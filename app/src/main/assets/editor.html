@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Editor</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0F1E35;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  #toolbar {
+    background: #1A2E4A;
+    border-bottom: 1px solid #2A3E5A;
+    padding: 6px 4px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  #toolbar button {
+    background: #0F1E35;
+    color: #e0e0e0;
+    border: 1px solid #2A3E5A;
+    border-radius: 5px;
+    padding: 6px 10px;
+    font-size: 14px;
+    cursor: pointer;
+    min-width: 34px;
+    text-align: center;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+  }
+  #toolbar button:active { background: #2A3E5A; }
+  #editor-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+    padding: 12px;
+  }
+  #editor {
+    flex: 1;
+    color: #ffffff;
+    font-size: 15px;
+    line-height: 1.6;
+    outline: none;
+    caret-color: #A8A800;
+    word-break: break-word;
+  }
+  #editor:empty::before {
+    content: attr(data-placeholder);
+    color: rgba(255,255,255,0.35);
+    pointer-events: none;
+  }
+  /* Resizable images in the editor */
+  img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 6px;
+    margin: 6px 0;
+    display: block;
+    resize: both;
+    overflow: auto;
+    cursor: se-resize;
+    box-sizing: border-box;
+  }
+  img.selected {
+    outline: 2px solid #A8A800;
+  }
+  video { max-width: 100%; border-radius: 6px; margin: 6px 0; display: block; }
+  a { color: #A8A800; }
+  b, strong { font-weight: bold; }
+  i, em { font-style: italic; }
+  u { text-decoration: underline; }
+  ul { padding-left: 20px; }
+  ol { padding-left: 20px; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <button onclick="fmt('bold')"><b>B</b></button>
+  <button onclick="fmt('italic')"><i>I</i></button>
+  <button onclick="fmt('underline')"><u>U</u></button>
+  <button onclick="fmtList('insertUnorderedList')">&#8226; Liste</button>
+  <button onclick="fmtList('insertOrderedList')">1. Liste</button>
+  <button onclick="insertLink()">&#128279; Link</button>
+  <button onclick="Android.pickImage()">&#128444; Bild</button>
+  <button onclick="Android.pickVideo()">&#127916; Video</button>
+</div>
+
+<div id="editor-container" onclick="focusEditor()">
+  <div id="editor"
+       contenteditable="true"
+       data-placeholder="Beitrag schreiben..."
+       oninput="notifyChange()"
+       onfocus="this.dataset.focused='1'"
+       onblur="this.dataset.focused=''"
+  ></div>
+</div>
+
+<script>
+  var editor = document.getElementById('editor');
+
+  function focusEditor() {
+    editor.focus();
+  }
+
+  function notifyChange() {
+    if (typeof Android !== 'undefined' && Android.onContentChanged) {
+      Android.onContentChanged(editor.innerHTML);
+    }
+  }
+
+  function fmt(cmd) {
+    editor.focus();
+    document.execCommand(cmd, false, null);
+    notifyChange();
+  }
+
+  function fmtList(cmd) {
+    editor.focus();
+    document.execCommand(cmd, false, null);
+    notifyChange();
+  }
+
+  function insertLink() {
+    var url = prompt('URL eingeben:');
+    if (url) {
+      editor.focus();
+      document.execCommand('createLink', false, url);
+      notifyChange();
+    }
+  }
+
+  function insertImage(url) {
+    editor.focus();
+    document.execCommand('insertImage', false, url);
+    notifyChange();
+  }
+
+  function insertVideo(url) {
+    editor.focus();
+    var v = '<video src="' + url + '" controls style="max-width:100%;border-radius:6px;margin:6px 0;display:block"></video><br>';
+    document.execCommand('insertHTML', false, v);
+    notifyChange();
+  }
+
+  function getHTML() {
+    return editor.innerHTML;
+  }
+
+  function setHTML(html) {
+    editor.innerHTML = html || '';
+    notifyChange();
+  }
+
+  // Image click → select/deselect (shows resize handles via CSS resize:both)
+  editor.addEventListener('click', function(e) {
+    if (e.target.tagName === 'IMG') {
+      var imgs = editor.querySelectorAll('img');
+      imgs.forEach(function(i) { i.classList.remove('selected'); });
+      e.target.classList.add('selected');
+      e.stopPropagation();
+    } else {
+      var imgs = editor.querySelectorAll('img');
+      imgs.forEach(function(i) { i.classList.remove('selected'); });
+    }
+  });
+
+  // Auto-focus on load
+  window.addEventListener('load', function() {
+    setTimeout(function() { editor.focus(); }, 100);
+  });
+</script>
+</body>
+</html>

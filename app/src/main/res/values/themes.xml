@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="Theme.SecureChat" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#FF0F1E35</item>
+        <item name="android:colorBackground">#FF0F1E35</item>
+        <item name="android:colorPrimary">#FF1A1A2E</item>
+        <item name="android:colorAccent">#FF6C63FF</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <style name="Theme.SecureChat.MediaRouter" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">#FF1A1A2E</item>
+        <item name="colorAccent">#FF6C63FF</item>
+        <item name="android:colorBackground">#FFFFFFFF</item>
+        <item name="android:windowBackground">@android:color/white</item>
+    </style>
+</resources>

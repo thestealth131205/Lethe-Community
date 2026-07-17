@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="400dp"
+    android:height="200dp"
+    android:viewportWidth="400"
+    android:viewportHeight="200">
+
+    <!-- Hintergrund -->
+    <path
+        android:pathData="M0,0 L400,0 L400,200 L0,200 Z"
+        android:fillColor="#1A1A2E" />
+
+    <!-- Verlauf-Effekt oben links -->
+    <path
+        android:pathData="M0,0 L200,0 L0,200 Z"
+        android:fillColor="#16213E"
+        android:fillAlpha="0.6" />
+
+    <!-- Stern-Akzente -->
+    <path
+        android:pathData="M50,50 L55,65 L70,65 L58,74 L63,89 L50,80 L37,89 L42,74 L30,65 L45,65 Z"
+        android:fillColor="#E8B64C" />
+
+    <path
+        android:pathData="M340,30 L344,42 L356,42 L347,50 L350,62 L340,55 L330,62 L333,50 L324,42 L336,42 Z"
+        android:fillColor="#E8B64C"
+        android:fillAlpha="0.7" />
+
+    <!-- Kamera-Icon Mitte (Rahmen) -->
+    <path
+        android:pathData="M180,80 L220,80 L220,130 L180,130 Z"
+        android:fillColor="#00000000"
+        android:strokeColor="#E8B64C"
+        android:strokeWidth="3" />
+    <path
+        android:pathData="M188,80 L200,68 L212,80"
+        android:fillColor="#E8B64C" />
+
+    <!-- Kreis als Pfad (Kamera-Linse) -->
+    <path
+        android:pathData="M200,93 A12,12 0 1,0 200.001,93 Z"
+        android:fillColor="#E8B64C"
+        android:fillAlpha="0.9" />
+
+    <!-- Text-Platzhalter-Linien -->
+    <path
+        android:pathData="M130,148 L270,148"
+        android:strokeColor="#E8B64C"
+        android:strokeWidth="3"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M150,162 L250,162"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeAlpha="0.5" />
+
+</vector>

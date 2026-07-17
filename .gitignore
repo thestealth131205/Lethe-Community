@@ -1,0 +1,26 @@
+# --- Build-Artefakte ---
+.gradle/
+**/build/
+**/.cxx/
+*.apk
+*.aab
+local.properties
+.idea/
+.DS_Store
+
+# --- Secrets (Doppelsicherung zur Allowlist/Blocklist) ---
+*.jks
+*.keystore
+*.pfx
+google-services.json
+secrets.properties
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.crt
+*.sql
+*.sqlite
+*.db
+*.dump

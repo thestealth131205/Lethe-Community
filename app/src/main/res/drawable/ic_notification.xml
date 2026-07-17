@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Notification small icon – muss monochrom sein (weiß auf transparent).
+    Android ignoriert Farben und nutzt nur den Alpha-Kanal.
+    Basiert auf dem App-Icon: Chat-Kopf (Blase + Augen) + Körper (Schild).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+
+    <!-- Kopf: abgerundetes Rechteck (Chat-Blase) -->
+    <path
+        android:pathData="M188,144 L324,144 C348.3,144 368,163.7 368,188 L368,244 C368,268.3 348.3,288 324,288 L188,288 C163.7,288 144,268.3 144,244 L144,188 C144,163.7 163.7,144 188,144 Z"
+        android:strokeWidth="18"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+
+    <!-- Auge links -->
+    <path
+        android:pathData="M220,204m-18,0a18,18 0 1,1 36,0a18,18 0 1,1 -36,0"
+        android:fillColor="#FFFFFFFF" />
+
+    <!-- Auge rechts -->
+    <path
+        android:pathData="M308,204m-18,0a18,18 0 1,1 36,0a18,18 0 1,1 -36,0"
+        android:fillColor="#FFFFFFFF" />
+
+    <!-- Antenne links -->
+    <path
+        android:pathData="M216,144 L192,108"
+        android:strokeWidth="18"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M192,108m-10,0a10,10 0 1,1 20,0a10,10 0 1,1 -20,0"
+        android:fillColor="#FFFFFFFF" />
+
+    <!-- Antenne rechts -->
+    <path
+        android:pathData="M312,144 L336,108"
+        android:strokeWidth="18"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M336,108m-10,0a10,10 0 1,1 20,0a10,10 0 1,1 -20,0"
+        android:fillColor="#FFFFFFFF" />
+
+    <!-- Ohren (seitliche Nocken) -->
+    <path
+        android:pathData="M144,220 C132,220 124,228 124,240 L124,252 C124,264 132,272 144,272 Z"
+        android:fillColor="#FFFFFFFF" />
+    <path
+        android:pathData="M368,220 C380,220 388,228 388,240 L388,252 C388,264 380,272 368,272 Z"
+        android:fillColor="#FFFFFFFF" />
+
+    <!-- Verbindung Kopf→Körper -->
+    <path
+        android:pathData="M224,288 L224,308 L288,308 L288,288"
+        android:strokeWidth="14"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+
+    <!-- Körper: abgerundetes Rechteck (Schild/Torso) -->
+    <path
+        android:pathData="M176,308 L336,308 C353.7,308 368,322.3 368,340 L368,416 C368,433.7 353.7,448 336,448 L176,448 C158.3,448 144,433.7 144,416 L144,340 C144,322.3 158.3,308 176,308 Z"
+        android:strokeWidth="18"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+
+    <!-- Beine links -->
+    <path
+        android:pathData="M192,448 L192,476"
+        android:strokeWidth="18"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round" />
+
+    <!-- Beine rechts -->
+    <path
+        android:pathData="M320,448 L320,476"
+        android:strokeWidth="18"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round" />
+
+</vector>

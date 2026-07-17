@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+        App Action: Google Assistant / Android Auto SEND_MESSAGE
+        =========================================================
+        Ermöglicht Sprachbefehle wie:
+          "Hey Google, schreibe [Name] eine Nachricht mit Lethe"
+          "Hey Google, sende [Name] '[Text]' mit Lethe"
+
+        Der Assistant liefert:
+          - recipient_name  → Extras-Key "recipient_name"  (Name des Empfängers)
+          - message_text    → Extras-Key "message_text"    (Nachrichtentext, optional)
+
+        Die MainActivity liest diese Extras in handleIncomingIntent() aus und
+        navigiert direkt zum passenden Kontakt/Chat.
+
+        Referenz: https://developer.android.com/guide/app-actions/built-in-intents/communication/send-message
+    -->
+    <capability android:name="actions.intent.SEND_MESSAGE">
+        <intent
+            android:action="android.intent.action.SENDTO"
+            android:targetPackage="com.securechat.app"
+            android:targetClass="com.securechat.app.MainActivity">
+            <!--
+                message.recipient.name → Intent-Extra "recipient_name"
+                Wird vom Assistant mit dem gesprochenen Kontaktnamen befüllt.
+            -->
+            <parameter
+                android:name="message.recipient.name"
+                android:key="recipient_name" />
+            <!--
+                message.text → Intent-Extra "message_text"
+                Wird vom Assistant mit dem diktierten Nachrichtentext befüllt.
+            -->
+            <parameter
+                android:name="message.text"
+                android:key="message_text" />
+        </intent>
+    </capability>
+
+    <!--
+        Share-Target für Direct Share (Android 10+, API 29+).
+
+        Registriert MainActivity als Ziel für das System-Share-Sheet.
+        Kontakte erscheinen automatisch im Share-Sheet, sobald ShortcutHelper
+        Dynamic Shortcuts mit der Kategorie MESSAGING_CONTACT erstellt hat.
+
+        Unterstützte MIME-Typen: alle Dateien und Text (entspricht den SEND-Intent-Filtern).
+    -->
+    <share-target android:targetClass="com.securechat.app.MainActivity">
+        <data android:mimeType="*/*" />
+        <category android:name="com.securechat.app.share.MESSAGING_CONTACT" />
+    </share-target>
+
+    <share-target android:targetClass="com.securechat.app.MainActivity">
+        <data android:mimeType="text/plain" />
+        <category android:name="com.securechat.app.share.MESSAGING_CONTACT" />
+    </share-target>
+
+    <share-target android:targetClass="com.securechat.app.MainActivity">
+        <data android:mimeType="image/*" />
+        <category android:name="com.securechat.app.share.MESSAGING_CONTACT" />
+    </share-target>
+
+</shortcuts>

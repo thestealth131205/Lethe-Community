@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Definiert, wie Lethe-RawContacts in der System-Kontakte-App dargestellt
+    werden ("Verbundene Apps"-Bereich, wie WhatsApp/Meet). Jede ContactsDataKind
+    entspricht einer eigenen Aktionszeile mit eigenem MIME-Typ:
+      .chat      → Lethe-Nachricht senden
+      .voicecall → Lethe-Sprachanruf
+      .videocall → Lethe-Videoanruf
+    summaryColumn (data2) = Aktionstext, detailColumn (data3) = Untertitel.
+    DATA1 hält die userId des Kontakts (für das Tap-Routing, siehe
+    ContactActionActivity).
+-->
+<ContactsAccountType xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <ContactsDataKind
+        android:mimeType="vnd.android.cursor.item/vnd.com.Lethe.app.chat"
+        android:icon="@mipmap/ic_launcher"
+        android:summaryColumn="data2"
+        android:detailColumn="data3" />
+
+    <ContactsDataKind
+        android:mimeType="vnd.android.cursor.item/vnd.com.Lethe.app.voicecall"
+        android:icon="@mipmap/ic_launcher"
+        android:summaryColumn="data2"
+        android:detailColumn="data3" />
+
+    <ContactsDataKind
+        android:mimeType="vnd.android.cursor.item/vnd.com.Lethe.app.videocall"
+        android:icon="@mipmap/ic_launcher"
+        android:summaryColumn="data2"
+        android:detailColumn="data3" />
+
+</ContactsAccountType>

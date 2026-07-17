@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Sync-Adapter-Definition für die Lethe-Kontakte-Integration.
+    Bindet den Lethe-Account (com.Lethe.app) an den Kontakte-Provider
+    (com.android.contacts). userVisible="false" blendet Lethe aus der
+    System-"Konten & Sync"-Liste aus; das Schreiben der RawContacts erfolgt
+    direkt aus der App, nicht über periodisches Sync.
+-->
+<sync-adapter xmlns:android="http://schemas.android.com/apk/res/android"
+    android:contentAuthority="com.android.contacts"
+    android:accountType="com.Lethe.app"
+    android:supportsUploading="false"
+    android:userVisible="false"
+    android:allowParallelSyncs="false"
+    android:isAlwaysSyncable="true" />
