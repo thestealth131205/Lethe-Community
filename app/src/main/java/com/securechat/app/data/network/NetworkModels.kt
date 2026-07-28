@@ -56,7 +56,10 @@ data class StickerInfoResponse(
 // --- FCM ---
 
 data class FcmTokenRequest(
-    @SerializedName("fcm_token") val fcmToken: String
+    @SerializedName("fcm_token") val fcmToken: String? = null,
+    // Push-Transport des Geräts: "fcm" (Play-Store-Build) oder "ws" (FOSS/F-Droid-Build).
+    // Null → Server lässt push_kind unverändert (Abwärtskompatibilität).
+    @SerializedName("push_kind") val pushKind: String? = null
 )
 
 // --- APP UPDATE ---

@@ -15,6 +15,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Arrangement
@@ -466,6 +467,10 @@ fun ChatVideoEditorScreen(
     val player = remember {
         ExoPlayer.Builder(context).build().apply {
             repeatMode = Player.REPEAT_MODE_ONE
+            // Effekt-Pipeline MUSS mindestens einmal vor dem ersten prepare()
+            // aktiviert werden (Media3-Anforderung), sonst greifen spätere
+            // setVideoEffects-Aufrufe (Live-Farbanpassung) nicht.
+            setVideoEffects(emptyList())
             videoUri?.let { setMediaItem(MediaItem.fromUri(it)); prepare() }
         }
     }
@@ -880,7 +885,17 @@ fun ChatVideoEditorScreen(
                             resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                         }
                     },
-                    modifier = Modifier.fillMaxSize().graphicsLayer {
+                    modifier = Modifier.fillMaxSize()
+                        .pointerInput(cropActive) {
+                            // Tippen auf das laufende Vorschau-Video hält es an / startet es
+                            // erneut. Im Zuschneide-Modus übernimmt das Overlay die Gesten.
+                            if (!cropActive) {
+                                detectTapGestures {
+                                    if (player.isPlaying) player.pause() else player.play()
+                                }
+                            }
+                        }
+                        .graphicsLayer {
                         if (cropActive) {
                             scaleX = cropScale; scaleY = cropScale
                             translationX = cropOffsetX; translationY = cropOffsetY

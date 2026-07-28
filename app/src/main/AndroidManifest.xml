@@ -215,14 +215,8 @@
             android:foregroundServiceType="dataSync"
             android:exported="false" />
 
-        <!-- FCM: Empfängt Push-Notifications via Firebase Cloud Messaging -->
-        <service
-            android:name=".LetheFcmService"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-            </intent-filter>
-        </service>
+        <!-- FCM-Service (.LetheFcmService) liegt jetzt im playstore-Flavor
+             (src/playstore/AndroidManifest.xml). Der foss/F-Droid-Build hat kein FCM. -->
 
         <!--
             Android Auto CarAppService: Stellt eine Messaging-Oberfläche im Auto bereit.

@@ -81,7 +81,7 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import java.io.FileInputStream
 import kotlinx.coroutines.isActive
-import com.google.firebase.messaging.FirebaseMessaging
+import com.securechat.app.push.PushProvider
 import com.securechat.app.CallForegroundService
 import com.securechat.app.data.crypto.CryptoManager
 import com.securechat.app.data.webrtc.WebRtcClient
@@ -246,6 +246,7 @@ class MainViewModel @Inject constructor(
     private val mediaCache: com.securechat.app.MediaCache,
     private val billingRepository: com.securechat.app.data.billing.BillingRepository,
     val castDiscoveryManager: com.securechat.app.cast.CastDiscoveryManager,
+    private val pushProvider: PushProvider,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -3950,18 +3951,13 @@ class MainViewModel @Inject constructor(
         sendMessage(chatId = contactId, content = text)
     }
 
-    /** Registriert den aktuellen FCM-Token am Server (nach Login und Session-Restore). */
+    /**
+     * Registriert den Push-Token am Server (nach Login und Session-Restore).
+     * Der konkrete Transport ist flavor-abhängig ([PushProvider]): playstore = FCM,
+     * foss = no-op (WS-Foreground-Service).
+     */
     private fun registerFcmToken() {
-        FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
-            viewModelScope.launch(Dispatchers.IO) {
-                try {
-                    apiService.updateFcmToken(FcmTokenRequest(fcmToken = token))
-                    Timber.tag("LETHE_FCM").d("FCM-Token am Server registriert.")
-                } catch (e: Exception) {
-                    Timber.tag("LETHE_FCM").w(e, "FCM-Token-Registrierung fehlgeschlagen")
-                }
-            }
-        }
+        pushProvider.registerToken()
     }
 
     /** Wird von MainActivity bei onResume/onPause aufgerufen, um den Foreground-Status zu setzen. */
@@ -11539,6 +11535,29 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Ermittelt den Anzeigenamen (Dateiname) einer URI, soweit verfügbar.
+     * Für content://-URIs via DISPLAY_NAME, sonst über das letzte Pfadsegment.
+     */
+    private fun displayNameOfUri(uri: Uri): String? = when (uri.scheme) {
+        "content" -> try {
+            context.contentResolver.query(
+                uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null
+            )?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+        } catch (_: Exception) { null }
+        else -> uri.lastPathSegment
+    }
+
+    /**
+     * Von Lethe selbst erzeugte Videos (Ausgabe des Video-Editors
+     * "chat_video_edit_…", in die Galerie gespeicherte "Lethe_…") sind bereits
+     * final komprimiert und dürfen beim Senden NICHT erneut transkodiert werden.
+     */
+    private fun isLetheCreatedVideo(uri: Uri): Boolean {
+        val name = displayNameOfUri(uri)?.lowercase() ?: return false
+        return name.startsWith("chat_video_edit") || name.startsWith("lethe_")
+    }
+
     fun sendGroupMediaMessage(groupId: String, uri: Uri, mediaType: String) {
         viewModelScope.launch {
             _isLoading.value = true
@@ -11573,15 +11592,21 @@ class MainViewModel @Inject constructor(
                 val mimeType: String
                 var originalFileName: String? = null
                 if (mediaType == "video") {
-                    val outFile = File(context.cacheDir, "tc_${clientId}.mp4")
-                    val success = com.securechat.app.data.local.VideoTranscoder.transcode(
-                        context = context, inputUri = uri, outputFile = outFile
-                    )
-                    fileToUpload = if (success && outFile.exists() && outFile.length() > 0) {
-                        outFile
-                    } else {
-                        outFile.delete()
+                    // Von Lethe erstellte Videos (Editor-Ausgabe) sind bereits
+                    // komprimiert → direkt hochladen, nicht erneut transkodieren.
+                    fileToUpload = if (isLetheCreatedVideo(uri)) {
                         uriToFile(uri, "video") ?: throw Exception("Datei nicht lesbar")
+                    } else {
+                        val outFile = File(context.cacheDir, "tc_${clientId}.mp4")
+                        val success = com.securechat.app.data.local.VideoTranscoder.transcode(
+                            context = context, inputUri = uri, outputFile = outFile
+                        )
+                        if (success && outFile.exists() && outFile.length() > 0) {
+                            outFile
+                        } else {
+                            outFile.delete()
+                            uriToFile(uri, "video") ?: throw Exception("Datei nicht lesbar")
+                        }
                     }
                     mimeType = "video/mp4"
                     _videoUploadProgress.update { it + (clientId to 0f) }
@@ -12955,18 +12980,24 @@ class MainViewModel @Inject constructor(
                 val mimeType: String
                 var originalFileName: String? = null
                 if (mediaType == "video" || mediaType == "circle_video") {
-                    val outFile = File(context.cacheDir, "tc_${clientId}.mp4")
-                    val success = com.securechat.app.data.local.VideoTranscoder.transcode(
-                        context = context,
-                        inputUri = uri,
-                        outputFile = outFile
-                    )
-                    fileToUpload = if (success && outFile.exists() && outFile.length() > 0) {
-                        outFile
-                    } else {
-                        // Fallback: Original-Video direkt hochladen
-                        outFile.delete()
+                    // Von Lethe erstellte Videos (Editor-Ausgabe) sind bereits
+                    // komprimiert → direkt hochladen, nicht erneut transkodieren.
+                    fileToUpload = if (isLetheCreatedVideo(uri)) {
                         uriToFile(uri, "video") ?: throw Exception("Datei nicht lesbar")
+                    } else {
+                        val outFile = File(context.cacheDir, "tc_${clientId}.mp4")
+                        val success = com.securechat.app.data.local.VideoTranscoder.transcode(
+                            context = context,
+                            inputUri = uri,
+                            outputFile = outFile
+                        )
+                        if (success && outFile.exists() && outFile.length() > 0) {
+                            outFile
+                        } else {
+                            // Fallback: Original-Video direkt hochladen
+                            outFile.delete()
+                            uriToFile(uri, "video") ?: throw Exception("Datei nicht lesbar")
+                        }
                     }
                     mimeType = "video/mp4"
 

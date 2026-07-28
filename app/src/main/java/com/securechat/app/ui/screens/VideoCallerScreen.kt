@@ -252,13 +252,16 @@ fun WebRtcVideoRenderer(
             update = { renderer ->
                 val prev = attachedTrack.value
                 if (prev != videoTrack) {
-                    prev?.removeSink(renderer)
-                    videoTrack?.addSink(renderer)
+                    // WebRTC disposed den nativen Track beim Anruf-Ende, während die
+                    // Kotlin-Referenz noch non-null ist. Ein Compose-Reattach ruft dann
+                    // add/removeSink auf einem toten Track → IllegalStateException.
+                    try { prev?.removeSink(renderer) } catch (_: IllegalStateException) {}
+                    try { videoTrack?.addSink(renderer) } catch (_: IllegalStateException) {}
                     attachedTrack.value = videoTrack
                 }
             },
             onRelease = { renderer ->
-                attachedTrack.value?.removeSink(renderer)
+                try { attachedTrack.value?.removeSink(renderer) } catch (_: IllegalStateException) {}
                 renderer.release()
             },
             modifier = modifier

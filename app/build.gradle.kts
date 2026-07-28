@@ -5,7 +5,9 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     id("com.google.android.libraries.mapsplatform.secrets-gradle-plugin")
-    id("com.google.gms.google-services")
+    // com.google.gms.google-services wird NICHT hier appliziert, sondern nur bedingt
+    // für den playstore-Flavor (siehe unten). Der foss/F-Droid-Build hat keine
+    // google-services.json und darf das Plugin nicht laden.
 }
 
 android {
@@ -52,6 +54,24 @@ android {
                 "proguard-rules.pro"
             )
             signingConfig = signingConfigs.getByName("release")
+        }
+    }
+
+    // Distributions-Flavors (F-Droid-Umbau Phase F1):
+    //  - playstore: bisheriger Google-Play-Build (FCM, Google Maps, Play Billing, Cast, Auth) – UNVERÄNDERT.
+    //  - foss:      F-Droid/Community-Build. In den Folgephasen F2–F4 werden alle proprietären
+    //               Abhängigkeiten (FCM, Maps inkl. Location, Billing, Cast, Auth) durch FOSS-Alternativen
+    //               ersetzt. In F1 teilt foss noch denselben Code/dieselben Deps wie playstore (Gerüst).
+    flavorDimensions += "dist"
+    productFlavors {
+        create("playstore") {
+            dimension = "dist"
+            buildConfigField("boolean", "IS_FOSS", "false")
+        }
+        create("foss") {
+            dimension = "dist"
+            versionNameSuffix = "-foss"
+            buildConfigField("boolean", "IS_FOSS", "true")
         }
     }
 
@@ -198,9 +218,10 @@ dependencies {
     implementation("androidx.camera:camera-view:$cameraVersion")
     implementation("androidx.camera:camera-video:$cameraVersion")
 
-    // Firebase Cloud Messaging (FCM) – Push-Notifications für Hintergrund-Empfang
-    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
-    implementation("com.google.firebase:firebase-messaging-ktx")
+    // Firebase Cloud Messaging (FCM) – Push-Notifications für Hintergrund-Empfang.
+    // NUR im playstore-Flavor: der foss/F-Droid-Build nutzt den WS-Foreground-Service.
+    "playstoreImplementation"(platform("com.google.firebase:firebase-bom:33.7.0"))
+    "playstoreImplementation"("com.google.firebase:firebase-messaging-ktx")
 
     // FFmpegKit – Dual-Audio-Muxing + Video-Filter für Spark Editor
     // Lokal eingebunden (thebytearray/ffmpeg-kit v1.0.0 – kein Maven-Repo verfügbar)
@@ -226,4 +247,12 @@ dependencies {
 
     // Stripe Android SDK – Payment Sheet für alternative Zahlungsmethode
     implementation("com.stripe:stripe-android:21.4.1")
+}
+
+// google-services-Plugin (FCM) nur anwenden, wenn ein playstore-Task gebaut wird.
+// Der foss/F-Droid-Build besitzt keine google-services.json → das Plugin würde sonst
+// fehlschlagen. CI baut :app:assemblePlaystoreRelease (enthält "Playstore"),
+// F-Droid baut assembleFossRelease (enthält "Foss") → sauber getrennt.
+if (gradle.startParameter.taskRequests.toString().contains("Playstore", ignoreCase = true)) {
+    apply(plugin = "com.google.gms.google-services")
 }
