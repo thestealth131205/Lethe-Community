@@ -6,20 +6,23 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import androidx.core.app.NotificationCompat
-import com.google.android.gms.location.*
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
 class LiveLocationService : Service() {
 
-    private lateinit var fusedClient: FusedLocationProviderClient
-    private var locationCallback: LocationCallback? = null
+    private var locationManager: LocationManager? = null
+    private var locationListener: LocationListener? = null
     private val handler = Handler(Looper.getMainLooper())
     private val stopRunnable = Runnable { stopSelf() }
 
@@ -71,22 +74,29 @@ class LiveLocationService : Service() {
     }
 
     private fun startLocationUpdates() {
-        fusedClient = LocationServices.getFusedLocationProviderClient(this)
-        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000L)
-            .setMinUpdateIntervalMillis(2000L)
-            .setMinUpdateDistanceMeters(2f)
-            .build()
-        locationCallback = object : LocationCallback() {
-            override fun onLocationResult(result: LocationResult) {
-                val loc = result.lastLocation ?: return
+        val lm = getSystemService(LOCATION_SERVICE) as? LocationManager ?: run { stopSelf(); return }
+        locationManager = lm
+        val listener = object : LocationListener {
+            override fun onLocationChanged(location: Location) {
                 val rid = _activeReceiverId
                 if (rid.isNotEmpty()) {
-                    _locationUpdates.tryEmit(LocationUpdate(loc.latitude, loc.longitude, rid))
+                    _locationUpdates.tryEmit(LocationUpdate(location.latitude, location.longitude, rid))
                 }
             }
+            override fun onProviderDisabled(provider: String) {}
+            override fun onProviderEnabled(provider: String) {}
+            @Deprecated("Erforderlich für ältere API-Level, keine Logik nötig")
+            override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+        }
+        locationListener = listener
+        val provider = when {
+            lm.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
+            lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
+            else -> { stopSelf(); return }
         }
         try {
-            fusedClient.requestLocationUpdates(request, locationCallback!!, Looper.getMainLooper())
+            // 2 s Mindestintervall, 2 m Mindestdistanz – wie zuvor mit FusedLocation.
+            lm.requestLocationUpdates(provider, 2000L, 2f, listener, Looper.getMainLooper())
         } catch (e: SecurityException) {
             stopSelf()
         }
@@ -94,9 +104,8 @@ class LiveLocationService : Service() {
 
     override fun onDestroy() {
         handler.removeCallbacks(stopRunnable)
-        if (::fusedClient.isInitialized) {
-            locationCallback?.let { fusedClient.removeLocationUpdates(it) }
-        }
+        locationListener?.let { locationManager?.removeUpdates(it) }
+        locationListener = null
         _activeReceiverId = ""
         _isRunning.tryEmit(false)
         super.onDestroy()

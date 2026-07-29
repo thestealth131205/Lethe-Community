@@ -72,10 +72,8 @@ import android.media.RingtoneManager
 import android.media.ToneGenerator
 import android.media.AudioManager
 
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
-import com.google.android.gms.tasks.CancellationTokenSource
-import com.google.android.gms.maps.model.LatLng
+import com.securechat.app.getCurrentLocationOnce
+import org.osmdroid.util.GeoPoint
 import androidx.core.content.FileProvider
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.RepeatMode
@@ -6726,27 +6724,24 @@ private fun AttachLocationSubMenu(
 ) {
     var selectedMode by remember { mutableStateOf<String?>(null) } // null = aktueller Standort, "30m"/... = live
     var locationLoading by remember { mutableStateOf(true) }
-    var currentLocation by remember { mutableStateOf<LatLng?>(null) }
+    var currentLocation by remember { mutableStateOf<GeoPoint?>(null) }
     var uploadedPreviewUrl by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
 
     fun fetchLocation() {
         locationLoading = true
-        LocationServices.getFusedLocationProviderClient(context)
-            .getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, CancellationTokenSource().token)
-            .addOnSuccessListener { loc ->
-                locationLoading = false
-                loc?.let {
-                    val latLng = LatLng(it.latitude, it.longitude)
-                    currentLocation = latLng
-                    // Vorschaubild im Hintergrund hochladen während der Nutzer noch entscheidet
-                    coroutineScope.launch {
-                        val url = onUploadMapPreview(latLng.latitude, latLng.longitude)
-                        if (url != null) uploadedPreviewUrl = url
-                    }
+        getCurrentLocationOnce(context) { loc ->
+            locationLoading = false
+            loc?.let {
+                val point = GeoPoint(it.latitude, it.longitude)
+                currentLocation = point
+                // Vorschaubild im Hintergrund hochladen während der Nutzer noch entscheidet
+                coroutineScope.launch {
+                    val url = onUploadMapPreview(point.latitude, point.longitude)
+                    if (url != null) uploadedPreviewUrl = url
                 }
             }
-            .addOnFailureListener { locationLoading = false }
+        }
     }
 
     LaunchedEffect(Unit) { fetchLocation() }
@@ -7244,7 +7239,7 @@ private fun MapsLinkCard(url: String, isFromMe: Boolean = true) {
 @Composable
 private fun AddressMessageCard(address: String) {
     val context = LocalContext.current
-    var geocodedLatLng by remember(address) { mutableStateOf<LatLng?>(null) }
+    var geocodedLatLng by remember(address) { mutableStateOf<GeoPoint?>(null) }
     var geocodeAttempted by remember(address) { mutableStateOf(false) }
 
     LaunchedEffect(address) {
@@ -7253,7 +7248,7 @@ private fun AddressMessageCard(address: String) {
                 @Suppress("DEPRECATION")
                 val results = Geocoder(context, Locale.getDefault()).getFromLocationName(address, 1)
                 if (!results.isNullOrEmpty()) {
-                    geocodedLatLng = LatLng(results[0].latitude, results[0].longitude)
+                    geocodedLatLng = GeoPoint(results[0].latitude, results[0].longitude)
                 }
             } catch (_: Exception) { /* Geocoding nicht verfügbar */ }
             // Fallback: OpenStreetMap Nominatim, wenn der Android-Geocoder nichts lieferte.
@@ -7274,7 +7269,7 @@ private fun AddressMessageCard(address: String) {
                                 val obj = arr.getJSONObject(0)
                                 val lat = obj.optString("lat").toDoubleOrNull()
                                 val lon = obj.optString("lon").toDoubleOrNull()
-                                if (lat != null && lon != null) geocodedLatLng = LatLng(lat, lon)
+                                if (lat != null && lon != null) geocodedLatLng = GeoPoint(lat, lon)
                             }
                         }
                     }

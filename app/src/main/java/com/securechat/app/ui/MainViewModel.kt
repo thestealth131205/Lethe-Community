@@ -3493,6 +3493,14 @@ class MainViewModel @Inject constructor(
     private val _inviteLinkUrl = MutableStateFlow<String?>(null)
     val inviteLinkUrl: StateFlow<String?> = _inviteLinkUrl.asStateFlow()
 
+    /** Fehlermeldung, falls die Generierung des Einladungslinks fehlgeschlagen ist (null = kein Fehler). */
+    private val _inviteLinkError = MutableStateFlow<String?>(null)
+    val inviteLinkError: StateFlow<String?> = _inviteLinkError.asStateFlow()
+
+    /** true während der Einladungslink gerade (neu) geladen wird. */
+    private val _inviteLinkLoading = MutableStateFlow(false)
+    val inviteLinkLoading: StateFlow<Boolean> = _inviteLinkLoading.asStateFlow()
+
     /** Ergebnisse der Telefonbuch-Suche (Lethe-Nutzer die im Adressbuch sind). */
     private val _phoneLookupMatches = MutableStateFlow<List<PhoneLookupMatch>>(emptyList())
     val phoneLookupMatches: StateFlow<List<PhoneLookupMatch>> = _phoneLookupMatches.asStateFlow()
@@ -4071,14 +4079,31 @@ class MainViewModel @Inject constructor(
      */
     fun generateInviteLink() {
         viewModelScope.launch(Dispatchers.IO) {
+            _inviteLinkLoading.value = true
+            _inviteLinkError.value = null
             try {
                 val response = apiService.generateInvite()
                 if (response.isSuccessful) {
                     val body = response.body()
-                    _inviteLinkUrl.value = body?.inviteUrl
+                    if (body?.inviteUrl != null) {
+                        _inviteLinkUrl.value = body.inviteUrl
+                    } else {
+                        _inviteLinkError.value = "Einladungslink konnte nicht erstellt werden."
+                    }
+                } else {
+                    val err = response.errorBody()?.string()
+                    val detail = try {
+                        org.json.JSONObject(err ?: "").optString("detail", "Fehler beim Laden des Einladungslinks.")
+                    } catch (_: Exception) {
+                        "Fehler beim Laden des Einladungslinks."
+                    }
+                    _inviteLinkError.value = detail
                 }
             } catch (e: Exception) {
                 Timber.tag("MainViewModel").e("generateInviteLink fehlgeschlagen: ${e.message}")
+                _inviteLinkError.value = "Keine Verbindung zum Server möglich."
+            } finally {
+                _inviteLinkLoading.value = false
             }
         }
     }
@@ -8120,6 +8145,70 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    private val _adminPanelPasswordSet = MutableStateFlow<Boolean?>(null)
+    val adminPanelPasswordSet: StateFlow<Boolean?> = _adminPanelPasswordSet.asStateFlow()
+
+    private val _adminPanelPasswordMessage = MutableStateFlow<String?>(null)
+    val adminPanelPasswordMessage: StateFlow<String?> = _adminPanelPasswordMessage.asStateFlow()
+
+    fun clearAdminPanelPasswordMessage() { _adminPanelPasswordMessage.value = null }
+
+    /** Laedt, ob der aktuelle Admin/Moderator bereits ein Backend-Passwort gesetzt hat. */
+    fun loadAdminPanelPasswordStatus() {
+        viewModelScope.launch {
+            try {
+                val response = apiService.getAdminPanelPasswordStatus()
+                if (response.isSuccessful) {
+                    _adminPanelPasswordSet.value = response.body()?.isSet == true
+                }
+            } catch (e: Exception) {
+                Timber.tag("MainViewModel").e("loadAdminPanelPasswordStatus fehlgeschlagen: ${e.message}")
+            }
+        }
+    }
+
+    /** Setzt/aendert das zusaetzliche Backend-Passwort (2. Faktor fuers Admin-/Mod-Panel). */
+    fun setAdminPanelPassword(password: String) {
+        viewModelScope.launch {
+            try {
+                val response = apiService.setAdminPanelPassword(SetAdminPanelPasswordRequest(password))
+                if (response.isSuccessful) {
+                    _adminPanelPasswordSet.value = true
+                    _adminPanelPasswordMessage.value = "Backend-Passwort gespeichert."
+                } else {
+                    val err = response.errorBody()?.string() ?: ""
+                    val detail = try { org.json.JSONObject(err).optString("detail", "Fehler ${response.code()}") } catch (_: Exception) { "Fehler ${response.code()}" }
+                    _adminPanelPasswordMessage.value = detail
+                }
+            } catch (e: Exception) {
+                _adminPanelPasswordMessage.value = "Netzwerkfehler: ${e.message}"
+            }
+        }
+    }
+
+    /**
+     * Prueft das Backend-Passwort vor dem Anzeigen des Admin-/Mod-Panels.
+     * [onResult] liefert (erfolgreich, Fehlermeldung-oder-null, mussErstGesetztWerden).
+     */
+    fun verifyAdminPanelPassword(password: String, onResult: (Boolean, String?, Boolean) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val response = apiService.verifyAdminPanelPassword(VerifyAdminPanelPasswordRequest(password))
+                if (response.isSuccessful) {
+                    onResult(true, null, false)
+                } else if (response.code() == 428) {
+                    onResult(false, "Bitte zuerst in den Account-Einstellungen ein Backend-Passwort festlegen.", true)
+                } else {
+                    val err = response.errorBody()?.string() ?: ""
+                    val detail = try { org.json.JSONObject(err).optString("detail", "Falsches Backend-Passwort.") } catch (_: Exception) { "Falsches Backend-Passwort." }
+                    onResult(false, detail, false)
+                }
+            } catch (e: Exception) {
+                onResult(false, "Netzwerkfehler: ${e.message}", false)
+            }
+        }
+    }
+
     /** Anzeigenamen aktualisieren. */
     fun updateProfile(name: String) {
         viewModelScope.launch {
@@ -11558,6 +11647,32 @@ class MainViewModel @Inject constructor(
         return name.startsWith("chat_video_edit") || name.startsWith("lethe_")
     }
 
+    /**
+     * Bereitet ein Video für den Upload vor. Von Lethe erzeugte Videos
+     * (Editor-Ausgabe) sind bereits komprimiert und werden – sofern sie
+     * innerhalb des Upload-Limits liegen – ohne erneute Kompression direkt
+     * hochgeladen. Fremd-Videos ODER zu große Lethe-Videos werden auf H.264
+     * heruntertranskodiert, damit sie das 80-MB-Limit nicht überschreiten
+     * (sonst würde die Datei-zu-groß-Prüfung die Nachricht kommentarlos löschen).
+     */
+    private suspend fun prepareVideoForUpload(uri: Uri, clientId: String): File {
+        if (isLetheCreatedVideo(uri)) {
+            val direct = uriToFile(uri, "video")
+            if (direct != null && direct.length() in 1..MAX_UPLOAD_BYTES) return direct
+            direct?.delete()
+        }
+        val outFile = File(context.cacheDir, "tc_${clientId}.mp4")
+        val success = com.securechat.app.data.local.VideoTranscoder.transcode(
+            context = context, inputUri = uri, outputFile = outFile
+        )
+        return if (success && outFile.exists() && outFile.length() > 0) {
+            outFile
+        } else {
+            outFile.delete()
+            uriToFile(uri, "video") ?: throw Exception("Datei nicht lesbar")
+        }
+    }
+
     fun sendGroupMediaMessage(groupId: String, uri: Uri, mediaType: String) {
         viewModelScope.launch {
             _isLoading.value = true
@@ -11593,21 +11708,9 @@ class MainViewModel @Inject constructor(
                 var originalFileName: String? = null
                 if (mediaType == "video") {
                     // Von Lethe erstellte Videos (Editor-Ausgabe) sind bereits
-                    // komprimiert → direkt hochladen, nicht erneut transkodieren.
-                    fileToUpload = if (isLetheCreatedVideo(uri)) {
-                        uriToFile(uri, "video") ?: throw Exception("Datei nicht lesbar")
-                    } else {
-                        val outFile = File(context.cacheDir, "tc_${clientId}.mp4")
-                        val success = com.securechat.app.data.local.VideoTranscoder.transcode(
-                            context = context, inputUri = uri, outputFile = outFile
-                        )
-                        if (success && outFile.exists() && outFile.length() > 0) {
-                            outFile
-                        } else {
-                            outFile.delete()
-                            uriToFile(uri, "video") ?: throw Exception("Datei nicht lesbar")
-                        }
-                    }
+                    // komprimiert → direkt hochladen (Passthrough), zu große
+                    // Editor-Videos werden dennoch heruntertranskodiert.
+                    fileToUpload = prepareVideoForUpload(uri, clientId)
                     mimeType = "video/mp4"
                     _videoUploadProgress.update { it + (clientId to 0f) }
                 } else if (mediaType == "audio_music") {
@@ -12981,24 +13084,9 @@ class MainViewModel @Inject constructor(
                 var originalFileName: String? = null
                 if (mediaType == "video" || mediaType == "circle_video") {
                     // Von Lethe erstellte Videos (Editor-Ausgabe) sind bereits
-                    // komprimiert → direkt hochladen, nicht erneut transkodieren.
-                    fileToUpload = if (isLetheCreatedVideo(uri)) {
-                        uriToFile(uri, "video") ?: throw Exception("Datei nicht lesbar")
-                    } else {
-                        val outFile = File(context.cacheDir, "tc_${clientId}.mp4")
-                        val success = com.securechat.app.data.local.VideoTranscoder.transcode(
-                            context = context,
-                            inputUri = uri,
-                            outputFile = outFile
-                        )
-                        if (success && outFile.exists() && outFile.length() > 0) {
-                            outFile
-                        } else {
-                            // Fallback: Original-Video direkt hochladen
-                            outFile.delete()
-                            uriToFile(uri, "video") ?: throw Exception("Datei nicht lesbar")
-                        }
-                    }
+                    // komprimiert → direkt hochladen (Passthrough), zu große
+                    // Editor-Videos werden dennoch heruntertranskodiert.
+                    fileToUpload = prepareVideoForUpload(uri, clientId)
                     mimeType = "video/mp4"
 
                     // Thumbnail aus der lokalen Datei generieren, bevor sie gelöscht wird

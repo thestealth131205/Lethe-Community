@@ -83,6 +83,7 @@
     <string name="account_section_invitation">Invito</string>
     <string name="account_qr_title">QR code di invito</string>
     <string name="account_qr_loading">In generazione…</string>
+    <string name="account_qr_retry">Riprova</string>
     <string name="account_invite_link_copy">Copia</string>
     <string name="account_invite_share">Condividi link di invito</string>
     <string name="account_section_settings">Impostazioni app</string>

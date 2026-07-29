@@ -1843,7 +1843,11 @@ class MainActivity : FragmentActivity() {
                         composable("settings/account") {
                             val currentUser by viewModel.currentUser.collectAsState()
                             val inviteLinkUrl by viewModel.inviteLinkUrl.collectAsState()
+                            val inviteLinkError by viewModel.inviteLinkError.collectAsState()
+                            val inviteLinkLoading by viewModel.inviteLinkLoading.collectAsState()
                             val myDatingProfile by viewModel.myDatingProfile.collectAsState()
+                            val adminPanelPasswordSet by viewModel.adminPanelPasswordSet.collectAsState()
+                            val adminPanelPasswordMessage by viewModel.adminPanelPasswordMessage.collectAsState()
                             LaunchedEffect(Unit) { viewModel.loadMyDatingProfile() }
                             AccountScreen(
                                 onNavigateBack = { navController.popBackStack() },
@@ -1851,6 +1855,8 @@ class MainActivity : FragmentActivity() {
                                 fakeNumber = currentUser?.fakeNumber ?: "",
                                 profileImageUrl = currentUser?.profileImageUrl,
                                 inviteLinkUrl = inviteLinkUrl,
+                                inviteLinkError = inviteLinkError,
+                                inviteLinkLoading = inviteLinkLoading,
                                 userInfo = currentUser?.info,
                                 userLinks = currentUser?.links,
                                 userInstagram = currentUser?.instagram,
@@ -1880,7 +1886,14 @@ class MainActivity : FragmentActivity() {
                                 onResetOnboarding = { viewModel.resetOnboarding() },
                                 isVerified = currentUser?.isVerified ?: false,
                                 currentStyx = currentUser?.styx ?: 0,
-                                onBuyVerification = { callback -> viewModel.buyVerification(callback) }
+                                onBuyVerification = { callback -> viewModel.buyVerification(callback) },
+                                isAdmin = currentUser?.isAdmin == true,
+                                isModerator = currentUser?.isModerator == true,
+                                adminPanelPasswordSet = adminPanelPasswordSet,
+                                onLoadAdminPanelPasswordStatus = { viewModel.loadAdminPanelPasswordStatus() },
+                                onSetAdminPanelPassword = { pw -> viewModel.setAdminPanelPassword(pw) },
+                                adminPanelPasswordMessage = adminPanelPasswordMessage,
+                                onClearAdminPanelPasswordMessage = { viewModel.clearAdminPanelPasswordMessage() }
                             )
                         }
 
@@ -2279,6 +2292,71 @@ class MainActivity : FragmentActivity() {
                             route = "settings/backend?initialTab={initialTab}",
                             arguments = listOf(navArgument("initialTab") { type = NavType.IntType; defaultValue = 0 })
                         ) { backStackEntry ->
+                            // Zusätzlicher Faktor: Backend-Passwort muss bei jedem Öffnen erneut bestätigt
+                            // werden, bevor das Panel gerendert wird (unabhängig von der is_admin/is_moderator-Rolle).
+                            var adminPanelVerified by remember { mutableStateOf(false) }
+                            var verifyPassword by remember { mutableStateOf("") }
+                            var verifyError by remember { mutableStateOf<String?>(null) }
+                            var verifyNeedsSetup by remember { mutableStateOf(false) }
+                            var verifyLoading by remember { mutableStateOf(false) }
+
+                            if (!adminPanelVerified) {
+                                AlertDialog(
+                                    onDismissRequest = { navController.popBackStack() },
+                                    icon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                                    title = { Text("Backend-Passwort") },
+                                    text = {
+                                        Column {
+                                            Text(
+                                                "Bitte gib dein Backend-Passwort ein, um das Admin-/Mod-Panel zu öffnen.",
+                                                fontSize = 12.sp
+                                            )
+                                            Spacer(Modifier.height(12.dp))
+                                            OutlinedTextField(
+                                                value = verifyPassword,
+                                                onValueChange = { verifyPassword = it; verifyError = null },
+                                                label = { Text("Passwort") },
+                                                singleLine = true,
+                                                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                            if (verifyError != null) {
+                                                Spacer(Modifier.height(8.dp))
+                                                Text(verifyError!!, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                                                if (verifyNeedsSetup) {
+                                                    Spacer(Modifier.height(8.dp))
+                                                    TextButton(onClick = {
+                                                        navController.popBackStack()
+                                                        navController.navigate("settings/account")
+                                                    }) { Text("Zu den Account-Einstellungen") }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    confirmButton = {
+                                        Button(
+                                            onClick = {
+                                                verifyLoading = true
+                                                viewModel.verifyAdminPanelPassword(verifyPassword) { success, message, needsSetup ->
+                                                    verifyLoading = false
+                                                    if (success) {
+                                                        adminPanelVerified = true
+                                                    } else {
+                                                        verifyError = message ?: "Falsches Backend-Passwort."
+                                                        verifyNeedsSetup = needsSetup
+                                                    }
+                                                }
+                                            },
+                                            enabled = verifyPassword.isNotBlank() && !verifyLoading
+                                        ) { Text("Bestätigen") }
+                                    },
+                                    dismissButton = {
+                                        TextButton(onClick = { navController.popBackStack() }) { Text("Abbrechen") }
+                                    }
+                                )
+                                return@composable
+                            }
+
                             val adminLogs by viewModel.adminLogs.collectAsState()
                             val serverStatus by viewModel.serverStatus.collectAsState()
                             val turnStatus by viewModel.turnStatus.collectAsState()

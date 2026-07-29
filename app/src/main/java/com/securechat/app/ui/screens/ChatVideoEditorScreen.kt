@@ -556,9 +556,15 @@ fun ChatVideoEditorScreen(
     // Farb-/Ton-Anpassung live in der Vorschau anwenden (leer = neutral).
     LaunchedEffect(colorAdjustments) {
         try {
+            val wasPlaying = player.playWhenReady
             player.setVideoEffects(
                 listOfNotNull(VideoTranscoder.colorAdjustEffect(colorAdjustments))
             )
+            // Media3: setVideoEffects hält die Effekt-Pipeline an und rendert danach
+            // keine neuen Frames mehr. Ein Seek auf die aktuelle Position stößt das
+            // Rendering wieder an; playWhenReady stellt die laufende Wiedergabe wieder her.
+            player.seekTo(player.currentPosition)
+            player.playWhenReady = wasPlaying
         } catch (_: Exception) { }
     }
 

@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -18,54 +19,43 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.border
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
-import com.google.android.gms.maps.CameraUpdateFactory
-import com.google.android.gms.maps.model.CameraPosition
-import com.google.android.gms.maps.model.LatLng
-import com.google.android.gms.maps.model.LatLngBounds
-import com.google.android.gms.tasks.CancellationTokenSource
-import com.google.maps.android.compose.GoogleMap
-import com.google.maps.android.compose.MapProperties
-import com.google.maps.android.compose.MapType
-import com.google.maps.android.compose.MapUiSettings
-import com.google.maps.android.compose.MarkerComposable
-import com.google.maps.android.compose.rememberCameraPositionState
-import androidx.compose.foundation.Image
+import androidx.compose.ui.viewinterop.AndroidView
+import coil.ImageLoader
 import coil.compose.AsyncImage
-import coil.compose.AsyncImagePainter
-import coil.compose.rememberAsyncImagePainter
-import com.google.maps.android.compose.rememberMarkerState
+import coil.request.ImageRequest
 import com.securechat.app.R
+import com.securechat.app.avatarMarkerBitmap
+import com.securechat.app.configureOsmdroid
 import com.securechat.app.data.local.ContactEntity
+import com.securechat.app.getCurrentLocationOnce
 import com.securechat.app.ui.MainViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.BoundingBox
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.CustomZoomButtonsController
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker
 
 private val liveLocRegex = Regex("""[\uD83D\uDCCD📍]live:(\S+) https://maps\.google\.com/\?q=([-\d.]+),([-\d.]+)""")
 
@@ -77,6 +67,17 @@ private data class LiveLocationPin(
     val durationKey: String,
     val profileImageUrl: String? = null
 )
+
+/** Lädt ein Bild als Bitmap über Coil (Hardware-Bitmaps deaktiviert, damit die Pixel
+ *  für das runde Marker-Icon gelesen werden können). */
+private suspend fun loadAvatarBitmap(context: Context, loader: ImageLoader, url: String?): android.graphics.Bitmap? {
+    if (url.isNullOrBlank()) return null
+    return try {
+        val req = ImageRequest.Builder(context).data(url).allowHardware(false).build()
+        val result = loader.execute(req)
+        (result.drawable as? BitmapDrawable)?.bitmap
+    } catch (_: Exception) { null }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -90,11 +91,31 @@ fun LiveMapsScreen(
     val contacts by viewModel.contacts.collectAsState(initial = emptyList())
     val currentUser by viewModel.currentUser.collectAsState()
 
-    var myLocation by remember { mutableStateOf<LatLng?>(null) }
+    var myLocation by remember { mutableStateOf<GeoPoint?>(null) }
     var locationLoading by remember { mutableStateOf(false) }
-    val cameraPositionState = rememberCameraPositionState()
-    var mapLoaded by remember { mutableStateOf(false) }
-    var mapType by remember { mutableStateOf(MapType.SATELLITE) }
+
+    // osmdroid einmalig konfigurieren (User-Agent + Cache) und MapView anlegen
+    val mapView = remember {
+        configureOsmdroid(context)
+        MapView(context).apply {
+            setTileSource(TileSourceFactory.MAPNIK)
+            setMultiTouchControls(true)
+            setUseDataConnection(true)
+            zoomController.setVisibility(CustomZoomButtonsController.Visibility.SHOW_AND_FADEOUT)
+            controller.setZoom(13.0)
+        }
+    }
+    val imageLoader = remember { ImageLoader(context) }
+    val avatarCache = remember { mutableMapOf<String, android.graphics.Bitmap>() }
+
+    // osmdroid-Lifecycle an die Composition koppeln
+    DisposableEffect(Unit) {
+        mapView.onResume()
+        onDispose {
+            mapView.onPause()
+            mapView.onDetach()
+        }
+    }
 
     // Build contact lookup map
     val contactMap: Map<String, ContactEntity> = remember(contacts) {
@@ -164,15 +185,10 @@ fun LiveMapsScreen(
 
     fun fetchMyLocation() {
         locationLoading = true
-        LocationServices.getFusedLocationProviderClient(context)
-            .getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, CancellationTokenSource().token)
-            .addOnSuccessListener { loc ->
-                locationLoading = false
-                loc?.let {
-                    myLocation = LatLng(it.latitude, it.longitude)
-                }
-            }
-            .addOnFailureListener { locationLoading = false }
+        getCurrentLocationOnce(context) { loc ->
+            locationLoading = false
+            if (loc != null) myLocation = GeoPoint(loc.latitude, loc.longitude)
+        }
     }
 
     val permLauncher = rememberLauncherForActivityResult(
@@ -202,28 +218,69 @@ fun LiveMapsScreen(
         }
     }
 
-    // Auto-zoom to fit all pins — live: bei jeder Standort-Aktualisierung animiert neu ausrichten
-    LaunchedEffect(myLocation, mergedPins, mapLoaded) {
-        if (!mapLoaded) return@LaunchedEffect
-        val allPoints = buildList {
-            myLocation?.let { add(it) }
-            mergedPins.forEach { add(LatLng(it.lat, it.lng)) }
+    // Marker neu aufbauen, sobald sich Pins oder eigener Standort ändern.
+    // Avatare werden asynchron geladen und gecacht; danach Auto-Zoom auf alle Punkte.
+    LaunchedEffect(mergedPins, myLocation, selfInLivePins) {
+        // Versatz bei identischen Positionen, damit mehrere Marker sichtbar bleiben
+        val groups = mutableMapOf<Pair<Int, Int>, MutableList<Int>>()
+        mergedPins.forEachIndexed { i, pin ->
+            val keyPos = Pair((pin.lat * 100000).roundToInt(), (pin.lng * 100000).roundToInt())
+            groups.getOrPut(keyPos) { mutableListOf() }.add(i)
         }
-        if (allPoints.isEmpty()) return@LaunchedEffect
-        if (allPoints.size >= 2) {
-            val boundsBuilder = LatLngBounds.builder()
-            allPoints.forEach { boundsBuilder.include(it) }
-            val bounds = boundsBuilder.build()
-            // Padding 120 dp damit Marker nicht am Rand abgeschnitten werden
-            cameraPositionState.animate(
-                update = CameraUpdateFactory.newLatLngBounds(bounds, 120),
-                durationMs = 800
-            )
-        } else {
-            cameraPositionState.animate(
-                update = CameraUpdateFactory.newLatLngZoom(allPoints[0], 13f),
-                durationMs = 800
-            )
+
+        val newOverlays = mutableListOf<Marker>()
+        val allPoints = mutableListOf<GeoPoint>()
+
+        // Eigener aktueller Standort — nur wenn eigene userId NICHT in livePins
+        if (!selfInLivePins) {
+            myLocation?.let { pos ->
+                val meName = currentUser?.name?.takeIf { it.isNotBlank() }
+                    ?: currentUser?.fakeNumber ?: liveMapsMeStr
+                val url = currentUser?.profileImageUrl
+                val bmp = url?.let { avatarCache[it] ?: loadAvatarBitmap(context, imageLoader, it)?.also { b -> avatarCache[it] = b } }
+                newOverlays.add(makeMarker(mapView, pos, meName, "Live · Mein Standort", bmp) {
+                    openMapsNavigation(context, pos.latitude, pos.longitude)
+                })
+                allPoints.add(pos)
+            }
+        }
+
+        // Live-Standort-Pins
+        mergedPins.forEachIndexed { i, pin ->
+            val keyPos = Pair((pin.lat * 100000).roundToInt(), (pin.lng * 100000).roundToInt())
+            val group = groups[keyPos] ?: listOf(i)
+            val idxInGroup = group.indexOf(i)
+            val spread = if (group.size > 1) 0.00006 else 0.0
+            val angle = (2.0 * Math.PI * idxInGroup) / group.size
+            val pos = GeoPoint(pin.lat + spread * sin(angle), pin.lng + spread * cos(angle))
+            val bmp = pin.profileImageUrl?.let {
+                avatarCache[it] ?: loadAvatarBitmap(context, imageLoader, it)?.also { b -> avatarCache[it] = b }
+            }
+            newOverlays.add(makeMarker(mapView, pos, pin.senderName, "Live · ${durationLabel(pin.durationKey)}", bmp) {
+                openMapsNavigation(context, pos.latitude, pos.longitude)
+            })
+            allPoints.add(pos)
+        }
+
+        mapView.overlays.clear()
+        mapView.overlays.addAll(newOverlays)
+        mapView.invalidate()
+
+        // Auto-Zoom auf alle Punkte (nach Layout, damit Breite/Höhe bekannt sind)
+        if (allPoints.isNotEmpty()) {
+            mapView.post {
+                if (allPoints.size >= 2) {
+                    val bb = BoundingBox.fromGeoPoints(allPoints)
+                    try {
+                        mapView.zoomToBoundingBox(bb, true, 120)
+                    } catch (_: Exception) {
+                        mapView.controller.animateTo(allPoints[0])
+                    }
+                } else {
+                    mapView.controller.setZoom(15.0)
+                    mapView.controller.animateTo(allPoints[0])
+                }
+            }
         }
     }
 
@@ -291,119 +348,13 @@ fun LiveMapsScreen(
                     .fillMaxWidth()
                     .weight(1f)
             ) {
-                GoogleMap(
-                    modifier = Modifier.fillMaxSize(),
-                    cameraPositionState = cameraPositionState,
-                    properties = MapProperties(mapType = mapType),
-                    uiSettings = MapUiSettings(
-                        zoomControlsEnabled = true,
-                        scrollGesturesEnabled = true,
-                        zoomGesturesEnabled = true,
-                        tiltGesturesEnabled = false,
-                        rotationGesturesEnabled = false,
-                        mapToolbarEnabled = false,
-                        compassEnabled = true,
-                        myLocationButtonEnabled = false
-                    ),
-                    onMapLoaded = { mapLoaded = true }
-                ) {
-                    if (mapLoaded) {
-                        // Own current location — nur anzeigen wenn eigene userId NICHT in livePins
-                        if (!selfInLivePins) {
-                            myLocation?.let { pos ->
-                                val myMarkerState = rememberMarkerState(position = pos)
-                                LaunchedEffect(pos) {
-                                    myMarkerState.position = pos
-                                }
-                                ProfileMapMarker(
-                                    state = myMarkerState,
-                                    profileImageUrl = currentUser?.profileImageUrl,
-                                    name = currentUser?.name?.takeIf { it.isNotBlank() }
-                                        ?: currentUser?.fakeNumber ?: stringResource(R.string.live_maps_me),
-                                    title = stringResource(R.string.live_maps_my_location_title),
-                                    snippet = stringResource(R.string.live_maps_current_snippet)
-                                )
-                            }
-                        }
-                        // Live location pins — Versatz bei identischen Positionen damit beide sichtbar sind
-                        val pinPositions: List<Pair<LiveLocationPin, LatLng>> = remember(mergedPins) {
-                            // Gruppiere nach gerundeter Position (5 Dezimalstellen ≈ 1 m Genauigkeit)
-                            val groups = mutableMapOf<Pair<Int, Int>, MutableList<Int>>()
-                            mergedPins.forEachIndexed { i, pin ->
-                                val key = Pair(
-                                    (pin.lat * 100000).roundToInt(),
-                                    (pin.lng * 100000).roundToInt()
-                                )
-                                groups.getOrPut(key) { mutableListOf() }.add(i)
-                            }
-                            mergedPins.mapIndexed { i, pin ->
-                                val key = Pair(
-                                    (pin.lat * 100000).roundToInt(),
-                                    (pin.lng * 100000).roundToInt()
-                                )
-                                val group = groups[key] ?: listOf(i)
-                                val idxInGroup = group.indexOf(i)
-                                val spread = if (group.size > 1) 0.00006 else 0.0
-                                val angle = (2.0 * Math.PI * idxInGroup) / group.size
-                                val offsetLat = pin.lat + spread * sin(angle)
-                                val offsetLng = pin.lng + spread * cos(angle)
-                                Pair(pin, LatLng(offsetLat, offsetLng))
-                            }
-                        }
-                        pinPositions.forEach { (pin, pos) ->
-                            key(pin.senderId) {
-                                val markerState = rememberMarkerState(position = pos)
-                                LaunchedEffect(pos) {
-                                    markerState.position = pos
-                                }
-                                ProfileMapMarker(
-                                    state = markerState,
-                                    profileImageUrl = pin.profileImageUrl,
-                                    name = pin.senderName,
-                                    snippet = "Live · ${durationLabel(pin.durationKey)} · In Maps öffnen",
-                                    onInfoWindowClick = {
-                                        openMapsNavigation(context, pos.latitude, pos.longitude)
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
+                AndroidView(
+                    factory = { mapView },
+                    modifier = Modifier.fillMaxSize()
+                )
 
                 if (locationLoading) {
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                }
-
-                // Kartentyp-Toggle oben rechts
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = 12.dp, end = 12.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-                    shadowElevation = 4.dp,
-                    onClick = {
-                        mapType = if (mapType == MapType.SATELLITE) MapType.NORMAL else MapType.SATELLITE
-                    }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (mapType == MapType.SATELLITE) Icons.Default.LocationOn else Icons.Filled.MyLocation,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = if (mapType == MapType.SATELLITE) "Normal" else "Satellit",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
                 }
 
                 // Re-center button
@@ -414,7 +365,8 @@ fun LiveMapsScreen(
                         ) {
                             fetchMyLocation()
                             myLocation?.let {
-                                cameraPositionState.position = CameraPosition.fromLatLngZoom(it, 14f)
+                                mapView.controller.setZoom(15.0)
+                                mapView.controller.animateTo(it)
                             }
                         } else {
                             permLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -470,107 +422,42 @@ fun LiveMapsScreen(
     }
 }
 
-@Composable
-private fun ProfileMapMarker(
-    state: com.google.maps.android.compose.MarkerState,
-    profileImageUrl: String?,
+/** Baut einen osmdroid-Marker mit rundem Avatar-Icon; Tap öffnet die Navigation. */
+private fun makeMarker(
+    mapView: MapView,
+    pos: GeoPoint,
     name: String,
-    title: String? = name,
-    snippet: String? = null,
-    onInfoWindowClick: (() -> Unit)? = null
-) {
-    // Bild außerhalb von MarkerComposable laden, damit es beim Render bereits im Cache ist
-    val painter = if (!profileImageUrl.isNullOrBlank()) {
-        rememberAsyncImagePainter(model = profileImageUrl)
-    } else null
-    val imageReady = painter != null && painter.state is AsyncImagePainter.State.Success
-
-    MarkerComposable(
-        keys = arrayOf(profileImageUrl ?: "", name, imageReady),
-        state = state,
-        title = title,
-        snippet = snippet,
-        anchor = androidx.compose.ui.geometry.Offset(0.5f, 1f),
-        onInfoWindowClick = { onInfoWindowClick?.invoke() }
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .shadow(6.dp, CircleShape)
-                    .clip(CircleShape)
-                    .background(Color(0xFF1565C0))
-                    .border(2.dp, Color.White, CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                if (painter != null && imageReady) {
-                    Image(
-                        painter = painter,
-                        contentDescription = name,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape)
-                    )
-                } else {
-                    Icon(
-                        Icons.Filled.Person,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-            }
-            // Kleines Dreieck als Zeiger nach unten
-            val trianglePath = remember { androidx.compose.ui.graphics.Path() }
-            Box(
-                modifier = Modifier
-                    .size(width = 12.dp, height = 7.dp)
-                    .drawBehind {
-                        trianglePath.apply {
-                            reset()
-                            moveTo(0f, 0f)
-                            lineTo(size.width, 0f)
-                            lineTo(size.width / 2f, size.height)
-                            close()
-                        }
-                        drawPath(trianglePath, color = Color.White)
-                    }
-            )
-            // Username-Label
-            Spacer(modifier = Modifier.height(2.dp))
-            Box(
-                modifier = Modifier
-                    .background(Color(0xCC000000), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 5.dp, vertical = 2.dp)
-            ) {
-                Text(
-                    text = name,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White,
-                    maxLines = 1
-                )
-            }
+    snippet: String,
+    avatar: android.graphics.Bitmap?,
+    onTap: () -> Unit
+): Marker {
+    return Marker(mapView).apply {
+        position = pos
+        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+        title = name
+        this.snippet = snippet
+        icon = BitmapDrawable(mapView.context.resources, avatarMarkerBitmap(avatar, name))
+        setOnMarkerClickListener { _, _ ->
+            onTap()
+            true
         }
     }
 }
 
-// Öffnet die Position in Google Maps mit Turn-by-Turn-Navigation; fällt
-// auf eine generische Maps-/Browser-URL zurück, falls die App fehlt.
+// Öffnet die Position in einer beliebigen installierten Karten-App via geo:-URI
+// (FOSS-freundlich, funktioniert mit OsmAnd, Organic Maps, Google Maps …);
+// fällt auf eine OpenStreetMap-Web-URL zurück, falls keine Karten-App vorhanden ist.
 private fun openMapsNavigation(context: Context, lat: Double, lng: Double) {
     try {
-        val navIntent = Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=$lat,$lng")).apply {
-            setPackage("com.google.android.apps.maps")
-        }
-        if (navIntent.resolveActivity(context.packageManager) != null) {
-            context.startActivity(navIntent)
+        val geoIntent = Intent(Intent.ACTION_VIEW, Uri.parse("geo:$lat,$lng?q=$lat,$lng"))
+        if (geoIntent.resolveActivity(context.packageManager) != null) {
+            context.startActivity(geoIntent)
             return
         }
     } catch (_: Exception) {}
     try {
         context.startActivity(
-            Intent(Intent.ACTION_VIEW, Uri.parse("https://maps.google.com/?q=$lat,$lng"))
+            Intent(Intent.ACTION_VIEW, Uri.parse("https://www.openstreetmap.org/?mlat=$lat&mlon=$lng#map=16/$lat/$lng"))
         )
     } catch (_: Exception) {}
 }

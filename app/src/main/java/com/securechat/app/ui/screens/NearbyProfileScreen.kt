@@ -31,20 +31,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.compose.rememberAsyncImagePainter
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
-import com.google.android.gms.maps.model.CameraPosition
-import com.google.android.gms.maps.model.LatLng
-import com.google.android.gms.tasks.CancellationTokenSource
-import com.google.maps.android.compose.GoogleMap
-import com.google.maps.android.compose.MapProperties
-import com.google.maps.android.compose.MapUiSettings
-import com.google.maps.android.compose.Marker
-import com.google.maps.android.compose.MarkerState
-import com.google.maps.android.compose.rememberCameraPositionState
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.viewinterop.AndroidView
 import com.securechat.app.R
+import com.securechat.app.configureOsmdroid
+import com.securechat.app.getCurrentLocationOnce
 import com.securechat.app.ui.MainViewModel
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -88,15 +84,13 @@ fun NearbyProfileScreen(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
-            LocationServices.getFusedLocationProviderClient(context)
-                .getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, CancellationTokenSource().token)
-                .addOnSuccessListener { loc ->
-                    loc?.let {
-                        lat = it.latitude
-                        lng = it.longitude
-                        locationLabel = "📍 Standort gesetzt"
-                    }
+            getCurrentLocationOnce(context) { loc ->
+                loc?.let {
+                    lat = it.latitude
+                    lng = it.longitude
+                    locationLabel = "📍 Standort gesetzt"
                 }
+            }
         }
     }
 
@@ -104,15 +98,13 @@ fun NearbyProfileScreen(
         if (context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
             == PackageManager.PERMISSION_GRANTED
         ) {
-            LocationServices.getFusedLocationProviderClient(context)
-                .getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, CancellationTokenSource().token)
-                .addOnSuccessListener { loc ->
-                    loc?.let {
-                        lat = it.latitude
-                        lng = it.longitude
-                        locationLabel = "📍 Standort gesetzt"
-                    }
+            getCurrentLocationOnce(context) { loc ->
+                loc?.let {
+                    lat = it.latitude
+                    lng = it.longitude
+                    locationLabel = "📍 Standort gesetzt"
                 }
+            }
         } else {
             locationPermLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
         }
@@ -125,15 +117,13 @@ fun NearbyProfileScreen(
         if (context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
             == PackageManager.PERMISSION_GRANTED
         ) {
-            LocationServices.getFusedLocationProviderClient(context)
-                .getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, CancellationTokenSource().token)
-                .addOnSuccessListener { loc ->
-                    if (loc != null && lat == 0.0) {
-                        lat = loc.latitude
-                        lng = loc.longitude
-                        locationLabel = "📍 Standort gesetzt"
-                    }
+            getCurrentLocationOnce(context) { loc ->
+                if (loc != null && lat == 0.0) {
+                    lat = loc.latitude
+                    lng = loc.longitude
+                    locationLabel = "📍 Standort gesetzt"
                 }
+            }
         }
     }
 
@@ -654,14 +644,34 @@ fun NearbyProfileScreen(
                 }
             }
 
-            // === KARTEN-VORSCHAU ===
+            // === KARTEN-VORSCHAU (OpenStreetMap via osmdroid) ===
             if (lat != 0.0) {
                 Spacer(modifier = Modifier.height(12.dp))
-                val cameraPositionState = rememberCameraPositionState {
-                    position = CameraPosition.fromLatLngZoom(LatLng(lat, lng), 13f)
+                val previewMap = remember {
+                    configureOsmdroid(context)
+                    MapView(context).apply {
+                        setTileSource(TileSourceFactory.MAPNIK)
+                        setMultiTouchControls(false)
+                        setUseDataConnection(true)
+                        zoomController.setVisibility(org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER)
+                        controller.setZoom(13.0)
+                    }
+                }
+                DisposableEffect(Unit) {
+                    previewMap.onResume()
+                    onDispose { previewMap.onPause(); previewMap.onDetach() }
                 }
                 LaunchedEffect(lat, lng) {
-                    cameraPositionState.position = CameraPosition.fromLatLngZoom(LatLng(lat, lng), 13f)
+                    val point = GeoPoint(lat, lng)
+                    previewMap.controller.setCenter(point)
+                    previewMap.overlays.clear()
+                    val marker = Marker(previewMap).apply {
+                        position = point
+                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                        title = "Mein Standort"
+                    }
+                    previewMap.overlays.add(marker)
+                    previewMap.invalidate()
                 }
                 Surface(
                     modifier = Modifier
@@ -671,26 +681,10 @@ fun NearbyProfileScreen(
                     shape = RoundedCornerShape(12.dp),
                     tonalElevation = 2.dp
                 ) {
-                    GoogleMap(
-                        modifier = Modifier.fillMaxSize(),
-                        cameraPositionState = cameraPositionState,
-                        uiSettings = MapUiSettings(
-                            scrollGesturesEnabled = false,
-                            zoomGesturesEnabled = false,
-                            tiltGesturesEnabled = false,
-                            rotationGesturesEnabled = false,
-                            zoomControlsEnabled = false,
-                            mapToolbarEnabled = false,
-                            compassEnabled = false,
-                            myLocationButtonEnabled = false
-                        ),
-                        properties = MapProperties(isMyLocationEnabled = false)
-                    ) {
-                        Marker(
-                            state = MarkerState(position = LatLng(lat, lng)),
-                            title = "Mein Standort"
-                        )
-                    }
+                    AndroidView(
+                        factory = { previewMap },
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
             }
 

@@ -83,6 +83,7 @@
     <string name="account_section_invitation">Uitnodiging</string>
     <string name="account_qr_title">Uitnodigings-QR-code</string>
     <string name="account_qr_loading">Wordt gegenereerd…</string>
+    <string name="account_qr_retry">Opnieuw proberen</string>
     <string name="account_invite_link_copy">Kopiëren</string>
     <string name="account_invite_share">Uitnodigingslink delen</string>
     <string name="account_section_settings">App-instellingen</string>

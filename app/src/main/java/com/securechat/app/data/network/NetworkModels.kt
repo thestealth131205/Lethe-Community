@@ -1047,6 +1047,18 @@ data class ThreeDFileMeta(
 
 // --- EINLADUNGEN ---
 
+data class SetAdminPanelPasswordRequest(
+    @SerializedName("password") val password: String
+)
+
+data class VerifyAdminPanelPasswordRequest(
+    @SerializedName("password") val password: String
+)
+
+data class AdminPanelPasswordStatusResponse(
+    @SerializedName("is_set") val isSet: Boolean
+)
+
 data class InviteGenerateResponse(
     @SerializedName("token") val token: String,
     @SerializedName("invite_url") val inviteUrl: String,

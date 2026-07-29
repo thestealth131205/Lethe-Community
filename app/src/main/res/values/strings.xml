@@ -90,6 +90,7 @@
     <string name="account_section_invitation">Invitation</string>
     <string name="account_qr_title">Invitation QR Code</string>
     <string name="account_qr_loading">Generating…</string>
+    <string name="account_qr_retry">Retry</string>
     <string name="account_invite_link_copy">Copy</string>
     <string name="account_invite_share">Share Invitation Link</string>
     <string name="account_section_settings">App Settings</string>

@@ -4,7 +4,6 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
-    id("com.google.android.libraries.mapsplatform.secrets-gradle-plugin")
     // com.google.gms.google-services wird NICHT hier appliziert, sondern nur bedingt
     // für den playstore-Flavor (siehe unten). Der foss/F-Droid-Build hat keine
     // google-services.json und darf das Plugin nicht laden.
@@ -18,24 +17,10 @@ android {
         applicationId = "com.Lethe.app"
         minSdk = 26
         targetSdk = 36 // Geändert von 35 auf 36
-        versionCode = 100534
-        versionName = "10.4.134"
+        versionCode = 100536
+        versionName = "10.4.136"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-    }
-    secrets {
-        // Optionally specify a different file name containing your secrets.
-        // The plugin defaults to "local.properties"
-        propertiesFileName = "secrets.properties"
-
-        // A properties file containing default secret values. This file can be
-        // checked in version control.
-        defaultPropertiesFileName = "local.defaults.properties"
-
-        // Configure which keys should be ignored by the plugin by providing regular expressions.
-        // "sdk.dir" is ignored by default.
-        ignoreList.add("keyToIgnore") // Ignore the key "keyToIgnore"
-        ignoreList.add("sdk.*")       // Ignore all keys matching the regexp "sdk.*"
     }
     signingConfigs {
         create("release") {
@@ -127,10 +112,9 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.8.5")
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 
-    // Maps SDK for Android
-    implementation("com.google.android.gms:play-services-maps:18.2.0")
-    // Maps Compose (kompatibel mit Maps SDK 18.x)
-    implementation("com.google.maps.android:maps-compose:4.3.3")
+    // Karten: OpenStreetMap via osmdroid (Apache-2.0, kein API-Key, F-Droid-tauglich).
+    // Ersetzt Google Maps (play-services-maps + maps-compose) in BEIDEN Flavors.
+    implementation("org.osmdroid:osmdroid-android:6.1.20")
     // Hilt
     implementation("com.google.dagger:hilt-android:2.51.1")
     ksp("com.google.dagger:hilt-android-compiler:2.51.1")
@@ -165,8 +149,8 @@ dependencies {
     implementation("androidx.hilt:hilt-work:1.2.0")
     ksp("androidx.hilt:hilt-compiler:1.2.0")
 
-    // Standort (für Standort-Sharing im Chat & Dating)
-    implementation("com.google.android.gms:play-services-location:21.3.0")
+    // Standort (für Standort-Sharing im Chat & Dating) über das native Android
+    // LocationManager-API – kein Google Play Services nötig (F-Droid-tauglich).
 
     // Media3 Transformer — lokale Video-Transkodierung (Hardware-beschleunigt)
     val media3Version = "1.4.1"

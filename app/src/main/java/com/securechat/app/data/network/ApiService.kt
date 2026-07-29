@@ -119,6 +119,15 @@ interface ApiService {
     @POST("users/me/password")
     suspend fun changePassword(@Body request: ChangePasswordRequest): Response<TokenResponse>
 
+    @GET("users/me/admin-panel-password/status")
+    suspend fun getAdminPanelPasswordStatus(): Response<AdminPanelPasswordStatusResponse>
+
+    @POST("users/me/admin-panel-password")
+    suspend fun setAdminPanelPassword(@Body request: SetAdminPanelPasswordRequest): Response<Map<String, Boolean>>
+
+    @POST("users/me/admin-panel-password/verify")
+    suspend fun verifyAdminPanelPassword(@Body request: VerifyAdminPanelPasswordRequest): Response<Map<String, Boolean>>
+
     @POST("users/me/fcm-token")
     suspend fun updateFcmToken(@Body request: FcmTokenRequest): Response<Unit>
 

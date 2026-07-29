@@ -31,6 +31,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -63,6 +64,8 @@ fun AccountScreen(
     fakeNumber: String = "",
     profileImageUrl: String? = null,
     inviteLinkUrl: String? = null,
+    inviteLinkError: String? = null,
+    inviteLinkLoading: Boolean = false,
     userInfo: String? = null,
     userLinks: String? = null,
     onUpdateName: (String) -> Unit = {},
@@ -87,7 +90,14 @@ fun AccountScreen(
     onResetOnboarding: (() -> Unit)? = null,
     isVerified: Boolean = false,
     currentStyx: Int = 0,
-    onBuyVerification: ((onResult: (Boolean, String) -> Unit) -> Unit)? = null
+    onBuyVerification: ((onResult: (Boolean, String) -> Unit) -> Unit)? = null,
+    isAdmin: Boolean = false,
+    isModerator: Boolean = false,
+    adminPanelPasswordSet: Boolean? = null,
+    onLoadAdminPanelPasswordStatus: (() -> Unit)? = null,
+    onSetAdminPanelPassword: ((String) -> Unit)? = null,
+    adminPanelPasswordMessage: String? = null,
+    onClearAdminPanelPasswordMessage: (() -> Unit)? = null
 ) {
     var showNameDialog by remember { mutableStateOf(false) }
     var showInfoDialog by remember { mutableStateOf(false) }
@@ -96,6 +106,7 @@ fun AccountScreen(
     var showTiktokDialog by remember { mutableStateOf(false) }
     var showYoutubeDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
+    var showAdminPanelPasswordDialog by remember { mutableStateOf(false) }
     var copiedNumber by remember { mutableStateOf(false) }
     var verificationMessage by remember { mutableStateOf<String?>(null) }
     var verificationLoading by remember { mutableStateOf(false) }
@@ -109,6 +120,7 @@ fun AccountScreen(
     // Invite-Link automatisch generieren wenn noch nicht vorhanden
     LaunchedEffect(Unit) {
         if (inviteLinkUrl == null) onGenerateInvite?.invoke()
+        if (isAdmin || isModerator) onLoadAdminPanelPasswordStatus?.invoke()
     }
 
     val imageLauncher = rememberLauncherForActivityResult(
@@ -610,6 +622,25 @@ fun AccountScreen(
                                     .size(164.dp)
                                     .clip(RoundedCornerShape(8.dp))
                             )
+                        } else if (inviteLinkError != null) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(horizontal = 12.dp)
+                            ) {
+                                Icon(Icons.Default.QrCode2, contentDescription = null,
+                                    modifier = Modifier.size(40.dp),
+                                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f))
+                                Spacer(Modifier.height(6.dp))
+                                Text(inviteLinkError, fontSize = 10.sp, textAlign = TextAlign.Center,
+                                    color = MaterialTheme.colorScheme.error)
+                                Spacer(Modifier.height(6.dp))
+                                TextButton(
+                                    onClick = { onGenerateInvite?.invoke() },
+                                    enabled = !inviteLinkLoading
+                                ) {
+                                    Text(stringResource(R.string.account_qr_retry), fontSize = 12.sp)
+                                }
+                            }
                         } else {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 if (inviteLinkUrl == null) {
@@ -739,6 +770,29 @@ fun AccountScreen(
                 Spacer(Modifier.height(16.dp))
             }
 
+            // Backend-Passwort (2. Faktor fürs Admin-/Mod-Panel, nur für Admins/Moderatoren)
+            if (isAdmin || isModerator) {
+                SettingsSection(title = "Backend-Sicherheit") {
+                    SettingsItem(
+                        icon = Icons.Default.AdminPanelSettings,
+                        title = "Backend-Passwort",
+                        subtitle = when (adminPanelPasswordSet) {
+                            true -> "Gesetzt – schützt den Zugriff aufs Backend-Panel"
+                            false -> "Noch nicht gesetzt – Backend-Panel ist gesperrt"
+                            null -> "Wird geladen…"
+                        },
+                        onClick = { showAdminPanelPasswordDialog = true }
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                        )
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+            }
+
             // Abmelden-Sektion
             if (onLogout != null) {
                 SettingsSection(title = stringResource(R.string.account_section_session)) {
@@ -802,6 +856,78 @@ fun AccountScreen(
                 TextButton(onClick = { showNameDialog = false }) {
                     Text(stringResource(R.string.account_name_cancel))
                 }
+            }
+        )
+    }
+
+    // Backend-Passwort-Dialog (2. Faktor fürs Admin-/Mod-Panel)
+    if (showAdminPanelPasswordDialog) {
+        var newPw by remember { mutableStateOf("") }
+        var confirmPw by remember { mutableStateOf("") }
+        val pwValid = newPw.length >= 12 && newPw.any { !it.isLetterOrDigit() }
+        AlertDialog(
+            onDismissRequest = {
+                showAdminPanelPasswordDialog = false
+                onClearAdminPanelPasswordMessage?.invoke()
+            },
+            icon = { Icon(Icons.Default.AdminPanelSettings, contentDescription = null) },
+            title = { Text("Backend-Passwort") },
+            text = {
+                Column {
+                    Text(
+                        "Dieses Passwort wird zusätzlich zu deiner Admin-/Moderator-Rolle abgefragt, bevor das Backend-Panel angezeigt wird.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = newPw,
+                        onValueChange = { newPw = it },
+                        label = { Text("Neues Backend-Passwort") },
+                        singleLine = true,
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = confirmPw,
+                        onValueChange = { confirmPw = it },
+                        label = { Text("Wiederholen") },
+                        singleLine = true,
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    if (newPw.isNotEmpty() && !pwValid) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Mind. 12 Zeichen + mind. ein Sonderzeichen.",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                    if (adminPanelPasswordMessage != null) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            adminPanelPasswordMessage,
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { onSetAdminPanelPassword?.invoke(newPw) },
+                    enabled = pwValid && newPw == confirmPw
+                ) { Text("Speichern") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showAdminPanelPasswordDialog = false
+                    onClearAdminPanelPasswordMessage?.invoke()
+                }) { Text(stringResource(R.string.account_name_cancel)) }
             }
         )
     }

@@ -618,8 +618,17 @@ private fun ShareGroupItem(
                 .background(MaterialTheme.colorScheme.secondaryContainer),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Default.Group, contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(26.dp))
+            if (!group.groupImageUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = group.groupImageUrl,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Icon(Icons.Default.Group, contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(26.dp))
+            }
         }
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {

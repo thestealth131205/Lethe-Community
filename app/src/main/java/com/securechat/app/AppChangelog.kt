@@ -24,6 +24,31 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.136",
+            title = "OpenStreetMap-Karten & Video-Editor-Verbesserungen",
+            items = listOf(
+                "Neu: Die Karten f\u00fcr Live-Standort, Standort-Teilen und Profil-Umkreis nutzen jetzt OpenStreetMap",
+                "Behoben: Beim Anpassen der Helligkeit im Video-Editor blieb die Vorschau stehen und lie\u00df sich nicht mehr fortsetzen \u2013 die Vorschau l\u00e4uft jetzt w\u00e4hrend der Anpassung weiter",
+                "Behoben: Beim Senden eines Videos aus dem Video-Editor verschwand die Video-Nachricht in manchen F\u00e4llen spurlos \u2013 gro\u00dfe Videos werden jetzt zuverl\u00e4ssig verarbeitet und gesendet",
+                "Behoben: Gruppen zeigten in der App-internen Teilen-Liste kein Gruppenbild, sondern nur einen Platzhalter \u2013 jetzt wird das echte Gruppenbild angezeigt",
+                "Behoben: Der QR-Code bzw. Einladungslink im Konto lud in manchen F\u00e4llen endlos \u2013 bei einem Fehler erscheint jetzt ein Hinweis mit Wiederholen-Option",
+            ),
+            shortSummary = "Karten nutzen jetzt OpenStreetMap, der Video-Editor wurde stabiler und Gruppenbilder erscheinen in der Teilen-Liste"
+        ),
+
+        ChangelogEntry(
+            version = "10.4.135",
+            title = "Video-Editor mit Live-Vorschau & stabilere Videocalls",
+            items = listOf(
+                "Neu: Die Vorschau im Video-Editor zeigt Anpassungen wie Helligkeit, Kontrast und S\u00e4ttigung jetzt in Echtzeit an",
+                "Neu: Tippe im Video-Editor auf die laufende Vorschau, um das Video anzuhalten \u2013 erneutes Antippen setzt die Wiedergabe fort",
+                "Verbessert: Mit dem Video-Editor erstellte Videos werden beim Senden nicht mehr ein zweites Mal komprimiert \u2013 das Senden geht schneller und die Qualit\u00e4t bleibt erhalten",
+                "Behoben: Ein Absturz im Videocall, der beim Beenden des Anrufs auftreten konnte, wurde behoben",
+            ),
+            shortSummary = "Der Video-Editor zeigt Anpassungen live an und erstellte Videos werden nicht mehr doppelt komprimiert \u2013 dazu ein Absturz-Fix im Videocall"
+        ),
+
+        ChangelogEntry(
             version = "10.4.134",
             title = "Amazon-Vorschau & Videocall-Verbesserungen",
             items = listOf(
@@ -43,33 +68,6 @@ object AppChangelog {
                 "Verbessert: Der Web-Chat nutzt jetzt denselben Gruppen-Schlüssel wie dein Handy, sodass deine im Web geschriebenen Gruppen-Nachrichten von allen Mitgliedern gelesen werden und die Verlaufshistorie korrekt erscheint",
             ),
             shortSummary = "Web-Chat entschlüsselt Gruppen-Nachrichten jetzt korrekt \u2013 die Gruppen-Schlüssel werden sicher vom Handy übertragen"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.132",
-            title = "Gruppen-Benachrichtigungen, Tipp-Anzeige & neue Playlist-Funktionen",
-            items = listOf(
-                "Behoben: Gruppen-Nachrichten kamen bei ausgeschaltetem Display teils nicht als Benachrichtigung an \u2013 solange du keinen Chat aktiv ge\u00f6ffnet hast, wachst du jetzt zuverl\u00e4ssig f\u00fcr neue Gruppen-Nachrichten auf",
-                "Behoben: Die \u201etippt\u2026\u201c-Anzeige einer Gruppe erschien f\u00e4lschlich auch im Einzelchat der Person \u2013 Gruppen- und Einzel-Tippen werden jetzt sauber getrennt angezeigt",
-                "Behoben: In seltenen F\u00e4llen wurde eine Benachrichtigung dauerhaft unterdr\u00fcckt, wenn ihre Anzeige unterbrochen wurde \u2013 die Fallback-Benachrichtigung springt jetzt zuverl\u00e4ssig ein",
-                "Neu: Eigene Playlists im Lethe Medie Player lassen sich jetzt \u201eals Mix\u201c abspielen \u2013 mit nahtlosen 15-Sekunden-\u00dcberg\u00e4ngen wie beim Family/FriendsMix",
-                "Neu: Kuratierte Lethe-Playlists erscheinen jetzt f\u00fcr alle Nutzer direkt auf der Startseite des Medie Players",
-                "Neu: In Android Auto kannst du den laufenden Titel jetzt direkt per Herz-Symbol liken",
-            ),
-            shortSummary = "Zuverl\u00e4ssige Gruppen-Benachrichtigungen bei ausgeschaltetem Display, korrekte \u201etippt\u2026\u201c-Anzeige und neue Playlist-Funktionen im Medie Player"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.131",
-            title = "FriendsMix als echter DJ-Mix & Android Auto endlich sichtbar",
-            items = listOf(
-                "Neu: Die FriendsMix-Playlist im Lethe Medie Player f\u00fchlt sich jetzt wie ein echter Mix an \u2013 die Lieder starten mitten im Song und blenden sanft \u00fcber 15 Sekunden ineinander \u00fcber, unabh\u00e4ngig von deinen \u00dcberblend-Einstellungen",
-                "Neu: Der FriendsMix ordnet die Titel jetzt nach Geschwindigkeit (Beat/BPM) an, sodass der Rhythmus von Song zu Song nur sanft steigt oder f\u00e4llt statt abrupt zu wechseln",
-                "Behoben: Der Lethe Medie Player erscheint jetzt zuverl\u00e4ssig in Android Auto \u2013 mit einem \u00fcbersichtlichen Men\u00fc aus Bibliothek, Favoriten, Playlists, FriendsMix und Lokal, und die laufende Wiedergabe wird korrekt angezeigt",
-                "Neu: In Android Auto startet ein Antippen eines Titels jetzt gleich die ganze Kategorie als Warteschlange",
-                "Verbessert: Gr\u00f6\u00dfere Musikdateien (bis 300\u00a0MB) lassen sich jetzt in die Lethe-Bibliothek hochladen \u2013 auch hochaufl\u00f6sende Formate wie FLAC oder WAV",
-            ),
-            shortSummary = "FriendsMix mixt jetzt mit sanften \u00dcberg\u00e4ngen und Beat-Sortierung, der Medie Player erscheint zuverl\u00e4ssig in Android Auto und gr\u00f6\u00dfere Musikdateien lassen sich hochladen"
         ),
 
     )
