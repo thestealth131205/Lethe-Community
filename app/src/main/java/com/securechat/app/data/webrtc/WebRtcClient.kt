@@ -64,6 +64,8 @@ class WebRtcClient(
      * Wenn gesetzt, wird kein eigenes Mikrofon initialisiert → kein zweiter AudioManager-Eingriff.
      */
     private val sharedLocalAudioTrack: AudioTrack? = null,
+    /** Selfie-Segmentierung für die Hintergrundunschärfe (Provider-Pattern, siehe [BackgroundBlurCapturerObserver]). */
+    private val segmentationProvider: com.securechat.app.segmentation.SegmentationProvider,
     /** Allgemeine Audio-Qualität: "AUTO" | "LOW" | "HIGH" (steuert Mikrofon-Verbesserungen). */
     private val audioQuality: String = "AUTO",
     /** Gewünschter Audio-Ausgang: "SYSTEM" | "EARPIECE" | "SPEAKER" | "BLUETOOTH". */
@@ -350,7 +352,7 @@ class WebRtcClient(
             surfaceHelper = SurfaceTextureHelper.create("VideoCaptureThread", eglBase.eglBaseContext)
 
             // BlurObserver zwischen Capturer und VideoSource schalten
-            val blur = BackgroundBlurCapturerObserver(videoSource!!.capturerObserver, context)
+            val blur = BackgroundBlurCapturerObserver(videoSource!!.capturerObserver, segmentationProvider)
             blurObserver = blur
             videoCapturer!!.initialize(surfaceHelper, context, blur)
             videoCapturer!!.startCapture(1280, 720, 30)  // max 720p @ 30 fps
@@ -862,7 +864,7 @@ class WebRtcClient(
 
         // 8. Kamera-Capturer mit neuem Helper/Source initialisieren und starten.
         //    BlurObserver für die neue Camera-Source neu verdrahten.
-        val newBlur = BackgroundBlurCapturerObserver(cameraSource.capturerObserver, context)
+        val newBlur = BackgroundBlurCapturerObserver(cameraSource.capturerObserver, segmentationProvider)
         blurObserver?.dispose()
         blurObserver = newBlur
         val cameraCapt = buildCameraCapturer()

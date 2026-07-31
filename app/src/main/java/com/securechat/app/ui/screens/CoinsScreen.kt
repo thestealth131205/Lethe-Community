@@ -24,7 +24,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.android.billingclient.api.ProductDetails
+import com.securechat.app.BuildConfig
+import com.securechat.app.billing.StyxProduct
 import com.securechat.app.ui.MainViewModel
 import com.stripe.android.PaymentConfiguration
 import com.stripe.android.paymentsheet.PaymentSheet
@@ -205,7 +206,12 @@ fun CoinsScreen(
                     billingError = billingError,
                     stripeLoading = stripeLoading,
                     onBuyPlayStore = { product ->
-                        if (activity != null) viewModel.buyStyx(activity, product)
+                        if (activity != null) viewModel.buyStyx(activity, product.productId)
+                    },
+                    onOpenWebTopup = {
+                        // foss-Build: kein Play Billing – FossBillingProvider öffnet
+                        // stattdessen https://letheapp.de/coins per Chrome Custom Tabs.
+                        if (activity != null) viewModel.buyStyx(activity, "")
                     },
                     onBuyStripe = {
                         stripeLoading = true
@@ -257,11 +263,12 @@ fun CoinsScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AufladenTab(
-    products: List<ProductDetails>,
+    products: List<StyxProduct>,
     isLoading: Boolean,
     billingError: String?,
     stripeLoading: Boolean,
-    onBuyPlayStore: (ProductDetails) -> Unit,
+    onBuyPlayStore: (StyxProduct) -> Unit,
+    onOpenWebTopup: () -> Unit,
     onBuyStripe: () -> Unit
 ) {
     // Zahlungsmethode: "playstore" | "stripe"
@@ -329,6 +336,11 @@ private fun AufladenTab(
                         textAlign = TextAlign.Center
                     )
                 }
+                products.isEmpty() && BuildConfig.IS_FOSS -> item {
+                    // foss-Build: kein Google Play Billing verfügbar (F-Droid-Auflage) –
+                    // stattdessen Web-Aufladeseite (Stripe) per Chrome Custom Tabs anbieten.
+                    WebTopupCard(onClick = onOpenWebTopup)
+                }
                 products.isEmpty() -> item {
                     Text(
                         text = "Keine Pakete verfügbar",
@@ -349,6 +361,42 @@ private fun AufladenTab(
         }
 
         item { Spacer(Modifier.height(32.dp)) }
+    }
+}
+
+// ─── Web-Aufladung (foss-Build ohne Google Play Billing) ─────────────────────
+
+@Composable
+private fun WebTopupCard(onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = Icons.Default.MonetizationOn,
+                contentDescription = null,
+                modifier = Modifier.size(40.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = "In dieser Version keine In-App-Käufe verfügbar.",
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            )
+            Spacer(Modifier.height(12.dp))
+            Button(onClick = onClick, shape = RoundedCornerShape(12.dp)) {
+                Text("Im Browser aufladen", fontWeight = FontWeight.Bold)
+            }
+        }
     }
 }
 
@@ -580,9 +628,9 @@ private fun parseStyxPackage(productId: String): StyxPackageInfo = when (product
 }
 
 @Composable
-private fun StyxProductCard(product: ProductDetails, onBuy: () -> Unit) {
+private fun StyxProductCard(product: StyxProduct, onBuy: () -> Unit) {
     val info = parseStyxPackage(product.productId)
-    val price = product.oneTimePurchaseOfferDetails?.formattedPrice ?: "–"
+    val price = product.formattedPrice
 
     Card(
         modifier = Modifier
@@ -632,9 +680,9 @@ private fun StyxProductCard(product: ProductDetails, onBuy: () -> Unit) {
                             }
                         }
                     }
-                    if (product.name.isNotBlank() && product.name != product.productId) {
+                    if (product.displayName.isNotBlank() && product.displayName != product.productId) {
                         Text(
-                            text = product.name,
+                            text = product.displayName,
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
                         )

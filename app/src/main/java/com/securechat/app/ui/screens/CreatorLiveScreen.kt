@@ -75,9 +75,6 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.IntOffset
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.segmentation.Segmentation
-import com.google.mlkit.vision.segmentation.selfie.SelfieSegmenterOptions
 import com.pedro.encoder.input.video.Camera2ApiManager
 import com.securechat.app.data.local.LiveSilhouetteFilter
 import java.io.ByteArrayOutputStream
@@ -90,7 +87,7 @@ private val LIVE_STICKERS = listOf("🔥", "❤️", "😂", "👏", "🎉", "�
 
 private data class PlacedSticker(val id: Int, val emoji: String)
 
-// Auflösung der NV21-Frames für ML-Kit-Segmentierung (niedrig für Performance)
+// Auflösung der NV21-Frames für die Selfie-Segmentierung (niedrig für Performance)
 private const val SEG_W = 320
 private const val SEG_H = 240
 
@@ -181,14 +178,7 @@ fun CreatorLiveScreen(
     var silhouetteBgSet      by remember { mutableStateOf(false) }
     val silhouetteProc       = remember { AtomicBoolean(false) }
     val silhouetteExecutor   = remember { Executors.newSingleThreadExecutor { r -> Thread(r, "silhouette-ml").also { it.isDaemon = true } } }
-    val silhouetteSegmenter  = remember {
-        Segmentation.getClient(
-            SelfieSegmenterOptions.Builder()
-                .setDetectorMode(SelfieSegmenterOptions.STREAM_MODE)
-                .enableRawSizeMask()
-                .build()
-        )
-    }
+    val segmentationProvider = viewModel.segmentationProvider
     val livePrefs            = remember { context.getSharedPreferences("live_prefs", android.content.Context.MODE_PRIVATE) }
 
     val bgPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -290,7 +280,6 @@ fun CreatorLiveScreen(
                 if (cam.isStreaming) { cam.stopStream(); viewModel.endStream {} }
                 if (cam.isOnPreview) cam.stopPreview()
             }
-            silhouetteSegmenter.close()
             silhouetteExecutor.shutdownNow()
             viewModel.disconnectLiveChat()
         }
@@ -383,7 +372,7 @@ fun CreatorLiveScreen(
                             // Silhouetten-Filter auf die GL-Pipeline setzen
                             cam.getGlInterface().addFilter(silhouetteFilter)
 
-                            // ML-Kit-Bildlistener registrieren (320×240 für Segmentierung)
+                            // Bildlistener registrieren (320×240 für Segmentierung)
                             cam.addImageListener(SEG_W, SEG_H, android.graphics.ImageFormat.YUV_420_888, 1, true, object : Camera2ApiManager.ImageCallback {
                                 override fun onImageAvailable(image: android.media.Image) {
                                     if (!silhouetteFilter.isEnabled) return
@@ -417,18 +406,15 @@ fun CreatorLiveScreen(
                                     silhouetteExecutor.execute {
                                         try {
                                             val raw = nv21ToBitmap(nv21, imgW, imgH) ?: run { silhouetteProc.set(false); return@execute }
-                                            // Kamera-Sensor ist um 90° gedreht – ML Kit kompensiert intern
-                                            val input = InputImage.fromBitmap(raw, 90)
-                                            silhouetteSegmenter.process(input)
-                                                .addOnSuccessListener { mask ->
-                                                    val floatBuf = mask.buffer
-                                                    val floats = FloatArray(floatBuf.remaining() / 4)
-                                                    floatBuf.asFloatBuffer().get(floats)
-                                                    silhouetteFilter.updateMask(floats, mask.width, mask.height)
-                                                }
-                                                .addOnCompleteListener { raw.recycle(); silhouetteProc.set(false) }
+                                            // Kamera-Sensor ist um 90° gedreht – der Provider kompensiert intern
+                                            val mask = segmentationProvider.segment(raw, 90)
+                                            if (mask != null) {
+                                                silhouetteFilter.updateMask(mask.buffer, mask.width, mask.height)
+                                            }
+                                            raw.recycle()
                                         } catch (e: Exception) {
                                             Timber.tag("CreatorLive").w("Segmentierung fehlgeschlagen: ${e.message}")
+                                        } finally {
                                             silhouetteProc.set(false)
                                         }
                                     }

@@ -47,6 +47,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.Cast
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -250,11 +252,8 @@ class MainActivity : FragmentActivity() {
         // Ausstehende globale Lumis-Broadcasts prüfen (falls App neu gestartet wurde)
         viewModel.checkPendingGlobalLumis()
 
-        // CastContext async initialisieren – startet Hintergrund-Discovery von Cast-Geräten
-        val castExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
-        com.google.android.gms.cast.framework.CastContext.getSharedInstance(this, castExecutor)
-            .addOnSuccessListener { /* CastContext bereit */ }
-            .addOnFailureListener { /* Cast nicht verfügbar (z. B. Google Play Services fehlt) */ }
+        // Cast-Geräte-Discovery (Google-frei, mDNS) läuft über den CastDiscoveryManager,
+        // der in SecureChatApplication gestartet wird – hier ist nichts zu tun.
 
         // Bluetooth-Routing-Receiver registrieren (A2DP + Headset Verbindungsänderungen)
         audioFocusManager.register()
@@ -346,6 +345,9 @@ class MainActivity : FragmentActivity() {
                 backgroundColor = effectiveBackgroundColor,
                 appTheme = preferences.appTheme
             ) {
+                // Globaler Cast-Geräte-Picker (Google-frei) – liegt über der ganzen App
+                GlobalCastDevicePicker(viewModel.castDiscoveryManager)
+
                 val currentUser by viewModel.currentUser.collectAsState()
                 val pendingShare by viewModel.pendingShare.collectAsState()
                 val pendingDeepLink by viewModel.pendingDeepLink.collectAsState()
@@ -1300,6 +1302,7 @@ class MainActivity : FragmentActivity() {
                                 val pendingSound = viewModel.pendingSoundData.collectAsState().value
                                 LaunchedEffect(Unit) { viewModel.clearPendingSoundData() }
                                 SparkAddEditorScreen(
+                                    viewModel = viewModel,
                                     mediaUri = mediaUri,
                                     preSelectedSoundOriginId = pendingSound?.soundOriginSparkId,
                                     preSelectedMusicTitle = pendingSound?.musicTitle,
@@ -1348,6 +1351,7 @@ class MainActivity : FragmentActivity() {
                                     val pendingSound = viewModel.pendingSoundData.collectAsState().value
                                     LaunchedEffect(Unit) { viewModel.clearPendingSoundData() }
                                     SparkAddEditorScreen(
+                                        viewModel = viewModel,
                                         mediaUri = firstUri,
                                         extraImageUris = extra,
                                         preSelectedSoundOriginId = pendingSound?.soundOriginSparkId,
@@ -2044,23 +2048,22 @@ class MainActivity : FragmentActivity() {
                                 }
                             }
 
-                            // Google Sign-In Launcher für Drive-Backup
+                            // Google Sign-In Launcher für Drive-Backup. Intent-Aufbau/Auswertung
+                            // laufen über MainViewModel → GoogleAuthProvider (playstore: echtes
+                            // Google-Sign-In; foss: nicht verfügbar) – MainActivity bleibt frei
+                            // von jeder com.google.android.gms.auth.api.signin.*-Abhängigkeit.
                             val googleSignInLauncher = rememberLauncherForActivityResult(
                                 ActivityResultContracts.StartActivityForResult()
                             ) { result ->
-                                val task = com.google.android.gms.auth.api.signin.GoogleSignIn.getSignedInAccountFromIntent(result.data)
-                                try {
-                                    val account = task.getResult(com.google.android.gms.common.api.ApiException::class.java)
-                                    if (account?.account != null && pendingBackupPassword.isNotBlank()) {
-                                        viewModel.exportToGoogleDrive(pendingBackupPassword, account.account!!) { _, msg ->
-                                            android.widget.Toast.makeText(this@MainActivity, msg, android.widget.Toast.LENGTH_LONG).show()
-                                        }
-                                        pendingBackupPassword = ""
-                                    }
-                                } catch (e: Exception) {
-                                    android.widget.Toast.makeText(this@MainActivity, "Google-Anmeldung fehlgeschlagen: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
-                                    pendingBackupPassword = ""
+                                val account = viewModel.handleGoogleSignInResult(result.data) { errorMsg ->
+                                    android.widget.Toast.makeText(this@MainActivity, errorMsg, android.widget.Toast.LENGTH_LONG).show()
                                 }
+                                if (account != null && pendingBackupPassword.isNotBlank()) {
+                                    viewModel.exportToGoogleDrive(pendingBackupPassword, account) { _, msg ->
+                                        android.widget.Toast.makeText(this@MainActivity, msg, android.widget.Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                                pendingBackupPassword = ""
                             }
 
                             AppSettingsScreen(
@@ -2075,15 +2078,18 @@ class MainActivity : FragmentActivity() {
                                             createBackupLauncher.launch("lethe_backup_${System.currentTimeMillis()}.lethe")
                                         }
                                         com.securechat.app.data.BackupManager.BackupDestination.GOOGLE_DRIVE -> {
-                                            // Google Sign-In starten
-                                            val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(
-                                                com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN
-                                            )
-                                                .requestEmail()
-                                                .requestScopes(com.google.android.gms.common.api.Scope("https://www.googleapis.com/auth/drive.file"))
-                                                .build()
-                                            val client = com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(this@MainActivity, gso)
-                                            googleSignInLauncher.launch(client.signInIntent)
+                                            // Google Sign-In starten (über GoogleAuthProvider; foss: null → Hinweis)
+                                            val signInIntent = viewModel.buildGoogleSignInIntent(this@MainActivity)
+                                            if (signInIntent != null) {
+                                                googleSignInLauncher.launch(signInIntent)
+                                            } else {
+                                                android.widget.Toast.makeText(
+                                                    this@MainActivity,
+                                                    "Google-Drive-Backup ist in dieser Version nicht verfügbar.",
+                                                    android.widget.Toast.LENGTH_LONG
+                                                ).show()
+                                                pendingBackupPassword = ""
+                                            }
                                         }
                                         com.securechat.app.data.BackupManager.BackupDestination.NEXTCLOUD -> {
                                             // Wird über onExportBackupNextcloud behandelt
@@ -3177,4 +3183,61 @@ class MainActivity : FragmentActivity() {
         }
         audioFocusManager.unregister()
     }
+}
+
+/**
+ * Globaler Cast-Geräte-Picker (Google-frei). Zeigt die per mDNS gefundenen
+ * Chromecast-Geräte als Auswahl-Dialog, sobald [CastDiscoveryManager.requestDevicePicker]
+ * aufgerufen wurde. Ersetzt den früheren MediaRouteChooserDialog des Google-Cast-SDK.
+ */
+@Composable
+private fun GlobalCastDevicePicker(manager: com.securechat.app.cast.CastDiscoveryManager) {
+    val show by manager.showPicker.collectAsState()
+    if (!show) return
+    val devices by manager.devices.collectAsState()
+
+    AlertDialog(
+        onDismissRequest = { manager.dismissPicker() },
+        icon = { Icon(Icons.Default.Cast, contentDescription = null, tint = Color(0xFF4FC3F7)) },
+        title = { Text("Auf Gerät streamen", style = MaterialTheme.typography.titleMedium) },
+        text = {
+            Column {
+                if (devices.isEmpty()) {
+                    Text(
+                        "Suche nach Cast-Geräten …",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    devices.forEach { device ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { manager.connectToDevice(device) }
+                                .padding(horizontal = 4.dp, vertical = 12.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Cast,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.size(12.dp))
+                            Text(
+                                text = device.name,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { manager.dismissPicker() }) {
+                Text("Abbrechen")
+            }
+        }
+    )
 }

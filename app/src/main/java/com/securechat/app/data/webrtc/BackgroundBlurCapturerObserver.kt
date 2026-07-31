@@ -1,13 +1,10 @@
 package com.securechat.app.data.webrtc
 
-import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Rect
 import android.graphics.YuvImage
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.segmentation.Segmentation
-import com.google.mlkit.vision.segmentation.selfie.SelfieSegmenterOptions
+import com.securechat.app.segmentation.SegmentationProvider
 import org.webrtc.CapturerObserver
 import org.webrtc.JavaI420Buffer
 import org.webrtc.VideoFrame
@@ -19,14 +16,14 @@ import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Ein [CapturerObserver]-Wrapper der bei aktivierter Privatsphäre-Funktion den Hintergrund
- * im lokalen Videostream via ML Kit Selfie-Segmentierung unscharf stellt.
+ * im lokalen Videostream via Selfie-Segmentierung ([SegmentationProvider]) unscharf stellt.
  *
  * Verwendung: Wird zwischen VideoCapturer und VideoSource geschaltet.
  * Wenn [isBlurEnabled] = false, werden Frames 1:1 weitergeleitet (kein Overhead).
  */
 class BackgroundBlurCapturerObserver(
     private val delegate: CapturerObserver,
-    private val context: Context
+    private val segmentationProvider: SegmentationProvider
 ) : CapturerObserver {
 
     /** Kann jederzeit threadsicher umgeschaltet werden. */
@@ -38,13 +35,6 @@ class BackgroundBlurCapturerObserver(
     }
     // Verhindert Frame-Stau: wenn noch ein Frame verarbeitet wird, wird der neue übersprungen
     private val isProcessingFrame = AtomicBoolean(false)
-
-    private val segmenter = Segmentation.getClient(
-        SelfieSegmenterOptions.Builder()
-            .setDetectorMode(SelfieSegmenterOptions.STREAM_MODE)
-            .enableRawSizeMask()
-            .build()
-    )
 
     // Letztes Segmentierungsmaske + deren Dimensionen (AtomicReference für threadsichere Updates)
     private val lastMask      = AtomicReference<FloatArray?>(null)
@@ -96,24 +86,21 @@ class BackgroundBlurCapturerObserver(
                     // Segmentierung alle 5 Frames neu berechnen (Performance)
                     frameCount++
                     if (frameCount % 5 == 0) {
-                        // Kopie für ML Kit erstellen: ML Kit verarbeitet async, das Original-Bitmap
-                        // darf nicht recycelt werden während ML Kit es noch liest → eigene Kopie
-                        val mlBitmap = bitmap.copy(bitmap.config ?: Bitmap.Config.ARGB_8888, false)
-                        val inputImage = InputImage.fromBitmap(mlBitmap, 0)
-                        segmenter.process(inputImage)
-                            .addOnSuccessListener { mask ->
-                                mlBitmap.recycle()
-                                val buf = mask.buffer
-                                val floats = FloatArray(buf.remaining() / 4)
-                                buf.asFloatBuffer().get(floats)
-                                lastMask.set(floats)
+                        // Kopie erstellen: die Segmentierung darf das Original-Bitmap nicht
+                        // recyceln während es weiter unten für den Blur-Mix verwendet wird.
+                        val segBitmap = bitmap.copy(bitmap.config ?: Bitmap.Config.ARGB_8888, false)
+                        try {
+                            val mask = segmentationProvider.segment(segBitmap, 0)
+                            if (mask != null) {
+                                lastMask.set(mask.buffer)
                                 lastMaskW = mask.width
                                 lastMaskH = mask.height
                             }
-                            .addOnFailureListener { e ->
-                                mlBitmap.recycle()
-                                Timber.tag("LETHE_BLUR").w("Segmentation failed: ${e.message}")
-                            }
+                        } catch (e: Exception) {
+                            Timber.tag("LETHE_BLUR").w("Segmentation failed: ${e.message}")
+                        } finally {
+                            segBitmap.recycle()
+                        }
                     }
 
                     val mask = lastMask.get()
@@ -162,9 +149,12 @@ class BackgroundBlurCapturerObserver(
         }
     }
 
-    /** Gibt den ML-Kit-Segmenter und den Executor frei. Muss beim Abbau des WebRTC-Clients aufgerufen werden. */
+    /**
+     * Gibt den Executor frei. Muss beim Abbau des WebRTC-Clients aufgerufen werden.
+     * Der [segmentationProvider] ist ein App-weiter Singleton und wird hier NICHT
+     * geschlossen (wird ggf. vom nächsten Call weiterverwendet).
+     */
     fun dispose() {
-        try { segmenter.close() } catch (_: Exception) {}
         blurExecutor.shutdownNow()
     }
 

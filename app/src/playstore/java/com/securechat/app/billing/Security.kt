@@ -1,4 +1,4 @@
-package com.securechat.app.data.billing
+package com.securechat.app.billing
 
 import android.util.Base64
 import timber.log.Timber

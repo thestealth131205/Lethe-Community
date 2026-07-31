@@ -163,6 +163,9 @@ dependencies {
     implementation("androidx.media3:media3-datasource:$media3Version")
     implementation("androidx.media3:media3-ui:$media3Version")
     implementation("androidx.media3:media3-session:$media3Version")
+    // androidx.media (MediaSessionCompat.Token) – für PlayerNotificationManager.setMediaSessionToken.
+    // Kam bisher transitiv über play-services-cast; nach dessen Entfernung explizit nötig.
+    implementation("androidx.media:media:1.7.0")
 
     // QR-Code-Generierung (pure Java, kein JNI)
     implementation("com.google.zxing:core:3.5.3")
@@ -185,14 +188,29 @@ dependencies {
     // WebRTC – 1:1 Video Calls (stream-webrtc-android = selbes org.webrtc-Package, auf Maven Central verfügbar)
     implementation("io.getstream:stream-webrtc-android:1.3.8")
 
-    // Google Play Billing – In-App-Käufe (Styx-Coins aufladen)
-    implementation("com.android.billingclient:billing-ktx:6.2.0")
+    // Google Play Billing – In-App-Käufe (Styx-Coins aufladen). NUR playstore-Flavor:
+    // proprietäres SDK, für F-Droid nicht zulässig. foss nutzt stattdessen FossBillingProvider
+    // (Web-Aufladung via Chrome Custom Tabs, siehe billing/BillingProvider.kt).
+    "playstoreImplementation"("com.android.billingclient:billing-ktx:6.2.0")
 
-    // ML Kit – Gesichtserkennung für Altersverifikation
-    implementation("com.google.mlkit:face-detection:16.1.7")
+    // ML Kit – Gesichtserkennung für Altersverifikation. NUR playstore-Flavor: proprietäres
+    // SDK, für F-Droid nicht zulässig. foss nutzt stattdessen OpenCV (Haar-Cascade,
+    // siehe facedetection/OpenCvFaceDetectionProvider.kt).
+    "playstoreImplementation"("com.google.mlkit:face-detection:16.1.7")
 
-    // ML Kit – Selfie-Segmentierung für Hintergrundunschärfe im Videocall
-    implementation("com.google.mlkit:segmentation-selfie:16.0.0-beta6")
+    // ML Kit – Selfie-Segmentierung für Hintergrundunschärfe im Videocall, Sticker-Freistellung
+    // und Live-Stream-Greenscreen. NUR playstore-Flavor: proprietäres SDK. foss nutzt
+    // stattdessen MediaPipe Tasks Vision (Apache-2.0, siehe
+    // segmentation/MediaPipeSegmentationProvider.kt).
+    "playstoreImplementation"("com.google.mlkit:segmentation-selfie:16.0.0-beta6")
+
+    // FOSS/F-Droid-Ersatz für ML Kit Face Detection: OpenCV Android (Apache-2.0, Haar-Cascade,
+    // Kaskaden-XMLs als App-Assets in src/foss/assets/ gebündelt).
+    "fossImplementation"("org.opencv:opencv:4.9.0")
+
+    // FOSS/F-Droid-Ersatz für ML Kit Segmentation: MediaPipe Tasks Vision (Apache-2.0,
+    // Modell selfie_segmenter.tflite als App-Asset in src/foss/assets/ gebündelt).
+    "fossImplementation"("com.google.mediapipe:tasks-vision:0.10.29")
 
     // CameraX – Kamerasteuerung für Altersverifikation
     val cameraVersion = "1.3.4"
@@ -207,18 +225,23 @@ dependencies {
     "playstoreImplementation"(platform("com.google.firebase:firebase-bom:33.7.0"))
     "playstoreImplementation"("com.google.firebase:firebase-messaging-ktx")
 
-    // FFmpegKit – Dual-Audio-Muxing + Video-Filter für Spark Editor
+    // FFmpegKit – Dual-Audio-Muxing + Video-Filter für Spark Editor (nur playstore-Flavor:
+    // vorgebautes Binär-AAR, F-Droid-inkompatibel. foss-Flavor nutzt Media3FfmpegProvider).
     // Lokal eingebunden (thebytearray/ffmpeg-kit v1.0.0 – kein Maven-Repo verfügbar)
-    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar", "*.jar"))))
+    "playstoreImplementation"(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar", "*.jar"))))
 
     // RootEncoder – RTMP-Push für Creator-Livestream (CameraX + RTMP)
     implementation("com.github.pedroSG94.RootEncoder:library:2.5.4")
 
-    // Google Cast – Chromecast-Integration für Musik-Streaming
-    implementation("com.google.android.gms:play-services-cast-framework:21.5.0")
+    // Chromecast – Google-freier CASTV2-Client (ChromecastV2Client, mDNS via NsdManager).
+    // Ersetzt play-services-cast-framework in BEIDEN Flavors (F-Droid-tauglich).
 
-    // Google Drive API – Backup-Upload zu Google Drive
-    implementation("com.google.android.gms:play-services-auth:21.3.0")
+    // Google Drive API – Backup-Upload zu Google Drive.
+    // play-services-auth (Google-Sign-In) ist proprietär und NUR playstore-Flavor
+    // (siehe backup/GoogleAuthProvider.kt). google-api-client-android + google-api-services-drive
+    // sind reine Apache-2.0-REST-Clients OHNE GMS-Abhängigkeit und bleiben in BEIDEN Flavors
+    // (MainViewModel.exportToGoogleDrive nutzt nur diese beiden + ein bereits vorhandenes Account).
+    "playstoreImplementation"("com.google.android.gms:play-services-auth:21.3.0")
     implementation("com.google.api-client:google-api-client-android:2.2.0") {
         exclude(group = "org.apache.httpcomponents")
     }

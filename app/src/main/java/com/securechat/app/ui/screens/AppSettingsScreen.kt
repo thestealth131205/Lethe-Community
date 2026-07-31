@@ -17,6 +17,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.securechat.app.BuildConfig
 import com.securechat.app.R
 import com.securechat.app.data.BackupManager.BackupDestination
 import com.securechat.app.ui.theme.topBarTitleColor
@@ -584,25 +585,28 @@ fun AppSettingsScreen(
                         }
                     }
 
-                    // Google Drive
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { selectedDestination = BackupDestination.GOOGLE_DRIVE }
-                            .padding(vertical = 4.dp)
-                    ) {
-                        RadioButton(
-                            selected = selectedDestination == BackupDestination.GOOGLE_DRIVE,
-                            onClick = { selectedDestination = BackupDestination.GOOGLE_DRIVE }
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Icon(Icons.Default.Cloud, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Column {
-                            Text(stringResource(R.string.app_settings_backup_drive_title), style = MaterialTheme.typography.bodyMedium)
-                            Text(stringResource(R.string.app_settings_backup_drive_subtitle), style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    // Google Drive – nur im playstore-Build (play-services-auth ist proprietär
+                    // und für F-Droid nicht zulässig; siehe com.securechat.app.backup.GoogleAuthProvider).
+                    if (!BuildConfig.IS_FOSS) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedDestination = BackupDestination.GOOGLE_DRIVE }
+                                .padding(vertical = 4.dp)
+                        ) {
+                            RadioButton(
+                                selected = selectedDestination == BackupDestination.GOOGLE_DRIVE,
+                                onClick = { selectedDestination = BackupDestination.GOOGLE_DRIVE }
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Icon(Icons.Default.Cloud, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Column {
+                                Text(stringResource(R.string.app_settings_backup_drive_title), style = MaterialTheme.typography.bodyMedium)
+                                Text(stringResource(R.string.app_settings_backup_drive_subtitle), style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                            }
                         }
                     }
 

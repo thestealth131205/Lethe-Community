@@ -67,8 +67,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
-import com.arthenica.ffmpegkit.FFmpegKit
-import com.arthenica.ffmpegkit.ReturnCode
+import com.securechat.app.media.FfmpegProvider
+import com.securechat.app.media.FfmpegResult
+import com.securechat.app.media.GifRequest
+import com.securechat.app.media.GifSource
 import com.securechat.app.ui.MainViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -76,10 +78,6 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
-import com.google.android.gms.tasks.Tasks
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.segmentation.Segmentation
-import com.google.mlkit.vision.segmentation.selfie.SelfieSegmenterOptions
 import kotlin.coroutines.resume
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -692,7 +690,7 @@ fun StickerCreatorSheet(
                                         } else {
                                             isRemovingBg = true
                                             scope.launch(Dispatchers.IO) {
-                                                val result = removeStickerBackground(bmp)
+                                                val result = removeStickerBackground(bmp, viewModel.segmentationProvider)
                                                 withContext(Dispatchers.Main) {
                                                     bgRemovedBitmap = result
                                                     bgRemoved = true
@@ -1352,7 +1350,7 @@ private fun getVideoFrameBitmap(context: Context, uri: Uri, timeMs: Long, maxDim
 
 /**
  * Erstellt einen Overlay-Bitmap mit Zeichenpfaden, Texten (mit Rotation/Skalierung/Schrift)
- * und Emojis (mit Rotation/Skalierung). Wird via FFmpegKit über das GIF gelegt.
+ * und Emojis (mit Rotation/Skalierung). Wird via FfmpegProvider über das GIF gelegt.
  */
 fun buildOverlayBitmap(
     width: Int, height: Int,
@@ -1427,7 +1425,7 @@ fun buildOverlayBitmap(
     return bmp
 }
 
-/** Kernfunktion: GIF/PNG erstellen via FFmpegKit + Upload. Läuft auf Dispatchers.IO. */
+/** Kernfunktion: GIF/PNG erstellen via FfmpegProvider + Upload. Läuft auf Dispatchers.IO. */
 private suspend fun processAndUpload(
     context: Context, viewModel: MainViewModel,
     sourceUri: Uri, sourceIsVideo: Boolean,
@@ -1486,40 +1484,30 @@ private suspend fun processAndUpload(
         }
     } catch (e: Exception) { onDone(false, "Quelldatei konnte nicht gelesen werden."); return }
 
-    val gifTarget = if (hasOverlays) File(cacheDir, "sticker_base_$id.gif") else outputGif
+    val overlayBmp = if (hasOverlays) {
+        buildOverlayBitmap(outW, outH, drawPaths, textOverlays, emojiOverlays, canvasSize, density)
+    } else null
 
-    val step1Ok: Boolean
-    if (sourceIsVideo) {
-        val startSec = startMs / 1000f; val durSec = durationMs / 1000f
-        val palFile = File(cacheDir, "sticker_pal_$id.png")
-        val cW = cropRight - cropLeft; val cH = cropBottom - cropTop
-        val cropVf = "crop=iw*$cW:ih*$cH:iw*$cropLeft:ih*$cropTop,"
-        val pass1 = "-ss $startSec -t $durSec -i \"${inputFile.absolutePath}\" -vf \"${cropVf}fps=10,scale=$outW:$outH:flags=lanczos,palettegen\" -y \"${palFile.absolutePath}\""
-        executeFFmpeg(pass1)
-        if (!palFile.exists()) { cleanup(inputFile); onDone(false, "GIF-Palette konnte nicht erstellt werden."); return }
-        val pass2 = "-ss $startSec -t $durSec -i \"${inputFile.absolutePath}\" -i \"${palFile.absolutePath}\" " +
-                "-filter_complex \"${cropVf}fps=10,scale=$outW:$outH:flags=lanczos[x];[x][1:v]paletteuse\" -loop 0 -y \"${gifTarget.absolutePath}\""
-        step1Ok = executeFFmpeg(pass2)
-        cleanup(palFile)
+    val gifSource = if (sourceIsVideo) {
+        GifSource.Video(inputFile, startMs, durationMs, cropLeft, cropTop, cropRight, cropBottom)
     } else {
-        val cW = cropRight - cropLeft; val cH = cropBottom - cropTop
-        val cropVf = "crop=iw*$cW:ih*$cH:iw*$cropLeft:ih*$cropTop,"
-        val imgCmd = "-i \"${inputFile.absolutePath}\" -vf \"${cropVf}scale=$outW:$outH:flags=lanczos\" -loop 0 -y \"${gifTarget.absolutePath}\""
-        step1Ok = executeFFmpeg(imgCmd)
+        GifSource.Image(inputFile, cropLeft, cropTop, cropRight, cropBottom)
     }
+    val gifResult = viewModel.ffmpegProvider.createGif(
+        GifRequest(
+            source = gifSource,
+            outputWidth = outW,
+            outputHeight = outH,
+            overlayBitmap = overlayBmp,
+            outputFile = outputGif
+        )
+    )
+    overlayBmp?.recycle()
 
-    if (!step1Ok || !gifTarget.exists() || gifTarget.length() == 0L) {
-        cleanup(inputFile); onDone(false, "GIF-Erstellung fehlgeschlagen."); return
-    }
-
-    if (hasOverlays) {
-        val overlayBmp = buildOverlayBitmap(outW, outH, drawPaths, textOverlays, emojiOverlays, canvasSize, density)
-        val overlayFile = File(cacheDir, "sticker_ovl_$id.png")
-        FileOutputStream(overlayFile).use { out -> overlayBmp.compress(Bitmap.CompressFormat.PNG, 100, out) }
-        val ovCmd = "-i \"${gifTarget.absolutePath}\" -i \"${overlayFile.absolutePath}\" -filter_complex \"[0:v][1:v]overlay=0:0\" -loop 0 -y \"${outputGif.absolutePath}\""
-        val ok2 = executeFFmpeg(ovCmd)
-        cleanup(overlayFile, gifTarget)
-        if (!ok2 || !outputGif.exists()) { cleanup(inputFile, outputGif); onDone(false, "Overlay konnte nicht angewendet werden."); return }
+    if (gifResult is FfmpegResult.Error) {
+        cleanup(inputFile, outputGif)
+        onDone(false, "GIF-Erstellung fehlgeschlagen.")
+        return
     }
 
     cleanup(inputFile)
@@ -1574,37 +1562,18 @@ private suspend fun createGifFromImages(
             return
         }
 
-        // FFmpeg-Concat-Datei schreiben (gibt jedem Bild die gewünschte Dauer)
-        val delaySec = frameDelayMs / 1000.0
-        val sb = StringBuilder("ffconcat version 1.0\n")
-        frameFiles.forEach { f ->
-            sb.append("file '${f.absolutePath}'\n")
-            sb.append("duration $delaySec\n")
-        }
-        // letztes Bild nochmals ohne duration (FFmpeg-Anforderung für korrektes Looping)
-        sb.append("file '${frameFiles.last().absolutePath}'\n")
-        concatFile.writeText(sb.toString())
-
-        // Pass 1: Palette generieren
-        val pass1 = "-f concat -safe 0 -i \"${concatFile.absolutePath}\" " +
-                "-vf \"scale=320:240:flags=lanczos,palettegen=stats_mode=diff\" -y \"${palFile.absolutePath}\""
-        executeFFmpeg(pass1)
-        if (!palFile.exists() || palFile.length() == 0L) {
-            cleanup(*frameFiles.toTypedArray(), outputGif, concatFile, palFile)
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                onDone(false, "GIF-Palette konnte nicht erstellt werden.")
-            }
-            return
-        }
-
-        // Pass 2: GIF erstellen mit Palette
-        val pass2 = "-f concat -safe 0 -i \"${concatFile.absolutePath}\" -i \"${palFile.absolutePath}\" " +
-                "-filter_complex \"scale=320:240:flags=lanczos[x];[x][1:v]paletteuse=dither=bayer\" -loop 0 -y \"${outputGif.absolutePath}\""
-        val ok = executeFFmpeg(pass2)
+        val gifResult = viewModel.ffmpegProvider.createGif(
+            GifRequest(
+                source = GifSource.ImageList(frameFiles, frameDelayMs),
+                outputWidth = 320,
+                outputHeight = 240,
+                outputFile = outputGif
+            )
+        )
 
         cleanup(*frameFiles.toTypedArray(), concatFile, palFile)
 
-        if (!ok || !outputGif.exists() || outputGif.length() == 0L) {
+        if (gifResult is FfmpegResult.Error || !outputGif.exists() || outputGif.length() == 0L) {
             cleanup(outputGif)
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                 onDone(false, "GIF-Erstellung fehlgeschlagen.")
@@ -1627,39 +1596,29 @@ private suspend fun createGifFromImages(
     }
 }
 
-private fun executeFFmpeg(command: String): Boolean {
-    val session = FFmpegKit.execute(command)
-    return ReturnCode.isSuccess(session.returnCode)
-}
-
 private fun cleanup(vararg files: File) {
     files.forEach { f -> try { if (f.exists()) f.delete() } catch (_: Exception) {} }
 }
 
 /**
- * Entfernt den Hintergrund via ML Kit Selfie Segmentation.
- * Fallback: BFS-Flood-Fill falls ML Kit nicht verfügbar.
+ * Entfernt den Hintergrund via Selfie-Segmentierung ([SegmentationProvider]).
+ * Fallback: BFS-Flood-Fill falls die Segmentierung fehlschlägt/kein Ergebnis liefert.
  * Liefert ein neues ARGB_8888-Bitmap mit transparentem Hintergrund.
  * Muss auf einem Hintergrund-Thread aufgerufen werden (Dispatchers.IO).
  */
-fun removeStickerBackground(source: Bitmap): Bitmap {
+fun removeStickerBackground(
+    source: Bitmap,
+    segmentationProvider: com.securechat.app.segmentation.SegmentationProvider
+): Bitmap {
     return try {
-        val options = SelfieSegmenterOptions.Builder()
-            .setDetectorMode(SelfieSegmenterOptions.SINGLE_IMAGE_MODE)
-            .build()
-        val segmenter = Segmentation.getClient(options)
-        val image = InputImage.fromBitmap(source, 0)
-        val result = Tasks.await(segmenter.process(image))
-        val mask = result.buffer
+        val result = segmentationProvider.segment(source, 0) ?: return removeStickerBackgroundFallback(source)
+        val floatArray = result.buffer
         val maskWidth = result.width
         val maskHeight = result.height
 
         val output = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
         val scaleX = source.width.toFloat() / maskWidth
         val scaleY = source.height.toFloat() / maskHeight
-        mask.rewind()
-        val floatArray = FloatArray(maskWidth * maskHeight)
-        mask.asFloatBuffer().get(floatArray)
 
         for (y in 0 until source.height) {
             for (x in 0 until source.width) {
@@ -1671,7 +1630,6 @@ fun removeStickerBackground(source: Bitmap): Bitmap {
                 }
             }
         }
-        segmenter.close()
         output
     } catch (_: Exception) {
         removeStickerBackgroundFallback(source)

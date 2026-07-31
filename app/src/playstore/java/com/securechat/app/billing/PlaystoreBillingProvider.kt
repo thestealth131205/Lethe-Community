@@ -1,9 +1,13 @@
-package com.securechat.app.data.billing
+package com.securechat.app.billing
 
 import android.app.Activity
 import android.content.Context
 import com.android.billingclient.api.*
+import dagger.Binds
+import dagger.Module
+import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
+import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -16,7 +20,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Repository für Google Play In-App-Käufe (Styx-Coins).
+ * Google Play Billing – In-App-Käufe für Styx-Coins. Nur im `playstore`-Flavor
+ * (Play Billing ist proprietär und für F-Droid nicht zulässig; siehe [FossBillingProvider]).
  *
  * Verwaltete Produkte (in Play Console als verbrauchbare In-App-Produkte anlegen):
  *   styx_1000_basic   →  1.000 Styx
@@ -24,16 +29,16 @@ import javax.inject.Singleton
  *   styx_5750_bonus   →  5.750 Styx  (+750 Bonus)
  *
  * Ablauf:
- *   1. connect()              – BillingClient verbinden & Produkte laden
- *   2. buyStyx(activity, pd)  – Kauf-Flow starten
- *   3. onPurchaseReady        – Server-Gutschrift-Callback (von MainViewModel gesetzt)
- *   4. consumeAsync           – Automatisch nach Server-Bestätigung
- *   5. disconnect()           – beim Verlassen des Screens
+ *   1. connect()                    – BillingClient verbinden & Produkte laden
+ *   2. buyProduct(activity, id)     – Kauf-Flow starten
+ *   3. onPurchaseReady              – Server-Gutschrift-Callback (von MainViewModel gesetzt)
+ *   4. consumeAsync                 – Automatisch nach Server-Bestätigung
+ *   5. disconnect()                 – beim Verlassen des Screens
  */
 @Singleton
-class BillingRepository @Inject constructor(
+class PlaystoreBillingProvider @Inject constructor(
     @ApplicationContext private val context: Context
-) {
+) : BillingProvider {
     companion object {
         val PRODUCT_IDS = listOf("styx_1000_basic", "styx_2200_bonus", "styx_5750_bonus")
         private const val TAG = "LETHE_BILLING"
@@ -54,23 +59,21 @@ class BillingRepository @Inject constructor(
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
-    // ── Öffentliche State-Flows ──────────────────────────────────────────────
+    /** ProductDetails-Cache (productId → ProductDetails), damit buyProduct(id) den Flow starten kann. */
+    private val productDetailsById = mutableMapOf<String, ProductDetails>()
 
-    private val _products = MutableStateFlow<List<ProductDetails>>(emptyList())
-    val products: StateFlow<List<ProductDetails>> = _products.asStateFlow()
+    // ── BillingProvider-Implementierung ─────────────────────────────────────
+
+    private val _products = MutableStateFlow<List<StyxProduct>>(emptyList())
+    override val products: StateFlow<List<StyxProduct>> = _products.asStateFlow()
 
     private val _isLoading = MutableStateFlow(false)
-    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+    override val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
     private val _errorMessage = MutableStateFlow<String?>(null)
-    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+    override val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
-    /**
-     * Wird aufgerufen, sobald ein Kauf PURCHASED ist – bevor consumeAsync.
-     * MainViewModel setzt diesen Callback und sendet den purchase_token an den Server.
-     * @return Anzahl gutgeschriebener Styx (0 bei Fehler)
-     */
-    var onPurchaseReady: (suspend (Purchase) -> Int)? = null
+    override var onPurchaseReady: (suspend (CoinPurchaseInfo) -> Int)? = null
 
     // ── BillingClient ────────────────────────────────────────────────────────
 
@@ -95,7 +98,14 @@ class BillingRepository @Inject constructor(
                                 Timber.tag(TAG).d("RSA-Signatur OK – sende an Server zur Bestätigung")
 
                                 // ── Schritt 2: Server-Bestätigung + Gutschrift ─────────────
-                                val added = onPurchaseReady?.invoke(purchase) ?: 0
+                                val productId = purchase.products.firstOrNull() ?: return@launch
+                                val info = CoinPurchaseInfo(
+                                    productId = productId,
+                                    purchaseToken = purchase.purchaseToken,
+                                    signedData = purchase.originalJson,
+                                    signature = purchase.signature
+                                )
+                                val added = onPurchaseReady?.invoke(info) ?: 0
                                 if (added > 0) {
                                     Timber.tag(TAG).d("+$added Styx gutgeschrieben – konsumiere Kauf")
                                     // ── Schritt 3: Kauf erst nach Server-OK konsumieren ─────
@@ -121,7 +131,7 @@ class BillingRepository @Inject constructor(
     // ── Öffentliche Funktionen ───────────────────────────────────────────────
 
     /** Verbindet den BillingClient und lädt verfügbare Produkte. */
-    fun connect() {
+    override fun connect() {
         _isLoading.value = true
         _errorMessage.value = null
         billingClient.startConnection(object : BillingClientStateListener {
@@ -142,8 +152,12 @@ class BillingRepository @Inject constructor(
         })
     }
 
-    /** Startet den Google-Play-Kauf-Dialog für das gewählte Produkt. */
-    fun buyStyx(activity: Activity, product: ProductDetails) {
+    /** Startet den Google-Play-Kauf-Dialog für [productId]. */
+    override fun buyProduct(activity: Activity, productId: String) {
+        val product = productDetailsById[productId] ?: run {
+            Timber.tag(TAG).w("buyProduct: ProductDetails für $productId nicht gefunden")
+            return
+        }
         val flowParams = BillingFlowParams.newBuilder()
             .setProductDetailsParamsList(
                 listOf(
@@ -157,7 +171,7 @@ class BillingRepository @Inject constructor(
     }
 
     /** Trennt den BillingClient – beim Verlassen des Screens aufrufen. */
-    fun disconnect() {
+    override fun disconnect() {
         billingClient.endConnection()
     }
 
@@ -174,9 +188,18 @@ class BillingRepository @Inject constructor(
         billingClient.queryProductDetailsAsync(params) { result, details ->
             _isLoading.value = false
             if (result.responseCode == BillingClient.BillingResponseCode.OK) {
-                _products.value = details.sortedBy {
-                    it.oneTimePurchaseOfferDetails?.priceAmountMicros ?: 0L
-                }
+                productDetailsById.clear()
+                details.forEach { productDetailsById[it.productId] = it }
+                _products.value = details
+                    .sortedBy { it.oneTimePurchaseOfferDetails?.priceAmountMicros ?: 0L }
+                    .map { pd ->
+                        StyxProduct(
+                            productId = pd.productId,
+                            displayName = pd.name,
+                            formattedPrice = pd.oneTimePurchaseOfferDetails?.formattedPrice ?: "–",
+                            priceAmountMicros = pd.oneTimePurchaseOfferDetails?.priceAmountMicros ?: 0L
+                        )
+                    }
                 Timber.tag(TAG).d("${details.size} Styx-Pakete geladen")
             } else {
                 _errorMessage.value = "Pakete konnten nicht geladen werden"
@@ -197,4 +220,12 @@ class BillingRepository @Inject constructor(
             }
         }
     }
+}
+
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class BillingProviderModule {
+    @Binds
+    @Singleton
+    abstract fun bindBillingProvider(impl: PlaystoreBillingProvider): BillingProvider
 }

@@ -5576,7 +5576,6 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
     // ── FloatingSharedMusicPlayer ─────────────────────────────────────────────
     if (listenTogetherActive && listenTogetherChatId == chatId && showListenTogetherPlayer) {
         val floatingCastAvailable by viewModel.castDiscoveryManager.castAvailable.collectAsState()
-        val floatingCastContext = LocalContext.current
         FloatingSharedMusicPlayer(
             track           = listenTogetherTrack,
             isPlaying       = listenTogetherPlaying,
@@ -5587,15 +5586,8 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
             shuffleActive   = listenTogetherShuffleActive,
             castAvailableBar = floatingCastAvailable,
             onCastClick     = {
-                try {
-                    com.google.android.gms.cast.framework.CastContext.getSharedInstance(floatingCastContext)
-                    viewModel.castDiscoveryManager.pendingCastUrl = listenTogetherTrack?.url
-                    (floatingCastContext as? androidx.fragment.app.FragmentActivity)?.let { fa ->
-                        val frag = com.securechat.app.cast.SafeMediaRouteChooserDialogFragment()
-                        frag.routeSelector = viewModel.castDiscoveryManager.selector
-                        frag.show(fa.supportFragmentManager, "cast_chooser_bar")
-                    }
-                } catch (_: Exception) {}
+                viewModel.castDiscoveryManager.pendingCastUrl = listenTogetherTrack?.url
+                viewModel.castDiscoveryManager.requestDevicePicker()
             },
             onRequestAction = { action -> viewModel.requestPlayAction(action) },
             onPositionSync  = { pos -> viewModel.syncListenTogetherState(listenTogetherPlaying, pos) },
@@ -11161,33 +11153,26 @@ fun MusicMessagePlayer(
 
     val openCastChooser: () -> Unit = remember(context, url, allChatMusicUrls) {
         {
-            try {
-                com.google.android.gms.cast.framework.CastContext.getSharedInstance(context)
-                val cdm = viewModel.castDiscoveryManager
-                val castUrls = allChatMusicUrls.map { viewModel.toCastUrl(it) }
-                val castUrl = viewModel.toCastUrl(url)
-                if (cdm.isCasting.value) {
-                    // Session bereits aktiv: Queue direkt laden
-                    val startIdx = castUrls.indexOf(castUrl).coerceAtLeast(0)
-                    cdm.loadMusicQueue(castUrls, startIdx) { trackUrl ->
-                        viewModel.buildMusicCastMetadataForUrl(trackUrl)
-                    }
-                } else {
-                    // Noch keine Session: pending setzen, Queue wird nach Session-Start geladen
-                    cdm.pendingCastUrl = castUrl
-                    cdm.pendingCastMediaMetadata = viewModel.buildMusicCastMetadataForUrl(castUrl)
-                    cdm.pendingMusicQueue = castUrls
-                    cdm.pendingMusicQueueStartIndex = castUrls.indexOf(castUrl).coerceAtLeast(0)
-                    cdm.pendingMusicQueueMetadataBuilder = { trackUrl ->
-                        viewModel.buildMusicCastMetadataForUrl(trackUrl)
-                    }
-                    (context as? androidx.fragment.app.FragmentActivity)?.let { fa ->
-                        val frag = com.securechat.app.cast.SafeMediaRouteChooserDialogFragment()
-                        frag.routeSelector = cdm.selector
-                        frag.show(fa.supportFragmentManager, "cast_chooser_music")
-                    }
+            val cdm = viewModel.castDiscoveryManager
+            val castUrls = allChatMusicUrls.map { viewModel.toCastUrl(it) }
+            val castUrl = viewModel.toCastUrl(url)
+            if (cdm.isCasting.value) {
+                // Session bereits aktiv: Queue direkt laden
+                val startIdx = castUrls.indexOf(castUrl).coerceAtLeast(0)
+                cdm.loadMusicQueue(castUrls, startIdx) { trackUrl ->
+                    viewModel.buildMusicCastMetadataForUrl(trackUrl)
                 }
-            } catch (_: Exception) {}
+            } else {
+                // Noch keine Session: pending setzen, Queue wird nach Verbindungsaufbau geladen
+                cdm.pendingCastUrl = castUrl
+                cdm.pendingCastMediaMetadata = viewModel.buildMusicCastMetadataForUrl(castUrl)
+                cdm.pendingMusicQueue = castUrls
+                cdm.pendingMusicQueueStartIndex = castUrls.indexOf(castUrl).coerceAtLeast(0)
+                cdm.pendingMusicQueueMetadataBuilder = { trackUrl ->
+                    viewModel.buildMusicCastMetadataForUrl(trackUrl)
+                }
+                cdm.requestDevicePicker()
+            }
         }
     }
 
@@ -17819,31 +17804,24 @@ fun DetachedMusicPlayerOverlay(
                             if (isActivelyCasting) {
                                 showCastDeviceDialog = true
                             } else {
-                                try {
-                                    com.google.android.gms.cast.framework.CastContext.getSharedInstance(context)
-                                    val cdm = viewModel.castDiscoveryManager
-                                    val castUrls = allChatMusicUrls.map { viewModel.toCastUrl(it) }
-                                    val castUrl  = viewModel.toCastUrl(displayUrl)
-                                    if (cdm.isCasting.value) {
-                                        val startIdx = castUrls.indexOf(castUrl).coerceAtLeast(0)
-                                        cdm.loadMusicQueue(castUrls, startIdx) { trackUrl ->
-                                            viewModel.buildMusicCastMetadataForUrl(trackUrl)
-                                        }
-                                    } else {
-                                        cdm.pendingCastUrl = castUrl
-                                        cdm.pendingCastMediaMetadata = viewModel.buildMusicCastMetadataForUrl(castUrl)
-                                        cdm.pendingMusicQueue = castUrls
-                                        cdm.pendingMusicQueueStartIndex = castUrls.indexOf(castUrl).coerceAtLeast(0)
-                                        cdm.pendingMusicQueueMetadataBuilder = { trackUrl ->
-                                            viewModel.buildMusicCastMetadataForUrl(trackUrl)
-                                        }
-                                        (context as? androidx.fragment.app.FragmentActivity)?.let { fa ->
-                                            val frag = com.securechat.app.cast.SafeMediaRouteChooserDialogFragment()
-                                            frag.routeSelector = cdm.selector
-                                            frag.show(fa.supportFragmentManager, "cast_chooser_detached")
-                                        }
+                                val cdm = viewModel.castDiscoveryManager
+                                val castUrls = allChatMusicUrls.map { viewModel.toCastUrl(it) }
+                                val castUrl  = viewModel.toCastUrl(displayUrl)
+                                if (cdm.isCasting.value) {
+                                    val startIdx = castUrls.indexOf(castUrl).coerceAtLeast(0)
+                                    cdm.loadMusicQueue(castUrls, startIdx) { trackUrl ->
+                                        viewModel.buildMusicCastMetadataForUrl(trackUrl)
                                     }
-                                } catch (_: Exception) {}
+                                } else {
+                                    cdm.pendingCastUrl = castUrl
+                                    cdm.pendingCastMediaMetadata = viewModel.buildMusicCastMetadataForUrl(castUrl)
+                                    cdm.pendingMusicQueue = castUrls
+                                    cdm.pendingMusicQueueStartIndex = castUrls.indexOf(castUrl).coerceAtLeast(0)
+                                    cdm.pendingMusicQueueMetadataBuilder = { trackUrl ->
+                                        viewModel.buildMusicCastMetadataForUrl(trackUrl)
+                                    }
+                                    cdm.requestDevicePicker()
+                                }
                             }
                         },
                         modifier = Modifier.size(36.dp)
@@ -17862,13 +17840,7 @@ fun DetachedMusicPlayerOverlay(
 
     // ── Cast-Geräte-Dialog ──────────────────────────────────────────────────
     if (showCastDeviceDialog) {
-        val router = remember { androidx.mediarouter.media.MediaRouter.getInstance(context) }
-        val selectedRoute = router.selectedRoute
-        val availableRoutes = remember(castAvailable) {
-            router.routes.filter {
-                it != router.defaultRoute && it.matchesSelector(viewModel.castDiscoveryManager.selector)
-            }
-        }
+        val castDevices by viewModel.castDiscoveryManager.devices.collectAsState()
 
         AlertDialog(
             onDismissRequest = { showCastDeviceDialog = false },
@@ -17893,44 +17865,35 @@ fun DetachedMusicPlayerOverlay(
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(4.dp))
 
-                    // Geräteliste
-                    availableRoutes.forEach { route ->
-                        val isSelected = route.id == selectedRoute.id
+                    // Geräteliste – Tippen wechselt/verbindet erneut
+                    castDevices.forEach { device ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(
-                                    if (isSelected) Color(0xFF4FC3F7).copy(alpha = 0.12f)
-                                    else Color.Transparent
-                                )
+                                .clickable {
+                                    showCastDeviceDialog = false
+                                    viewModel.castDiscoveryManager.connectToDevice(device)
+                                }
                                 .padding(horizontal = 8.dp, vertical = 10.dp)
                         ) {
                             Icon(
-                                if (isSelected) Icons.Default.CastConnected else Icons.Default.Cast,
+                                Icons.Default.Cast,
                                 contentDescription = null,
-                                tint = if (isSelected) Color(0xFF4FC3F7)
-                                       else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(Modifier.width(10.dp))
                             Text(
-                                text = route.name,
+                                text = device.name,
                                 style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSelected) Color(0xFF4FC3F7)
-                                        else MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface
                             )
-                            if (isSelected) {
-                                Spacer(Modifier.weight(1f))
-                                Text("Aktiv", fontSize = 11.sp, color = Color(0xFF4FC3F7),
-                                    fontWeight = FontWeight.Medium)
-                            }
                         }
                     }
 
-                    if (availableRoutes.isEmpty()) {
+                    if (castDevices.isEmpty()) {
                         Text("Keine Geräte gefunden",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)

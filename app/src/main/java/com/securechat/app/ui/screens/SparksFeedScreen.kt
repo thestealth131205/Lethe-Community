@@ -163,9 +163,7 @@ import com.securechat.app.data.network.VipSearchResponse
 import com.securechat.app.ui.MainViewModel
 import androidx.compose.ui.res.stringResource
 import com.securechat.app.R
-import com.securechat.app.cast.SafeMediaRouteChooserDialogFragment
 import com.securechat.app.cast.SparkCastChannel
-import com.securechat.app.cast.sendSparkMessage
 import kotlinx.coroutines.delay
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.animateFloat
@@ -465,10 +463,10 @@ fun SparksFeedScreen(
                         // bereit ist. Da loadPendingMedia() das Video nicht mehr vorab laedt, gibt es
                         // hier keinen doppelten Load – deshalb ohne castCurrentUrl-Sperre.
                         if (absoluteUrl != null) {
-                            val metadata = com.google.android.gms.cast.MediaMetadata(com.google.android.gms.cast.MediaMetadata.MEDIA_TYPE_MOVIE).apply {
-                                putString(com.google.android.gms.cast.MediaMetadata.KEY_TITLE, currentSpark.title ?: "Spark")
-                                putString(com.google.android.gms.cast.MediaMetadata.KEY_SUBTITLE, currentSpark.creatorName ?: currentSpark.creatorFakeNumber ?: "")
-                            }
+                            val metadata = com.securechat.app.cast.CastMediaMetadata(
+                                title = currentSpark.title ?: "Spark",
+                                artist = currentSpark.creatorName ?: currentSpark.creatorFakeNumber ?: ""
+                            )
                             viewModel.castDiscoveryManager.loadUrlOnCast(absoluteUrl, metadata, currentSpark.isLive)
                         }
                     }
@@ -585,11 +583,7 @@ fun SparksFeedScreen(
                                         if (it.startsWith("http")) it else "https://letheapp.de$it"
                                     }
                                 }
-                                (context as? androidx.fragment.app.FragmentActivity)?.let { fa ->
-                                    val frag = SafeMediaRouteChooserDialogFragment()
-                                    frag.routeSelector = viewModel.castDiscoveryManager.selector
-                                    frag.show(fa.supportFragmentManager, "cast_chooser")
-                                }
+                                viewModel.castDiscoveryManager.requestDevicePicker()
                             }
                         }) {
                             Icon(
@@ -1079,14 +1073,9 @@ private fun SparksPage(
     // bevor das Video geladen wird (z.B. nach prependSparkToFeed beim Tap auf gespeicherte Sparks).
     // OOM-Fix: player.stop() nach 500ms wenn Seite nicht sichtbar → gibt MediaCodec-Ressourcen frei.
     // player.prepare() wenn Player in STATE_IDLE und Seite wieder sichtbar wird.
-    // Hilfsfunktion: RemoteMediaClient holen wenn Cast verbunden
-    fun getCastRemoteClient(): com.google.android.gms.cast.framework.media.RemoteMediaClient? {
-        if (!castConnected) return null
-        return try {
-            com.google.android.gms.cast.framework.CastContext.getSharedInstance(context)
-                .sessionManager?.currentCastSession?.remoteMediaClient
-        } catch (_: Exception) { null }
-    }
+    // Hilfsfunktion: Cast-Manager holen wenn Cast verbunden
+    fun castSync(): com.securechat.app.cast.CastDiscoveryManager? =
+        if (castConnected) viewModel.castDiscoveryManager else null
 
     LaunchedEffect(currentPage, index, isPlaying, isLifecyclePaused) {
         val isVisible = currentPage == index
@@ -1105,12 +1094,12 @@ private fun SparksPage(
                 }
             }
             // Cast: Play synchronisieren
-            getCastRemoteClient()?.play()
+            castSync()?.castPlay()
         } else {
             if (player.mediaItemCount > 0) player.pause()
             if (hasExternalSound) audioPlayer?.pause()
             // Cast: Pause synchronisieren
-            if (isVisible) getCastRemoteClient()?.pause()
+            if (isVisible) castSync()?.castPause()
             if (!isVisible) {
                 delay(500)
                 // Nur stoppen wenn Seite immer noch nicht sichtbar (kein schnelles Hin-und-Her)
@@ -1310,21 +1299,18 @@ private fun SparksPage(
                     val absoluteMusicUrl = spark.musicUrl?.let {
                         if (it.startsWith("http")) it else "https://letheapp.de$it"
                     }
-                    try {
-                        com.google.android.gms.cast.framework.CastContext.getSharedInstance(context)
-                            .sessionManager?.currentCastSession?.sendSparkMessage(
-                                SparkCastChannel.buildSparkMessage(
-                                    sparkId = spark.id,
-                                    videoUrl = null,
-                                    title = spark.title,
-                                    creatorName = spark.creatorName ?: spark.creatorFakeNumber,
-                                    imageUrls = absoluteImageUrls,
-                                    musicUrl = absoluteMusicUrl,
-                                    imageIndex = imagePagerState.currentPage,
-                                    description = spark.description
-                                )
-                            )
-                    } catch (_: Exception) {}
+                    viewModel.castDiscoveryManager.sendSparkMessage(
+                        SparkCastChannel.buildSparkMessage(
+                            sparkId = spark.id,
+                            videoUrl = null,
+                            title = spark.title,
+                            creatorName = spark.creatorName ?: spark.creatorFakeNumber,
+                            imageUrls = absoluteImageUrls,
+                            musicUrl = absoluteMusicUrl,
+                            imageIndex = imagePagerState.currentPage,
+                            description = spark.description
+                        )
+                    )
                 }
             }
             if (imageUrls.isEmpty()) {
@@ -1949,7 +1935,7 @@ private fun SparksPage(
                             onValueChangeFinished = {
                                 player.seekTo(videoPositionMs)
                                 // Cast: Seek synchronisieren
-                                getCastRemoteClient()?.seek(videoPositionMs)
+                                castSync()?.castSeekTo(videoPositionMs)
                                 isSeekingVideo = false
                             },
                             modifier = Modifier

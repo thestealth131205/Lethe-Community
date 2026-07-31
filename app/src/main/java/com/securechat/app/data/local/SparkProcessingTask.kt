@@ -2,11 +2,10 @@ package com.securechat.app.data.local
 
 import android.content.Context
 import android.net.Uri
-import com.arthenica.ffmpegkit.FFmpegKit
-import com.arthenica.ffmpegkit.FFmpegKitConfig
-import com.arthenica.ffmpegkit.ReturnCode
+import com.securechat.app.media.FfmpegProvider
+import com.securechat.app.media.FfmpegResult
+import com.securechat.app.media.SparkEncodeRequest
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -14,7 +13,6 @@ import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
-import kotlin.coroutines.resume
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SparkProcessingTask
@@ -68,6 +66,7 @@ object SparkProcessingTask {
      */
     suspend fun process(
         context: Context,
+        ffmpegProvider: FfmpegProvider,
         inputVideoPath: String,
         musicDownloadUrl: String? = null,
         isMuted: Boolean = false,
@@ -109,31 +108,29 @@ object SparkProcessingTask {
             }
             onProgress(0.25f)
 
-            // ── Phase 2: FFmpeg-Command bauen ─────────────────────────────────
+            // ── Phase 2+3: Video-Verarbeitung via FfmpegProvider (25% → 90%) ───
             val outputFile = File(workDir, "spark_final_$sessionId.mp4")
-            val command = buildFfmpegCommand(
+            val req = SparkEncodeRequest(
                 inputVideoPath = inputVideoPath,
                 musicFile = musicFile,
                 isMuted = isMuted,
                 filterId = filterId,
                 musicVolume = musicVolume,
                 originalVolume = originalVolume,
+                videoDurationMs = videoDurationMs,
                 isImage = isImage,
                 imageDurationSec = imageDurationSec,
                 trimStartMs = trimStartMs,
                 trimEndMs = trimEndMs,
                 musicOffsetSec = musicOffsetSec,
-                outputPath = outputFile.absolutePath
+                outputFile = outputFile
             )
-            Timber.tag("LETHE_SPARK").d("FFmpeg-Command: $command")
-
-            // ── Phase 3: FFmpeg ausführen (25% → 90%) ─────────────────────────
             onProgress(0.30f)
-            val ffmpegSuccess = executeFfmpeg(command, videoDurationMs) { sessionProgress ->
+            val encodeResult = ffmpegProvider.encodeSparkVideo(req) { sessionProgress ->
                 onProgress(0.30f + sessionProgress * 0.60f) // 30%–90%
             }
 
-            if (!ffmpegSuccess) {
+            if (encodeResult is FfmpegResult.Error) {
                 workDir.deleteRecursively()
                 return@withContext ProcessResult.Error(
                     "FFmpeg-Verarbeitung fehlgeschlagen. Bitte versuche es erneut."
@@ -155,196 +152,6 @@ object SparkProcessingTask {
             Timber.tag("LETHE_SPARK").e("SparkProcessingTask Ausnahme: ${e.message}")
             workDir.deleteRecursively()
             ProcessResult.Error("Fehler: ${e.message ?: "Unbekannt"}")
-        }
-    }
-
-    // ─── Privat: FFmpeg-Command-Builder ──────────────────────────────────────
-
-    /**
-     * Erstellt den vollständigen FFmpeg-Befehlsstring.
-     *
-     * Strategie:
-     *   A) Nur Filter, kein Musik:  -i video -vf FILTER -c:a copy out.mp4
-     *   B) Musik, Original stumm:   -i video -i musik -vf FILTER -map 0:v:0 -map 1:a:0 -shortest out.mp4
-     *   C) Musik + Original-Mix:    -i video -i musik -filter_complex "[0:a]volume=V1[a0];[1:a]volume=V2[a1];[a0][a1]amix=inputs=2:duration=first[aout]" -map 0:v -map [aout] -vf FILTER out.mp4
-     *
-     * @param inputVideoPath  Absoluter Eingabe-Videopfad.
-     * @param musicFile       Heruntergeladene MP3-Datei (null = kein Musik-Overlay).
-     * @param isMuted         Original-Audiospur stummschalten.
-     * @param filterId        Gewählter [SparkFilterId].
-     * @param musicVolume     Lautstärke der Musik-Spur (amix).
-     * @param originalVolume  Lautstärke der Originalspur (amix).
-     * @param outputPath      Absoluter Ausgabepfad.
-     * @return                FFmpegKit-kompatibler Befehlsstring.
-     */
-    private fun buildFfmpegCommand(
-        inputVideoPath: String,
-        musicFile: File?,
-        isMuted: Boolean,
-        filterId: SparkFilterId,
-        musicVolume: Float,
-        originalVolume: Float,
-        isImage: Boolean = false,
-        imageDurationSec: Int = 5,
-        trimStartMs: Long = 0L,
-        trimEndMs: Long = 0L,
-        musicOffsetSec: Float = 0f,
-        outputPath: String
-    ): String {
-        val baseFilter = SparkFilterEngine.ffmpegFilterFor(filterId)
-
-        // Für Bilder: zusätzlicher Skalier-Filter um ungerade Dimensionen zu vermeiden
-        val fullFilter = if (isImage) {
-            val scaleFilter = "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p"
-            if (baseFilter.isNotBlank()) "$scaleFilter,$baseFilter" else scaleFilter
-        } else baseFilter
-
-        val vfPart = if (fullFilter.isNotBlank()) "-vf \"$fullFilter\"" else ""
-
-        // Trim-Optionen (nur für Video, wenn Trim gesetzt)
-        val trimStart = if (!isImage && trimStartMs > 0L) "-ss ${trimStartMs / 1000.0}" else ""
-        val trimDuration = if (!isImage && trimEndMs > trimStartMs) {
-            val durSec = (trimEndMs - trimStartMs) / 1000.0
-            "-t $durSec"
-        } else ""
-
-        // Musik-Offset (vor Musik-Input)
-        val musicSsFlag = if (musicOffsetSec > 0f) "-ss ${musicOffsetSec}" else ""
-
-        return when {
-
-            // ── Fall A: Kein Musik-Overlay ─────────────────────────────────────
-            musicFile == null -> {
-                if (isImage) {
-                    // Bild → Video
-                    buildString {
-                        append("-loop 1 -i \"$inputVideoPath\" ")
-                        append("-t $imageDurationSec ")
-                        if (vfPart.isNotBlank()) append("$vfPart ")
-                        append("-c:v libx264 -preset fast -crf 23 ")
-                        append("-an -movflags +faststart ")
-                        append("\"$outputPath\"")
-                    }
-                } else {
-                    val audioFlags = if (isMuted) "-an" else "-c:a copy"
-                    "$trimStart $trimDuration -i \"$inputVideoPath\" $vfPart $audioFlags -c:v libx264 -preset fast -crf 23 -movflags +faststart \"$outputPath\""
-                }
-            }
-
-            // ── Fall B: Musik, Original-Audio stumm (oder Bild ohne Audio) ─────
-            isMuted || isImage -> {
-                buildString {
-                    if (isImage) {
-                        append("-loop 1 -i \"$inputVideoPath\" ")
-                        append("-t $imageDurationSec ")
-                    } else {
-                        if (trimStart.isNotBlank()) append("$trimStart ")
-                        if (trimDuration.isNotBlank()) append("$trimDuration ")
-                        append("-i \"$inputVideoPath\" ")
-                    }
-                    if (musicSsFlag.isNotBlank()) append("$musicSsFlag ")
-                    append("-i \"${musicFile.absolutePath}\" ")
-                    if (vfPart.isNotBlank()) append("$vfPart ")
-                    append("-map 0:v:0 -map 1:a:0 ")
-                    append("-c:v libx264 -preset fast -crf 23 ")
-                    append("-c:a aac -b:a 192k ")
-                    append("-shortest ")
-                    append("-movflags +faststart ")
-                    append("\"$outputPath\"")
-                }
-            }
-
-            // ── Fall C: Musik + Original-Audio mischen (amix) ─────────────────
-            else -> {
-                val ov = "%.2f".format(originalVolume)
-                val mv = "%.2f".format(musicVolume)
-                val filterComplex =
-                    "[0:a]volume=${ov}[a0];" +
-                    "[1:a]volume=${mv}[a1];" +
-                    "[a0][a1]amix=inputs=2:duration=first:dropout_transition=2[aout]"
-
-                buildString {
-                    if (isImage) {
-                        append("-loop 1 -i \"$inputVideoPath\" ")
-                        append("-t $imageDurationSec ")
-                    } else {
-                        if (trimStart.isNotBlank()) append("$trimStart ")
-                        if (trimDuration.isNotBlank()) append("$trimDuration ")
-                        append("-i \"$inputVideoPath\" ")
-                    }
-                    if (musicSsFlag.isNotBlank()) append("$musicSsFlag ")
-                    append("-i \"${musicFile.absolutePath}\" ")
-                    append("-filter_complex \"$filterComplex\" ")
-                    if (vfPart.isNotBlank()) append("$vfPart ")
-                    append("-map 0:v -map [aout] ")
-                    append("-c:v libx264 -preset fast -crf 23 ")
-                    append("-c:a aac -b:a 192k ")
-                    append("-movflags +faststart ")
-                    append("\"$outputPath\"")
-                }
-            }
-        }
-    }
-
-    // ─── Privat: FFmpeg ausführen ─────────────────────────────────────────────
-
-    /**
-     * Führt einen FFmpeg-Befehl via FFmpegKit aus.
-     * Gibt true zurück, wenn der Return-Code 0 (Erfolg) ist.
-     *
-     * @param command    Vollständiger FFmpeg-Befehlsstring.
-     * @param onProgress Fortschritts-Callback; FFmpegKit meldet Fortschritt via
-     *                   Statistik-Callbacks nicht linear, daher Pseudo-Fortschritt.
-     * @return           True = Erfolg, False = Fehler.
-     */
-    private suspend fun executeFfmpeg(
-        command: String,
-        videoDurationMs: Long = 0L,
-        onProgress: (Float) -> Unit
-    ): Boolean = suspendCancellableCoroutine { cont ->
-
-        // Wenn die Video-Gesamtdauer bekannt ist: exakte Fortschrittsberechnung.
-        // Sonst: Pseudo-Sättigungs-Fortschritt (0.02f pro Statistik-Callback).
-        var progressSimulation = 0f
-
-        val session = FFmpegKit.executeAsync(
-            command,
-            { completedSession ->
-                // Completion-Callback (auf FFmpegKit-Thread)
-                val returnCode = completedSession.returnCode
-                val success = ReturnCode.isSuccess(returnCode)
-                if (!success) {
-                    Timber.tag("LETHE_SPARK").e(
-                        "FFmpeg fehlgeschlagen: Code=${returnCode.value}, " +
-                        "Output=${completedSession.allLogsAsString?.takeLast(500)}"
-                    )
-                }
-                onProgress(1f)
-                if (cont.isActive) cont.resume(success)
-            },
-            { log ->
-                // Log-Callback (auf FFmpegKit-Thread) – nur Timber-Logging
-                Timber.tag("LETHE_SPARK").v("FFmpeg: ${log.message?.trimEnd()}")
-            },
-            { statistics ->
-                // Statistik-Callback: exakter Fortschritt wenn Dauer bekannt, sonst Pseudo
-                val processedMs = statistics.time.toFloat()
-                if (processedMs > 0) {
-                    val p = if (videoDurationMs > 0L) {
-                        // Echte Prozentberechnung: verarbeitete ms / Gesamtdauer
-                        (processedMs / videoDurationMs.toFloat()).coerceIn(0f, 0.98f)
-                    } else {
-                        // Fallback: Pseudo-Sättigung
-                        progressSimulation = minOf(progressSimulation + 0.02f, 0.95f)
-                        progressSimulation
-                    }
-                    onProgress(p)
-                }
-            }
-        )
-
-        cont.invokeOnCancellation {
-            FFmpegKit.cancel(session.sessionId)
         }
     }
 

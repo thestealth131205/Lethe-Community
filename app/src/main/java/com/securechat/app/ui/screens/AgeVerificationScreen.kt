@@ -30,9 +30,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.face.FaceDetection
-import com.google.mlkit.vision.face.FaceDetectorOptions
 import androidx.compose.ui.res.stringResource
 import com.securechat.app.R
 import com.securechat.app.data.network.AgeVerificationResponse
@@ -89,20 +86,10 @@ fun AgeVerificationScreen(
     var imageCaptureRef by remember { mutableStateOf<ImageCapture?>(null) }
     val cameraExecutor: ExecutorService = remember { Executors.newSingleThreadExecutor() }
 
-    // ML Kit FaceDetector
-    val faceDetector = remember {
-        FaceDetection.getClient(
-            FaceDetectorOptions.Builder()
-                .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE)
-                .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
-                .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
-                .build()
-        )
-    }
+    val faceDetectionProvider = viewModel.faceDetectionProvider
 
     DisposableEffect(Unit) {
         onDispose {
-            faceDetector.close()
             cameraExecutor.shutdown()
             viewModel.resetAgeVerificationResult()
         }
@@ -251,42 +238,41 @@ fun AgeVerificationScreen(
                                     imageProxy.close()
                                     return@setAnalyzer
                                 }
-                                val inputImage = InputImage.fromMediaImage(
-                                    mediaImage,
-                                    imageProxy.imageInfo.rotationDegrees
-                                )
-                                faceDetector.process(inputImage)
-                                    .addOnSuccessListener { faces ->
-                                        if (faces.isNotEmpty()) {
-                                            val angle = faces[0].headEulerAngleY
-                                            when (livenessStateForAnalyzer.value) {
-                                                LivenessState.LOOK_STRAIGHT -> {
-                                                    if (angle in -15f..15f) {
-                                                        livenessStateForAnalyzer.value =
-                                                            LivenessState.TURN_LEFT
-                                                    }
+                                try {
+                                    val bitmap = mediaImageToBitmap(mediaImage)
+                                    val angle = bitmap?.let {
+                                        val result = faceDetectionProvider.detectHeadYaw(it, imageProxy.imageInfo.rotationDegrees)
+                                        it.recycle()
+                                        result
+                                    }
+                                    if (angle != null) {
+                                        when (livenessStateForAnalyzer.value) {
+                                            LivenessState.LOOK_STRAIGHT -> {
+                                                if (angle in -15f..15f) {
+                                                    livenessStateForAnalyzer.value =
+                                                        LivenessState.TURN_LEFT
                                                 }
-                                                LivenessState.TURN_LEFT -> {
-                                                    if (angle < -30f) {
-                                                        livenessStateForAnalyzer.value =
-                                                            LivenessState.TURN_RIGHT
-                                                    }
-                                                }
-                                                LivenessState.TURN_RIGHT -> {
-                                                    if (angle > 30f) {
-                                                        livenessStateForAnalyzer.value =
-                                                            LivenessState.CAPTURING
-                                                    }
-                                                }
-                                                else -> {}
                                             }
+                                            LivenessState.TURN_LEFT -> {
+                                                if (angle < -30f) {
+                                                    livenessStateForAnalyzer.value =
+                                                        LivenessState.TURN_RIGHT
+                                                }
+                                            }
+                                            LivenessState.TURN_RIGHT -> {
+                                                if (angle > 30f) {
+                                                    livenessStateForAnalyzer.value =
+                                                        LivenessState.CAPTURING
+                                                }
+                                            }
+                                            else -> {}
                                         }
-                                        imageProxy.close()
                                     }
-                                    .addOnFailureListener {
-                                        Timber.tag("AgeVerify").w("FaceDetector: ${it.message}")
-                                        imageProxy.close()
-                                    }
+                                } catch (e: Exception) {
+                                    Timber.tag("AgeVerify").w("FaceDetector: ${e.message}")
+                                } finally {
+                                    imageProxy.close()
+                                }
                             }
 
                             try {
@@ -690,3 +676,42 @@ private fun LivenessProgressDots(
         }
     }
 }
+
+/**
+ * Konvertiert ein YUV_420_888 [android.media.Image] (CameraX ImageAnalysis) in ein
+ * ARGB_8888-[android.graphics.Bitmap], damit der [com.securechat.app.facedetection.FaceDetectionProvider]
+ * (Bitmap-basiertes Interface, flavor-unabhängig) darauf arbeiten kann.
+ */
+private fun mediaImageToBitmap(image: android.media.Image): android.graphics.Bitmap? = runCatching {
+    val width = image.width
+    val height = image.height
+    val yPlane = image.planes[0]
+    val uPlane = image.planes[1]
+    val vPlane = image.planes[2]
+    val yRowStride = yPlane.rowStride
+    val uvRowStride = vPlane.rowStride
+    val uvPixelStride = vPlane.pixelStride
+
+    val nv21 = ByteArray(width * height * 3 / 2)
+    val yBuffer = yPlane.buffer
+    for (row in 0 until height) {
+        yBuffer.position(row * yRowStride)
+        yBuffer.get(nv21, row * width, width)
+    }
+    val uBuffer = uPlane.buffer
+    val vBuffer = vPlane.buffer
+    val uvBase = width * height
+    for (row in 0 until height / 2) {
+        for (col in 0 until width / 2) {
+            val src = row * uvRowStride + col * uvPixelStride
+            val dst = uvBase + row * width + col * 2
+            vBuffer.position(src); nv21[dst] = vBuffer.get()
+            uBuffer.position(src); nv21[dst + 1] = uBuffer.get()
+        }
+    }
+
+    val yuvImage = android.graphics.YuvImage(nv21, android.graphics.ImageFormat.NV21, width, height, null)
+    val out = java.io.ByteArrayOutputStream()
+    yuvImage.compressToJpeg(android.graphics.Rect(0, 0, width, height), 90, out)
+    android.graphics.BitmapFactory.decodeByteArray(out.toByteArray(), 0, out.size())
+}.getOrNull()

@@ -86,8 +86,8 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.rememberAsyncImagePainter
-import com.arthenica.ffmpegkit.FFmpegKit
-import com.arthenica.ffmpegkit.ReturnCode
+import com.securechat.app.media.FfmpegResult
+import com.securechat.app.media.VideoOverlayRequest
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.securechat.app.R
@@ -2513,7 +2513,7 @@ private fun VideoStatusTab(
                         val hasOverlays = snapTxtOverlays.isNotEmpty() || snapEmojiOverlays.isNotEmpty()
                         val transcodedUri = if (hasOverlays) {
                             transcodeVideoWithOverlays(
-                                context, uri, trimStartMs, trimEndMs,
+                                context, viewModel.ffmpegProvider, uri, trimStartMs, trimEndMs,
                                 snapTxtOverlays, snapEmojiOverlays, snapBoxSize, snapDensity
                             )
                         } else {
@@ -2932,11 +2932,12 @@ private suspend fun transcodeVideoForStatus(
 }
 
 /**
- * Exportiert ein Video mit Trim + Text/Emoji-Overlays via FFmpegKit.
- * Erstellt zuerst ein Overlay-Bitmap, speichert es als PNG, dann overlay=0:0.
+ * Exportiert ein Video mit Trim + Text/Emoji-Overlays via FfmpegProvider.
+ * Erstellt zuerst ein Overlay-Bitmap, Rest (PNG-Zwischenschritt, Filtergraph) kapselt der Provider.
  */
 private suspend fun transcodeVideoWithOverlays(
     context: Context,
+    ffmpegProvider: com.securechat.app.media.FfmpegProvider,
     inputUri: Uri,
     trimStartMs: Long,
     trimEndMs: Long,
@@ -2960,22 +2961,22 @@ private suspend fun transcodeVideoWithOverlays(
 
     // Overlay-Bitmap bauen (gleiche Dimensionen wie Video)
     val overlayBmp = buildOverlayBitmap(vidW, vidH, emptyList(), textOverlays, emojiOverlays, previewBoxSize, density)
-    val overlayFile = File(context.cacheDir, "vstatus_ov_$id.png")
-    java.io.FileOutputStream(overlayFile).use { out -> overlayBmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out) }
-    overlayBmp.recycle()
 
     val outputFile = File(context.cacheDir, "vstatus_out_$id.mp4")
-    val startSec = trimStartMs / 1000.0
-    val durSec = (trimEndMs - trimStartMs) / 1000.0
-    val trimArgs = if (trimEndMs > trimStartMs && trimEndMs < Long.MAX_VALUE) "-ss $startSec -t $durSec" else ""
+    val result = ffmpegProvider.overlayOnVideo(
+        VideoOverlayRequest(
+            inputFile = inputFile,
+            trimStartMs = trimStartMs,
+            trimEndMs = trimEndMs,
+            overlayBitmap = overlayBmp,
+            outputFile = outputFile
+        )
+    )
+    overlayBmp.recycle()
+    inputFile.delete()
 
-    val cmd = "$trimArgs -i \"${inputFile.absolutePath}\" -i \"${overlayFile.absolutePath}\" " +
-              "-filter_complex \"[0:v][1:v]overlay=0:0\" -c:a copy -y \"${outputFile.absolutePath}\""
-    val session = FFmpegKit.execute(cmd)
-    inputFile.delete(); overlayFile.delete()
-
-    if (!ReturnCode.isSuccess(session.returnCode) || !outputFile.exists()) {
-        throw Exception("FFmpeg overlay-Fehler: ${session.allLogsAsString?.takeLast(200)}")
+    if (result is FfmpegResult.Error || !outputFile.exists()) {
+        throw Exception("FFmpeg overlay-Fehler: ${(result as? FfmpegResult.Error)?.message}")
     }
     Uri.fromFile(outputFile)
 }

@@ -244,9 +244,13 @@ class MainViewModel @Inject constructor(
     private val notificationHelper: NotificationHelper,
     private val shortcutHelper: ShortcutHelper,
     private val mediaCache: com.securechat.app.MediaCache,
-    private val billingRepository: com.securechat.app.data.billing.BillingRepository,
+    private val billingProvider: com.securechat.app.billing.BillingProvider,
     val castDiscoveryManager: com.securechat.app.cast.CastDiscoveryManager,
     private val pushProvider: PushProvider,
+    private val googleAuthProvider: com.securechat.app.backup.GoogleAuthProvider,
+    val faceDetectionProvider: com.securechat.app.facedetection.FaceDetectionProvider,
+    val segmentationProvider: com.securechat.app.segmentation.SegmentationProvider,
+    val ffmpegProvider: com.securechat.app.media.FfmpegProvider,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -1674,6 +1678,7 @@ class MainViewModel @Inject constructor(
             turnPassword = turnPassword,
             sharedLocalVideoTrack = sharedLocalVideoTrack,
             sharedLocalAudioTrack = sharedLocalAudioTrack,
+            segmentationProvider = segmentationProvider,
             audioQuality = prefs.audioQuality,
             audioOutputChannel = prefs.audioOutputChannel,
             bluetoothHeadsetEnabled = prefs.bluetoothHeadsetEnabled,
@@ -2391,7 +2396,7 @@ class MainViewModel @Inject constructor(
     }
 
     /** Erstellt Cast-MediaMetadata für den aktuell spielenden Musik-Track. */
-    fun buildCurrentMusicCastMetadata(): com.google.android.gms.cast.MediaMetadata {
+    fun buildCurrentMusicCastMetadata(): com.securechat.app.cast.CastMediaMetadata {
         return castDiscoveryManager.buildMusicMetadata(
             title = _musicTitle.value,
             artist = _musicArtist.value,
@@ -2409,7 +2414,7 @@ class MainViewModel @Inject constructor(
 
     /** Erstellt Cast-MediaMetadata für eine Musik-URL; nutzt In-Memory-Cache für Titel/Artist.
      *  Akzeptiert sowohl Original-/uploads/-URLs als auch /m/-Cast-URLs. */
-    fun buildMusicCastMetadataForUrl(url: String): com.google.android.gms.cast.MediaMetadata {
+    fun buildMusicCastMetadataForUrl(url: String): com.securechat.app.cast.CastMediaMetadata {
         // Cache-Key ist immer die Original-/uploads/-URL; /m/-URLs hier zurückkonvertieren
         val uploadsUrl = url
             .replace(Regex("(https://letheapp\\.de)/m/(.+)$"), "$1/uploads/$2")
@@ -3156,38 +3161,38 @@ class MainViewModel @Inject constructor(
 
     // ── STYX BILLING ────────────────────────────────────────────────────────
 
-    /** Verfügbare Styx-Coin-Pakete aus dem Play Store. */
-    val styxProducts: StateFlow<List<com.android.billingclient.api.ProductDetails>> =
-        billingRepository.products
+    /** Verfügbare Styx-Coin-Pakete (playstore: aus Google Play; foss: immer leer). */
+    val styxProducts: StateFlow<List<com.securechat.app.billing.StyxProduct>> =
+        billingProvider.products
 
-    /** true solange Produkte vom Play Store geladen werden. */
-    val billingLoading: StateFlow<Boolean> = billingRepository.isLoading
+    /** true solange Produkte geladen werden. */
+    val billingLoading: StateFlow<Boolean> = billingProvider.isLoading
 
     /** Fehlermeldung aus dem Billing-Flow (null = kein Fehler). */
-    val billingError: StateFlow<String?> = billingRepository.errorMessage
+    val billingError: StateFlow<String?> = billingProvider.errorMessage
 
     /** Erfolgsmeldung nach einem Kauf ("+X Styx gutgeschrieben!"). */
     private val _billingMessage = MutableStateFlow<String?>(null)
     val billingMessage: StateFlow<String?> = _billingMessage.asStateFlow()
 
-    /** Verbindet BillingClient und setzt den Server-Callback. Aus CoinsScreen aufrufen. */
+    /** Verbindet den Billing-Provider und setzt den Server-Callback. Aus CoinsScreen aufrufen. */
     fun initBilling() {
-        billingRepository.onPurchaseReady = { purchase ->
-            handleCoinPurchase(purchase).also { added ->
+        billingProvider.onPurchaseReady = { purchaseInfo ->
+            handleCoinPurchase(purchaseInfo).also { added ->
                 if (added > 0) _billingMessage.value = "+$added Styx gutgeschrieben!"
             }
         }
-        billingRepository.connect()
+        billingProvider.connect()
     }
 
-    /** Startet den Google-Play-Kauf-Dialog. */
-    fun buyStyx(activity: android.app.Activity, product: com.android.billingclient.api.ProductDetails) {
-        billingRepository.buyStyx(activity, product)
+    /** Startet den Kauf-Flow für [productId] (playstore: Google-Play-Dialog; foss: Web-Aufladeseite). */
+    fun buyStyx(activity: android.app.Activity, productId: String) {
+        billingProvider.buyProduct(activity, productId)
     }
 
-    /** Trennt BillingClient. Aus CoinsScreen (DisposableEffect) aufrufen. */
+    /** Trennt den Billing-Provider. Aus CoinsScreen (DisposableEffect) aufrufen. */
     fun disposeBilling() {
-        billingRepository.disconnect()
+        billingProvider.disconnect()
     }
 
     /** Löscht die Billing-Erfolgsmeldung nach dem Anzeigen. */
@@ -17352,6 +17357,19 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    /** true, wenn Google-Drive-Backup in diesem Build angeboten wird (playstore only). */
+    val googleDriveBackupAvailable: Boolean get() = googleAuthProvider.isAvailable
+
+    /** Baut den Google-Sign-In-Intent für den Drive-Backup-Scope. null im foss-Build. Aus MainActivity aufrufen. */
+    fun buildGoogleSignInIntent(activity: android.app.Activity): android.content.Intent? =
+        googleAuthProvider.buildSignInIntent(activity)
+
+    /** Wertet das Ergebnis des Google-Sign-In-Intents aus. Aus MainActivity (ActivityResultLauncher) aufrufen. */
+    fun handleGoogleSignInResult(
+        resultData: android.content.Intent?,
+        onError: (String) -> Unit
+    ): android.accounts.Account? = googleAuthProvider.handleSignInResult(resultData, onError)
+
     fun exportToGoogleDrive(password: String, account: android.accounts.Account, onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             _backupProgress.value = 0f
@@ -18195,19 +18213,21 @@ class MainViewModel @Inject constructor(
      * Verarbeitet einen abgeschlossenen Google-Play-Kauf mit 2-Stufen-Sicherheit:
      *   1. Server-Verifikation: RSA-Signatur gegen Google-Schlüssel geprüft (POST /coins/verify-purchase)
      *   2. Gutschrift:          Coins werden verbucht (POST /coins/purchase)
-     *   → consumeAsync im BillingRepository wird nur bei Rückgabe > 0 ausgelöst.
+     *   → consumeAsync im PlaystoreBillingProvider wird nur bei Rückgabe > 0 ausgelöst.
+     *
+     * Die lokale RSA-Signaturprüfung + PURCHASED-State-Filterung passiert bereits im
+     * BillingProvider, bevor [purchase] (nur noch primitive Felder) hier ankommt.
      *
      * @return Anzahl gutgeschriebener Styx (0 bei jeder Fehlerart)
      */
-    suspend fun handleCoinPurchase(purchase: com.android.billingclient.api.Purchase): Int {
-        if (purchase.purchaseState != com.android.billingclient.api.Purchase.PurchaseState.PURCHASED) return 0
-        val productId = purchase.products.firstOrNull() ?: return 0
+    suspend fun handleCoinPurchase(purchase: com.securechat.app.billing.CoinPurchaseInfo): Int {
+        val productId = purchase.productId
 
         return try {
             // ── Stufe 1: Server prüft RSA-Signatur ──────────────────────────────
             val verifyResponse = apiService.verifyPurchase(
                 com.securechat.app.data.network.VerifyPurchaseRequest(
-                    signedData = purchase.originalJson,
+                    signedData = purchase.signedData,
                     signature  = purchase.signature,
                     productId  = productId
                 )
@@ -18223,7 +18243,7 @@ class MainViewModel @Inject constructor(
                 com.securechat.app.data.network.CoinPurchaseRequest(
                     purchaseToken = purchase.purchaseToken,
                     productId     = productId,
-                    signedData    = purchase.originalJson,
+                    signedData    = purchase.signedData,
                     signature     = purchase.signature
                 )
             )

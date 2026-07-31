@@ -127,13 +127,12 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.mediarouter.app.MediaRouteButton
-import com.google.android.gms.cast.framework.CastContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.securechat.app.ui.MainViewModel
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.common.MediaItem
@@ -179,6 +178,7 @@ private val SPARK_CATEGORIES = listOf(
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun SparkAddEditorScreen(
+    viewModel: MainViewModel,
     mediaUri: Uri,
     extraImageUris: List<Uri> = emptyList(),
     preSelectedSoundOriginId: String? = null,
@@ -439,6 +439,7 @@ fun SparkAddEditorScreen(
 
             val result = SparkProcessingTask.process(
                 context = context,
+                ffmpegProvider = viewModel.ffmpegProvider,
                 inputVideoPath = inputPath,
                 musicDownloadUrl = musicSourceUrl,
                 isMuted = isOriginalMuted,
@@ -2050,25 +2051,6 @@ internal fun MusicPickerSheet(
                 Icon(Icons.Default.MusicNote, contentDescription = null, tint = Color(0xFFA8A800), modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.spark_editor_music_choose), fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.White, modifier = Modifier.weight(1f))
-                // MediaRouteButton für Cast – sicher initialisieren, da es auf manchen Geräten abstürzt
-                AndroidView(
-                    factory = { ctx ->
-                        try {
-                            MediaRouteButton(ctx).apply {
-                                try {
-                                    @Suppress("DEPRECATION")
-                                    CastContext.getSharedInstance()?.mergedSelector?.let {
-                                        routeSelector = it
-                                    }
-                                } catch (_: Exception) { /* Cast nicht verfügbar */ }
-                            }
-                        } catch (_: Exception) {
-                            // Fallback: leere View wenn MediaRouteButton nicht initialisiert werden kann
-                            android.widget.FrameLayout(ctx)
-                        }
-                    },
-                    modifier = Modifier.size(40.dp)
-                )
                 if (selectedTrack != null || localMusicUri != null) {
                     Text(
                         "✕ Entfernen",
