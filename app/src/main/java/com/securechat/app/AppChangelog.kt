@@ -24,6 +24,18 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.138",
+            title = "Account-Switcher & Mehr-Konten-Fix",
+            items = listOf(
+                "Neu: Konto-Switcher \u2013 wechsle im Login-Bildschirm oder unter Konto \u2192 Konto wechseln zwischen mehreren Lethe-Accounts auf diesem Ger\u00e4t, ohne das Passwort erneut einzugeben",
+                "Behoben: Beim Anlegen eines zweiten Accounts auf demselben Ger\u00e4t wurden manchmal noch Kontakte und Daten des vorherigen Accounts angezeigt \u2013 Konten werden jetzt zuverl\u00e4ssig sauber getrennt",
+                "Behoben: Videocalls in Gruppen konnten \u201enicht erreichbar\u201c melden und abbrechen, wenn Teilnehmer im Energiesparmodus waren \u2013 die Anruf-Benachrichtigung wird jetzt zuverl\u00e4ssig zugestellt",
+                "Behoben: Ein seltener Absturz beim Empfang von Nachrichten im Hintergrund wurde behoben",
+            ),
+            shortSummary = "Neuer Konto-Switcher zum Wechseln zwischen mehreren Accounts ohne Passwort, dazu ein Fix f\u00fcr sauber getrennte Konten auf einem Ger\u00e4t"
+        ),
+
+        ChangelogEntry(
             version = "10.4.137",
             title = "Sicherheits-Updates & Nearby-Blockierung",
             items = listOf(
@@ -58,18 +70,6 @@ object AppChangelog {
                 "Behoben: Ein Absturz im Videocall, der beim Beenden des Anrufs auftreten konnte, wurde behoben",
             ),
             shortSummary = "Der Video-Editor zeigt Anpassungen live an und erstellte Videos werden nicht mehr doppelt komprimiert \u2013 dazu ein Absturz-Fix im Videocall"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.134",
-            title = "Amazon-Vorschau & Videocall-Verbesserungen",
-            items = listOf(
-                "Behoben: Amazon-Kurzlinks (amzn.eu) zeigten im Chat keine Produktvorschau mit Bild \u2013 stattdessen erschien nur ein Platzhalter. Die Produktvorschau inkl. Bild wird jetzt korrekt angezeigt",
-                "Behoben: Beim Antippen der Steuerungsleiste im Videocall wurde versehentlich das Haupt- und Kleinbild umgeschaltet \u2013 Taps auf die Leiste bleiben jetzt wirkungslos",
-                "Verbessert: Der Auflegen-Button im Videocall hat einen kleineren Ber\u00fchrbereich, damit du nicht mehr versehentlich auflegst",
-                "Verbessert: Die Bedienelemente im Videocall wurden neu angeordnet \u2013 mit direktem Zugriff auf Emoji-Reaktionen",
-            ),
-            shortSummary = "Amazon-Kurzlinks zeigen wieder die Produktvorschau, und der Videocall wurde gegen versehentliches Umschalten und Auflegen abgesichert"
         ),
 
     )

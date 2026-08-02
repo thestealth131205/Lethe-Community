@@ -52,6 +52,8 @@ class TokenManager @Inject constructor(
     companion object {
         private const val KEY_AUTH_TOKEN = "auth_token"
         private const val KEY_USER_ID = "user_id"
+        private fun profileTokenKey(profileKey: String) = "auth_token_$profileKey"
+        private fun profileUserIdKey(profileKey: String) = "user_id_$profileKey"
     }
 
     private val _sessionExpired = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -62,11 +64,22 @@ class TokenManager @Inject constructor(
         _sessionExpired.tryEmit(Unit)
     }
 
-    fun saveToken(token: String, userId: String) {
+    fun saveToken(token: String, userId: String, profileKey: String? = null) {
+        // WICHTIG: commit() statt apply() – synchron auf Disk schreiben.
+        // Bei Profil-/Account-Wechsel folgt direkt danach ein Process.killProcess().
+        // apply() persistiert asynchron im Hintergrund; verliert dieser Hintergrund-Write
+        // das Rennen gegen den Kill, startet der Prozess mit dem ALTEN Token neu und
+        // lädt dadurch Daten des vorherigen Accounts in die neue Profil-Datenbank.
         prefs.edit().apply {
             putString(KEY_AUTH_TOKEN, token)
             putString(KEY_USER_ID, userId)
-            apply()
+            // Zusätzlich profilspezifisch ablegen, damit der Account-Switcher später
+            // ohne erneute Passworteingabe zu diesem Account zurückwechseln kann.
+            if (profileKey != null) {
+                putString(profileTokenKey(profileKey), token)
+                putString(profileUserIdKey(profileKey), userId)
+            }
+            commit()
         }
     }
 
@@ -76,11 +89,35 @@ class TokenManager @Inject constructor(
 
     fun hasToken(): Boolean = !getToken().isNullOrEmpty()
 
+    fun getTokenForProfile(profileKey: String): String? = prefs.getString(profileTokenKey(profileKey), null)
+
+    fun getUserIdForProfile(profileKey: String): String? = prefs.getString(profileUserIdKey(profileKey), null)
+
+    /** Aktiviert das gespeicherte Token eines anderen Accounts (Account-Switcher, kein Passwort nötig). */
+    fun activateProfileToken(profileKey: String): Boolean {
+        val token = getTokenForProfile(profileKey) ?: return false
+        val userId = getUserIdForProfile(profileKey) ?: return false
+        prefs.edit().apply {
+            putString(KEY_AUTH_TOKEN, token)
+            putString(KEY_USER_ID, userId)
+            commit()
+        }
+        return true
+    }
+
+    fun clearProfileToken(profileKey: String) {
+        prefs.edit().apply {
+            remove(profileTokenKey(profileKey))
+            remove(profileUserIdKey(profileKey))
+            commit()
+        }
+    }
+
     fun clearToken() {
         prefs.edit().apply {
             remove(KEY_AUTH_TOKEN)
             remove(KEY_USER_ID)
-            apply()
+            commit()
         }
     }
 }

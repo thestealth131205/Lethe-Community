@@ -7229,6 +7229,9 @@ class MainViewModel @Inject constructor(
     }
 
     init {
+        // Account-Switcher: gespeicherte Accounts sofort für den Login-Screen laden
+        loadSavedAccounts()
+
         // Cast: lokale Wiedergabe stoppen sobald eine Cast-Session beginnt
         castDiscoveryManager.onCastSessionStarted = {
             viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
@@ -7345,7 +7348,22 @@ class MainViewModel @Inject constructor(
                 _currentUser.value = user
                 if (user != null) {
                     Timber.tag("MainViewModel").d("Sitzung wiederhergestellt für User ID: ${user.userId}")
-                    tokenManager.saveToken(user.authToken, user.userId)
+                    val activeProfileKey = ProfileManager.getActiveProfile(context)
+                    tokenManager.saveToken(user.authToken, user.userId, activeProfileKey.ifEmpty { null })
+                    if (activeProfileKey.isNotEmpty()) {
+                        ProfileManager.saveAccountToRegistry(
+                            context,
+                            ProfileManager.SavedAccount(
+                                profileKey = activeProfileKey,
+                                fakeNumber = ProfileManager.getOriginalFakeNumber(context).ifEmpty { user.fakeNumber },
+                                userId = user.userId,
+                                displayName = user.name.ifBlank { user.fakeNumber },
+                                profileImageUrl = user.profileImageUrl,
+                                lastUsed = System.currentTimeMillis()
+                            )
+                        )
+                        loadSavedAccounts()
+                    }
                     registerFcmToken()
                     // ECDH-Schlüsselpaar sicherstellen – synchron, damit loadContacts() deriveSharedSecret() nutzen kann
                     try {
@@ -7512,8 +7530,11 @@ class MainViewModel @Inject constructor(
                         return@launch
                     }
 
-                    // WICHTIG: Token im TokenManager speichern für API-Requests
-                    tokenManager.saveToken(accessToken, userId)
+                    // WICHTIG: Token im TokenManager speichern für API-Requests.
+                    // Zusätzlich profilspezifisch, damit der Account-Switcher später ohne
+                    // erneute Passworteingabe zu diesem Account zurückwechseln kann.
+                    val profileKeyForRegistry = ProfileManager.sanitize(fakeNumber)
+                    tokenManager.saveToken(accessToken, userId, profileKeyForRegistry)
                     Timber.tag("MainViewModel").d("Token gespeichert für User: $userId")
 
                     // Pseudo-TokenResponse für die Weiterverarbeitung
@@ -7558,6 +7579,18 @@ class MainViewModel @Inject constructor(
                     )
                     userDao.insertUser(newUser)
                     _currentUser.value = newUser
+                    ProfileManager.saveAccountToRegistry(
+                        context,
+                        ProfileManager.SavedAccount(
+                            profileKey = profileKeyForRegistry,
+                            fakeNumber = fakeNumber,
+                            userId = userId,
+                            displayName = newUser.name.ifBlank { fakeNumber },
+                            profileImageUrl = newUser.profileImageUrl,
+                            lastUsed = System.currentTimeMillis()
+                        )
+                    )
+                    loadSavedAccounts()
                     registerFcmToken()
                     redeemPendingInvite()
 
@@ -8762,8 +8795,16 @@ class MainViewModel @Inject constructor(
     /** Logout: Session löschen und Verbindung trennen. */
     fun logout() {
         viewModelScope.launch {
+            // Expliziter Logout: Account auch aus dem Account-Switcher entfernen,
+            // damit beim nächsten Öffnen wieder das Passwort verlangt wird.
+            val loggedOutProfileKey = ProfileManager.getActiveProfile(context)
             userDao.clearUser()
             tokenManager.clearToken()
+            if (loggedOutProfileKey.isNotEmpty()) {
+                tokenManager.clearProfileToken(loggedOutProfileKey)
+                ProfileManager.removeSavedAccount(context, loggedOutProfileKey)
+                loadSavedAccounts()
+            }
             webSocketManager.disconnect()
             // NotificationHandler-Service stoppen, damit kein dataSync-Timeout-Crash entsteht
             try {
@@ -8774,6 +8815,51 @@ class MainViewModel @Inject constructor(
             _currentUser.value = null
             _statusMessage.value = "Abgemeldet"
             Timber.tag("MainViewModel").d("User ausgeloggt und Token gelöscht")
+        }
+    }
+
+    // --- ACCOUNT-SWITCHER ---
+
+    private val _savedAccounts = MutableStateFlow<List<ProfileManager.SavedAccount>>(emptyList())
+    /** Andere auf diesem Gerät gespeicherte Accounts (ohne den aktuell aktiven). */
+    val savedAccounts: StateFlow<List<ProfileManager.SavedAccount>> = _savedAccounts.asStateFlow()
+
+    fun loadSavedAccounts() {
+        val activeProfileKey = ProfileManager.getActiveProfile(context)
+        _savedAccounts.value = ProfileManager.getSavedAccounts(context)
+            .filterNot { it.profileKey == activeProfileKey }
+    }
+
+    /** Wechselt ohne erneute Passworteingabe zu einem zuvor gespeicherten Account. */
+    fun switchAccount(profileKey: String) {
+        viewModelScope.launch {
+            val account = ProfileManager.getSavedAccounts(context).find { it.profileKey == profileKey }
+            if (account == null) {
+                _statusMessage.value = "Account nicht gefunden."
+                return@launch
+            }
+            if (!tokenManager.activateProfileToken(profileKey)) {
+                _statusMessage.value = "Sitzung abgelaufen, bitte erneut mit Passwort anmelden."
+                ProfileManager.removeSavedAccount(context, profileKey)
+                loadSavedAccounts()
+                return@launch
+            }
+            ProfileManager.setActiveProfile(context, account.fakeNumber)
+            Timber.tag("MainViewModel").i("Account-Switcher: Wechsel zu ${account.profileKey}, starte neu")
+            android.os.Process.killProcess(android.os.Process.myPid())
+        }
+    }
+
+    /** Entfernt einen gespeicherten Account aus dem Switcher (meldet ihn ggf. vorher ab). */
+    fun removeSavedAccount(profileKey: String) {
+        viewModelScope.launch {
+            if (profileKey == ProfileManager.getActiveProfile(context)) {
+                logout()
+                return@launch
+            }
+            tokenManager.clearProfileToken(profileKey)
+            ProfileManager.removeSavedAccount(context, profileKey)
+            loadSavedAccounts()
         }
     }
 
@@ -8815,6 +8901,21 @@ class MainViewModel @Inject constructor(
                     )
                     userDao.insertUser(newUser)
                     _currentUser.value = newUser
+                    val autoRestoreProfileKey = ProfileManager.getActiveProfile(context)
+                    if (autoRestoreProfileKey.isNotEmpty()) {
+                        ProfileManager.saveAccountToRegistry(
+                            context,
+                            ProfileManager.SavedAccount(
+                                profileKey = autoRestoreProfileKey,
+                                fakeNumber = fakeNumber,
+                                userId = userId,
+                                displayName = newUser.name.ifBlank { fakeNumber },
+                                profileImageUrl = newUser.profileImageUrl,
+                                lastUsed = System.currentTimeMillis()
+                            )
+                        )
+                        loadSavedAccounts()
+                    }
                     redeemPendingInvite()
                     // ECDH-Schlüsselpaar sicherstellen – synchron, damit deriveSharedSecret() greift
                     try {

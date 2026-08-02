@@ -1881,6 +1881,14 @@ class MainActivity : FragmentActivity() {
                                         popUpTo(0) { inclusive = true }
                                     }
                                 },
+                                onSwitchAccount = {
+                                    // Kein logout() – aktueller Account bleibt im Switcher gespeichert,
+                                    // Login-Screen zeigt die gespeicherten Accounts zum Wechseln ohne Passwort.
+                                    viewModel.loadSavedAccounts()
+                                    navController.navigate("login") {
+                                        popUpTo(0) { inclusive = true }
+                                    }
+                                },
                                 ageVerified = currentUser?.ageVerified ?: false,
                                 nearbyUsername = myDatingProfile?.username,
                                 letheId = currentUser?.letheId,
