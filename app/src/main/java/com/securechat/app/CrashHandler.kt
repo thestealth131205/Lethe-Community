@@ -6,7 +6,8 @@ import android.content.Intent
 /**
  * Globaler Crash-Handler für Lethe.
  *
- * Registrierung in SecureChatApplication.onCreate():
+ * Registrierung in SecureChatApplication.attachBaseContext() (bewusst VOR super.onCreate(),
+ * damit auch Abstürze während der Hilt-Feld-Injection erfasst werden):
  *   Thread.setDefaultUncaughtExceptionHandler(
  *       CrashHandler(this, Thread.getDefaultUncaughtExceptionHandler())
  *   )
@@ -15,7 +16,8 @@ import android.content.Intent
  * wird nicht als Absturz behandelt – stattdessen wird die App transparent neu gestartet.
  *
  * Alle anderen unbehandelten Fehler werden mit dem Prefix [CRASH] in die lethe_logs.txt
- * geschrieben, bevor der Standard-Handler die App ordnungsgemäß beendet.
+ * (App-privat) UND als eigenständige lethe_crash_<zeit>.txt in Dokumente/Lethe (öffentlich,
+ * ohne adb auslesbar) geschrieben, bevor der Standard-Handler die App ordnungsgemäß beendet.
  */
 class CrashHandler(
     private val application: Application,
@@ -41,10 +43,17 @@ class CrashHandler(
 
         try {
             val stackTrace = throwable.stackTraceToString()
-            LetheLogger.crash(
-                tag = "CRASH_HANDLER",
-                message = "Unbehandelte Exception in Thread '${thread.name}':\n$stackTrace"
-            )
+            val message = "Unbehandelte Exception in Thread '${thread.name}':\n$stackTrace"
+            LetheLogger.crash(tag = "CRASH_HANDLER", message = message)
+
+            // Zusätzlich als eigenständige .txt in Dokumente/Lethe ablegen – so kann der Nutzer
+            // den Absturzgrund ohne adb/root über einen Dateimanager auslesen und uns zusenden.
+            val header = "Lethe Crash-Report\n" +
+                "Zeit: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}\n" +
+                "Version: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})\n" +
+                "Gerät: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}, Android ${android.os.Build.VERSION.RELEASE} (SDK ${android.os.Build.VERSION.SDK_INT})\n" +
+                "Thread: ${thread.name}\n\n"
+            LetheLogger.writeCrashCopyToDocuments(application, header + stackTrace)
         } catch (_: Exception) {
             // Fehler im Crash-Handler dürfen den normalen Shutdown nicht blockieren
         } finally {

@@ -24,6 +24,15 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.139",
+            title = "Absturz-Fix beim App-Start",
+            items = listOf(
+                "Behoben: Die App st\u00fcrzte bei manchen Nutzern direkt beim Start ab, nachdem der neue Konto-Switcher aus 10.4.138 hinzugekommen war",
+            ),
+            shortSummary = "Wichtiger Fix f\u00fcr einen Absturz beim App-Start"
+        ),
+
+        ChangelogEntry(
             version = "10.4.138",
             title = "Account-Switcher & Mehr-Konten-Fix",
             items = listOf(
@@ -58,18 +67,6 @@ object AppChangelog {
                 "Behoben: Der QR-Code bzw. Einladungslink im Konto lud in manchen F\u00e4llen endlos \u2013 bei einem Fehler erscheint jetzt ein Hinweis mit Wiederholen-Option",
             ),
             shortSummary = "Karten nutzen jetzt OpenStreetMap, der Video-Editor wurde stabiler und Gruppenbilder erscheinen in der Teilen-Liste"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.135",
-            title = "Video-Editor mit Live-Vorschau & stabilere Videocalls",
-            items = listOf(
-                "Neu: Die Vorschau im Video-Editor zeigt Anpassungen wie Helligkeit, Kontrast und S\u00e4ttigung jetzt in Echtzeit an",
-                "Neu: Tippe im Video-Editor auf die laufende Vorschau, um das Video anzuhalten \u2013 erneutes Antippen setzt die Wiedergabe fort",
-                "Verbessert: Mit dem Video-Editor erstellte Videos werden beim Senden nicht mehr ein zweites Mal komprimiert \u2013 das Senden geht schneller und die Qualit\u00e4t bleibt erhalten",
-                "Behoben: Ein Absturz im Videocall, der beim Beenden des Anrufs auftreten konnte, wurde behoben",
-            ),
-            shortSummary = "Der Video-Editor zeigt Anpassungen live an und erstellte Videos werden nicht mehr doppelt komprimiert \u2013 dazu ein Absturz-Fix im Videocall"
         ),
 
     )

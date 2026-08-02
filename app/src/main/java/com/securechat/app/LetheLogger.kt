@@ -1,6 +1,10 @@
 package com.securechat.app
 
+import android.content.ContentValues
 import android.content.Context
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import java.io.File
 import java.io.FileWriter
 import java.text.SimpleDateFormat
@@ -58,6 +62,39 @@ object LetheLogger {
             FileWriter(file, /* append = */ true).use { it.write(line) }
         } catch (_: Exception) {
             // Logging darf die App niemals zum Absturz bringen
+        }
+    }
+
+    /**
+     * Schreibt eine Kopie des Absturz-Stacktraces als eigenständige .txt-Datei
+     * in den öffentlichen "Dokumente/Lethe"-Ordner. Im Gegensatz zu lethe_logs.txt
+     * (App-privater Speicher, nur via adb/root lesbar) kann der Nutzer diese Datei
+     * ohne adb über eine Dateimanager-App finden und z.B. per Mail versenden.
+     * Wird ausschließlich vom CrashHandler aufgerufen, muss daher absolut robust
+     * sein (darf niemals selbst eine Exception werfen).
+     */
+    fun writeCrashCopyToDocuments(context: Context, content: String) {
+        try {
+            val timestamp = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.getDefault()).format(Date())
+            val fileName = "lethe_crash_$timestamp.txt"
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val collection = MediaStore.Files.getContentUri("external")
+                val values = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                    put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_DOCUMENTS}/Lethe")
+                }
+                val uri = context.contentResolver.insert(collection, values) ?: return
+                context.contentResolver.openOutputStream(uri)?.use { it.write(content.toByteArray()) }
+            } else {
+                @Suppress("DEPRECATION")
+                val docsDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "Lethe")
+                if (!docsDir.exists()) docsDir.mkdirs()
+                File(docsDir, fileName).writeText(content)
+            }
+        } catch (_: Exception) {
+            // Darf den Crash-Handler niemals zum Absturz bringen
         }
     }
 

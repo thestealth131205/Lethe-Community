@@ -7228,6 +7228,11 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    // --- ACCOUNT-SWITCHER ---
+    private val _savedAccounts = MutableStateFlow<List<ProfileManager.SavedAccount>>(emptyList())
+    /** Andere auf diesem Gerät gespeicherte Accounts (ohne den aktuell aktiven). */
+    val savedAccounts: StateFlow<List<ProfileManager.SavedAccount>> = _savedAccounts.asStateFlow()
+
     init {
         // Account-Switcher: gespeicherte Accounts sofort für den Login-Screen laden
         loadSavedAccounts()
@@ -8819,10 +8824,6 @@ class MainViewModel @Inject constructor(
     }
 
     // --- ACCOUNT-SWITCHER ---
-
-    private val _savedAccounts = MutableStateFlow<List<ProfileManager.SavedAccount>>(emptyList())
-    /** Andere auf diesem Gerät gespeicherte Accounts (ohne den aktuell aktiven). */
-    val savedAccounts: StateFlow<List<ProfileManager.SavedAccount>> = _savedAccounts.asStateFlow()
 
     fun loadSavedAccounts() {
         val activeProfileKey = ProfileManager.getActiveProfile(context)

@@ -1,6 +1,7 @@
 package com.securechat.app
 
 import android.app.Application
+import android.content.Context
 import android.util.Log
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
@@ -39,17 +40,23 @@ class SecureChatApplication : Application(), Configuration.Provider, ImageLoader
      */
     override fun newImageLoader(): ImageLoader = imageLoader
 
-    override fun onCreate() {
-        super.onCreate()
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(base)
 
-        // Dateibasierter Logger – muss vor allem anderen initialisiert werden
+        // Logger + Crash-Handler MÜSSEN vor super.onCreate() stehen: bei @HiltAndroidApp
+        // löst super.onCreate() die Injection der @Inject-Felder (workerFactory, imageLoader,
+        // castDiscoveryManager) aus – stürzt dabei etwas ab, wäre das sonst ein nicht
+        // erfasster Absturz VOR der bisherigen Registrierung in onCreate().
         LetheLogger.init(this)
-        LetheLogger.i("APP", "Lethe gestartet (debug=${BuildConfig.DEBUG}, version=${BuildConfig.VERSION_NAME})")
-
-        // Globaler Crash-Handler: fängt unbehandelte Exceptions ab und schreibt sie in die Log-Datei
         Thread.setDefaultUncaughtExceptionHandler(
             CrashHandler(this, Thread.getDefaultUncaughtExceptionHandler())
         )
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+
+        LetheLogger.i("APP", "Lethe gestartet (debug=${BuildConfig.DEBUG}, version=${BuildConfig.VERSION_NAME})")
 
         if (BuildConfig.DEBUG) {
             // Debug: vollständiges Logging mit Klasse/Zeile
