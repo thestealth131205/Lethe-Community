@@ -447,6 +447,13 @@ interface ApiService {
     @GET("support/my-tickets")
     suspend fun getMyTickets(): Response<List<UserSupportTicket>>
 
+    @Multipart
+    @POST("support/otp-issue")
+    suspend fun createOtpSupportTicket(
+        @Part("phone_number") phoneNumber: okhttp3.RequestBody,
+        @Part("message") message: okhttp3.RequestBody
+    ): Response<Map<String, String>>
+
     // --- VERKNÜPFTE GERÄTE ---
 
     @POST("linked-devices/scan")

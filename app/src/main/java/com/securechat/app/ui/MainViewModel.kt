@@ -248,6 +248,7 @@ class MainViewModel @Inject constructor(
     val castDiscoveryManager: com.securechat.app.cast.CastDiscoveryManager,
     private val pushProvider: PushProvider,
     private val googleAuthProvider: com.securechat.app.backup.GoogleAuthProvider,
+    private val driveBackupProvider: com.securechat.app.backup.DriveBackupProvider,
     val faceDetectionProvider: com.securechat.app.facedetection.FaceDetectionProvider,
     val segmentationProvider: com.securechat.app.segmentation.SegmentationProvider,
     val ffmpegProvider: com.securechat.app.media.FfmpegProvider,
@@ -1692,9 +1693,14 @@ class MainViewModel @Inject constructor(
                         put("call_type", callType)
                         putAll(extraPayload)
                     }
-                    // Offer-Payload für einen möglichen Retry bei "nicht erreichbar" merken
-                    // (nur 1:1-Anrufe ohne Gruppen-Kontext – Gruppen-Einladungen haben eigene Logik)
-                    if (type == "offer" && extraPayload["is_group_call"] != true) {
+                    // Offer-Payload für einen möglichen Retry bei "nicht erreichbar" merken.
+                    // Gilt für 1:1-Anrufe UND den Primär-Anruf eines Gruppen-Calls (der sich wie
+                    // ein 1:1-Offer verhält und den FCM-Wakeup-Retry ebenfalls braucht, sonst
+                    // bricht der Gruppenanruf sofort mit "nicht erreichbar" ab, wenn der primäre
+                    // Angerufene gerade im Hintergrund/Doze ist). NUR sekundäre Gruppen-Einladungen
+                    // (inviteToCall, erkennbar an existing_participant_ids) haben eigene Logik.
+                    val isSecondaryGroupInvite = extraPayload.containsKey("existing_participant_ids")
+                    if (type == "offer" && !isSecondaryGroupInvite) {
                         lastCallOfferPayload = payload
                         lastCallOfferPartner = partnerId
                     }
@@ -13757,17 +13763,20 @@ class MainViewModel @Inject constructor(
         }
     }
 
-    /** Kauft eine kostenpflichtige 3D-Datei: zieht Styx ab und gibt das neue Guthaben zurück. */
+    /**
+     * Kauft eine kostenpflichtige 3D-Datei: zieht Styx ab und gibt das neue Guthaben zurück.
+     * Der Preis wird serverseitig aus der Nachricht (messageId) gelesen - hier NICHT mitgesendet,
+     * damit ein manipulierter Client keinen niedrigeren Preis erzwingen kann.
+     */
     fun purchase3DFile(
-        senderId: String,
-        price: Int,
+        messageId: String,
         onSuccess: (newBalance: Int) -> Unit,
         onError: (String) -> Unit
     ) {
         viewModelScope.launch {
             try {
                 val response = apiService.purchase3DFile(
-                    mapOf("sender_id" to senderId, "price" to price)
+                    mapOf("message_id" to messageId)
                 )
                 if (response.isSuccessful) {
                     val body = response.body()
@@ -15930,6 +15939,29 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Erstellt ein Support-Ticket wenn der SMS-Verifizierungscode (Login/Registrierung)
+     * abgelaufen ist. Kein Login erforderlich – die Rufnummer wird direkt mitgeschickt,
+     * auch wenn noch kein Account existiert.
+     */
+    fun submitOtpSupportTicket(
+        phoneNumber: String,
+        message: String,
+        onResult: (Boolean, String) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val phoneBody = phoneNumber.toRequestBody("text/plain".toMediaTypeOrNull())
+                val msgBody = message.toRequestBody("text/plain".toMediaTypeOrNull())
+                val resp = apiService.createOtpSupportTicket(phoneBody, msgBody)
+                if (resp.isSuccessful) onResult(true, "Ticket erstellt – wir melden uns bei dir.")
+                else onResult(false, "Server-Fehler (${resp.code()})")
+            } catch (e: Exception) {
+                onResult(false, e.message ?: "Unbekannter Fehler")
+            }
+        }
+    }
+
     private val _myTickets = MutableStateFlow<List<com.securechat.app.data.network.UserSupportTicket>>(emptyList())
     val myTickets: StateFlow<List<com.securechat.app.data.network.UserSupportTicket>> = _myTickets.asStateFlow()
 
@@ -17399,57 +17431,25 @@ class MainViewModel @Inject constructor(
                 return@launch
             }
 
-            // 2) Zu Google Drive hochladen
-            try {
-                _backupProgress.value = 0.75f
-                val credential = com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
-                    .usingOAuth2(context, listOf("https://www.googleapis.com/auth/drive.file"))
-                credential.selectedAccount = account
-
-                val transport = com.google.api.client.http.javanet.NetHttpTransport()
-                val jsonFactory = com.google.api.client.json.gson.GsonFactory.getDefaultInstance()
-                val driveService = com.google.api.services.drive.Drive.Builder(transport, jsonFactory, credential)
-                    .setApplicationName("Lethe")
-                    .build()
-
-                // Ordner "Lethe-Backups" suchen oder erstellen
-                val folderQuery = driveService.files().list()
-                    .setQ("name='Lethe-Backups' and mimeType='application/vnd.google-apps.folder' and trashed=false")
-                    .setSpaces("drive")
-                    .execute()
-                val folderId = if (folderQuery.files.isNotEmpty()) {
-                    folderQuery.files[0].id
-                } else {
-                    val folderMeta = com.google.api.services.drive.model.File()
-                        .setName("Lethe-Backups")
-                        .setMimeType("application/vnd.google-apps.folder")
-                    driveService.files().create(folderMeta).setFields("id").execute().id
-                }
-
-                _backupProgress.value = 0.85f
-
-                // Datei hochladen
-                val fileMeta = com.google.api.services.drive.model.File()
-                    .setName(tempFile.name)
-                    .setParents(listOf(folderId))
-                val mediaContent = com.google.api.client.http.FileContent("application/octet-stream", tempFile)
-                driveService.files().create(fileMeta, mediaContent)
-                    .setFields("id, name")
-                    .execute()
-
-                _backupProgress.value = 1f
-                tempFile.delete()
+            // 2) Zu Google Drive hochladen (Upload-Logik im flavor-spezifischen
+            // DriveBackupProvider, damit src/main frei von Google-Drive-API-Referenzen bleibt)
+            _backupProgress.value = 0.75f
+            val uploadResult = driveBackupProvider.uploadBackup(context, account, tempFile) { p ->
+                _backupProgress.value = 0.75f + p * 0.25f
+            }
+            tempFile.delete()
+            if (uploadResult.isSuccess) {
                 _backupProgress.value = -1f
                 renewAllContactHandshakesSilent()
                 withContext(Dispatchers.Main) {
                     onResult(true, "Backup auf Google Drive hochgeladen")
                 }
-            } catch (e: Exception) {
-                tempFile.delete()
+            } else {
                 _backupProgress.value = -1f
+                val e = uploadResult.exceptionOrNull()
                 timber.log.Timber.e(e, "Google Drive Upload fehlgeschlagen")
                 withContext(Dispatchers.Main) {
-                    onResult(false, "Google Drive Upload fehlgeschlagen: ${e.message}")
+                    onResult(false, "Google Drive Upload fehlgeschlagen: ${e?.message}")
                 }
             }
         }

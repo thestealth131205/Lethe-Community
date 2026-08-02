@@ -27,10 +27,6 @@ import androidx.compose.ui.unit.sp
 import com.securechat.app.BuildConfig
 import com.securechat.app.billing.StyxProduct
 import com.securechat.app.ui.MainViewModel
-import com.stripe.android.PaymentConfiguration
-import com.stripe.android.paymentsheet.PaymentSheet
-import com.stripe.android.paymentsheet.PaymentSheetResult
-import com.stripe.android.paymentsheet.rememberPaymentSheet
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -72,28 +68,6 @@ fun CoinsScreen(
     var exchangeMessage by remember { mutableStateOf<String?>(null) }
     var exchangeError by remember { mutableStateOf<String?>(null) }
 
-    // Stripe PaymentSheet
-    var stripeLoading by remember { mutableStateOf(false) }
-    var stripeError by remember { mutableStateOf<String?>(null) }
-
-    val paymentSheet = rememberPaymentSheet { result ->
-        stripeLoading = false
-        when (result) {
-            is PaymentSheetResult.Completed -> {
-                // Extrahiere PI-ID aus dem gespeicherten clientSecret
-                val piId = (context.getSharedPreferences("stripe_tmp", android.content.Context.MODE_PRIVATE)
-                    .getString("last_pi_id", null))
-                if (piId != null) {
-                    viewModel.onStripePaymentCompleted(piId)
-                }
-            }
-            is PaymentSheetResult.Canceled -> {}
-            is PaymentSheetResult.Failed -> {
-                stripeError = result.error.localizedMessage ?: "Zahlung fehlgeschlagen."
-            }
-        }
-    }
-
     // Billing initialisieren beim Betreten, trennen beim Verlassen
     LaunchedEffect(Unit) { viewModel.initBilling() }
     DisposableEffect(Unit) {
@@ -120,9 +94,6 @@ fun CoinsScreen(
     LaunchedEffect(exchangeError) {
         if (exchangeError != null) { delay(3000); exchangeError = null }
     }
-    LaunchedEffect(stripeError) {
-        if (stripeError != null) { delay(4000); stripeError = null }
-    }
 
     Scaffold(
         topBar = {
@@ -145,16 +116,16 @@ fun CoinsScreen(
             )
         },
         snackbarHost = {
-            val msg = billingMessage ?: exchangeMessage ?: exchangeError ?: stripeError
+            val msg = billingMessage ?: exchangeMessage ?: exchangeError
             AnimatedVisibility(visible = msg != null, enter = fadeIn(), exit = fadeOut()) {
                 msg?.let { m ->
                     Snackbar(
                         modifier = Modifier.padding(16.dp),
-                        containerColor = if (exchangeError != null || stripeError != null)
+                        containerColor = if (exchangeError != null)
                             MaterialTheme.colorScheme.errorContainer
                         else
                             MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = if (exchangeError != null || stripeError != null)
+                        contentColor = if (exchangeError != null)
                             MaterialTheme.colorScheme.onErrorContainer
                         else
                             MaterialTheme.colorScheme.onPrimaryContainer
@@ -201,10 +172,11 @@ fun CoinsScreen(
 
             when (selectedTab) {
                 0 -> AufladenTab(
+                    viewModel = viewModel,
+                    activity = activity,
                     products = products,
                     isLoading = isLoading,
                     billingError = billingError,
-                    stripeLoading = stripeLoading,
                     onBuyPlayStore = { product ->
                         if (activity != null) viewModel.buyStyx(activity, product.productId)
                     },
@@ -212,26 +184,6 @@ fun CoinsScreen(
                         // foss-Build: kein Play Billing – FossBillingProvider öffnet
                         // stattdessen https://letheapp.de/coins per Chrome Custom Tabs.
                         if (activity != null) viewModel.buyStyx(activity, "")
-                    },
-                    onBuyStripe = {
-                        stripeLoading = true
-                        stripeError = null
-                        viewModel.createStripePaymentIntent { clientSecret, publishableKey ->
-                            if (clientSecret != null && publishableKey != null) {
-                                // PI-ID für spätere Gutschrift zwischenspeichern
-                                val piId = clientSecret.substringBefore("_secret_")
-                                context.getSharedPreferences("stripe_tmp", android.content.Context.MODE_PRIVATE)
-                                    .edit().putString("last_pi_id", piId).apply()
-                                PaymentConfiguration.init(context, publishableKey)
-                                paymentSheet.presentWithPaymentIntent(
-                                    clientSecret,
-                                    PaymentSheet.Configuration(merchantDisplayName = "Lethe")
-                                )
-                            } else {
-                                stripeLoading = false
-                                stripeError = "Stripe-Zahlung konnte nicht gestartet werden."
-                            }
-                        }
                     }
                 )
                 1 -> MuenzTauschTab(
@@ -263,13 +215,13 @@ fun CoinsScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AufladenTab(
+    viewModel: MainViewModel,
+    activity: Activity?,
     products: List<StyxProduct>,
     isLoading: Boolean,
     billingError: String?,
-    stripeLoading: Boolean,
     onBuyPlayStore: (StyxProduct) -> Unit,
-    onOpenWebTopup: () -> Unit,
-    onBuyStripe: () -> Unit
+    onOpenWebTopup: () -> Unit
 ) {
     // Zahlungsmethode: "playstore" | "stripe"
     var paymentMethod by remember { mutableStateOf("playstore") }
@@ -355,8 +307,12 @@ private fun AufladenTab(
             }
         } else {
             // ── Stripe-Produkt ───────────────────────────────────────────────
+            // Flavor-spezifisch: playstore nutzt das native Stripe-PaymentSheet-SDK
+            // (bindet transitiv Google Pay/Play-Services-Wallet ein), foss leitet auf
+            // dieselbe Web-Aufladeseite wie beim Play-Billing-Fallback weiter
+            // (siehe StripeTopupTab.kt in den jeweiligen Flavor-Sourcesets).
             item {
-                StripeProductCard(loading = stripeLoading, onBuy = onBuyStripe)
+                StripeTopupTab(viewModel = viewModel, activity = activity)
             }
         }
 
@@ -367,7 +323,7 @@ private fun AufladenTab(
 // ─── Web-Aufladung (foss-Build ohne Google Play Billing) ─────────────────────
 
 @Composable
-private fun WebTopupCard(onClick: () -> Unit) {
+internal fun WebTopupCard(onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -398,68 +354,6 @@ private fun WebTopupCard(onClick: () -> Unit) {
             }
         }
     }
-}
-
-// ─── Stripe-Kauf-Karte ────────────────────────────────────────────────────────
-
-@Composable
-private fun StripeProductCard(loading: Boolean, onBuy: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 6.dp),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.MonetizationOn,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(36.dp)
-                )
-                Spacer(Modifier.width(14.dp))
-                Column {
-                    Text(text = "5000 Styx", fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                    Text(
-                        text = "Kleiner Styx-Beutel",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
-                    )
-                }
-            }
-            Button(
-                onClick = onBuy,
-                enabled = !loading,
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                if (loading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                } else {
-                    Text("6,50 €", fontWeight = FontWeight.Bold)
-                }
-            }
-        }
-    }
-    Spacer(Modifier.height(8.dp))
-    Text(
-        text = "Sichere Zahlung über Stripe. Kreditkarte, SEPA-Lastschrift u. v. m.",
-        fontSize = 11.sp,
-        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-        textAlign = TextAlign.Center,
-        modifier = Modifier.padding(horizontal = 24.dp)
-    )
 }
 
 // ─── Tab: Münz-Tausch ────────────────────────────────────────────────────────

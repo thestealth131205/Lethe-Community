@@ -2021,7 +2021,7 @@ private fun SupportTicketListItem(
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
-                    "${ticket.userFakeNumber ?: ticket.userId}  ·  ${ticket.category}",
+                    "${ticket.userFakeNumber ?: ticket.phoneNumber ?: ticket.userId ?: "unbekannt"}  ·  ${ticket.category}",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -2101,7 +2101,7 @@ private fun SupportTicketDetail(
                 Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Von:", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                        Text(ticket.userFakeNumber ?: ticket.userId, fontSize = 13.sp)
+                        Text(ticket.userFakeNumber ?: ticket.phoneNumber ?: ticket.userId ?: "unbekannt", fontSize = 13.sp)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Kategorie:", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)

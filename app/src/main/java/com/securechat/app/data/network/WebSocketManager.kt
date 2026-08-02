@@ -82,6 +82,11 @@ class WebSocketManager @Inject constructor(
     // In-flight: gesendete Nachrichten die noch kein message_ack erhalten haben
     // Bei Disconnect → werden in pendingQueue zurückverschoben (server dedup verhindert Duplikate)
     private val inFlightMessages = ConcurrentHashMap<String, String>() // clientMessageId → json
+    // Schützt Snapshot+Clear von inFlightMessages: requeueInFlight() kann von mehreren Threads
+    // gleichzeitig aufgerufen werden (onClosed/onFailure via OkHttp-Dispatcher, startWriter() via
+    // Coroutine), und onOpen() ruft parallel clear() auf. Ein clear() während entries.toList()
+    // iteriert kann bei ConcurrentHashMap zu NoSuchElementException führen → alle Zugriffe sperren.
+    private val inFlightLock = Any()
 
     // ── Prioritäts-Sende-Queue (Online-Draht-Puffer) ───────────────────────────────
     // HIGH überholt NORMAL. Innerhalb einer Klasse gilt FIFO über die Sequenz-Nummer.
@@ -158,7 +163,7 @@ class WebSocketManager @Inject constructor(
                 Log.d("WebSocket", "Connected – flushe ${pendingQueue.size} gepufferte Nachrichten")
                 reconnectAttempts = 0
                 firstFailureTime = 0L
-                inFlightMessages.clear() // Safety: in-flight wurde bereits bei Disconnect in pending verschoben
+                synchronized(inFlightLock) { inFlightMessages.clear() } // Safety: in-flight wurde bereits bei Disconnect in pending verschoben
                 // Offline-Backlog in die Sende-Queue einspeisen (als NORMAL, FIFO über seq beibehalten)
                 // statt direkt zu senden → einheitlicher Draht über den einzelnen Writer-Consumer.
                 while (pendingQueue.isNotEmpty()) {
@@ -226,9 +231,12 @@ class WebSocketManager @Inject constructor(
      *  Wird bei onClosed/onFailure aufgerufen. Server-seitiges client_message_id Dedup verhindert
      *  doppelte Speicherung falls der Server die Nachricht doch noch erhalten hat. */
     private fun requeueInFlight() {
-        val entries = inFlightMessages.entries.toList()
+        val entries = synchronized(inFlightLock) {
+            val snapshot = inFlightMessages.entries.map { it.key to it.value }
+            inFlightMessages.clear()
+            snapshot
+        }
         if (entries.isEmpty()) return
-        inFlightMessages.clear()
         Log.w("WebSocket", "requeueInFlight: ${entries.size} in-flight Nachrichten zurück in pending queue")
         for ((clientId, json) in entries) {
             if (pendingClientIds.add(clientId)) {

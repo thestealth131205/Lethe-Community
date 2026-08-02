@@ -88,6 +88,7 @@ fun LoginScreen(
     var otpCode by remember { mutableStateOf("") }
     var isSendingOtp by remember { mutableStateOf(false) }
     var otpError by remember { mutableStateOf<String?>(null) }
+    var otpResendKey by remember { mutableStateOf(0) }
 
     // ── Kind-Konto-Registrierung ─────────────────────────────────────────────
     var isChildAccount by remember { mutableStateOf(false) }
@@ -641,6 +642,7 @@ fun LoginScreen(
                                         isSendingOtp = false
                                         if (success) {
                                             showOtpDialog = true
+                                            otpResendKey++
                                         } else {
                                             otpError = msg
                                         }
@@ -778,6 +780,10 @@ fun LoginScreen(
     // ── Neues-Gerät-Verifikations-Dialog ────────────────────────────────────
     val newDeviceState by viewModel.newDeviceState.collectAsState()
     var newDeviceSmsCode by remember { mutableStateOf("") }
+    var newDeviceResendKey by remember { mutableStateOf(0) }
+    LaunchedEffect(newDeviceState != null) {
+        if (newDeviceState != null) newDeviceResendKey++
+    }
     if (newDeviceState != null) {
         AlertDialog(
             onDismissRequest = { },
@@ -807,6 +813,18 @@ fun LoginScreen(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
                     )
+                    val currentDeviceState = newDeviceState
+                    if (currentDeviceState != null) {
+                        SmsOtpTimerSection(
+                            phoneNumber = currentDeviceState.fakeNumber,
+                            viewModel = viewModel,
+                            resendKey = newDeviceResendKey,
+                            onResendCode = {
+                                newDeviceSmsCode = ""
+                                viewModel.login(currentDeviceState.fakeNumber, currentDeviceState.password, rememberMe, autoLogin)
+                            }
+                        )
+                    }
                 }
             },
             confirmButton = {
@@ -856,6 +874,17 @@ fun LoginScreen(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
                     )
+                    SmsOtpTimerSection(
+                        phoneNumber = fullPhoneNumber,
+                        viewModel = viewModel,
+                        resendKey = otpResendKey,
+                        onResendCode = {
+                            otpCode = ""
+                            viewModel.sendRegistrationOtp(fullPhoneNumber) { success, msg ->
+                                if (success) otpResendKey++ else otpError = msg
+                            }
+                        }
+                    )
                 }
             },
             confirmButton = {
@@ -883,6 +912,118 @@ fun LoginScreen(
                     otpCode = ""
                 }) {
                     Text(stringResource(R.string.login_cancel))
+                }
+            }
+        )
+    }
+}
+
+/**
+ * Countdown-Timer (180s) für die SMS-Code-Eingabe. Läuft der Timer ab ohne dass
+ * der Code eingegeben wurde, erscheinen "Code erneut anfordern" und "Problem melden".
+ * "Problem melden" erstellt automatisch ein Support-Ticket mit der Absender-Rufnummer
+ * (funktioniert auch wenn noch kein Account existiert, z.B. während der Registrierung).
+ */
+@Composable
+private fun SmsOtpTimerSection(
+    phoneNumber: String,
+    viewModel: MainViewModel,
+    resendKey: Int,
+    onResendCode: () -> Unit
+) {
+    var secondsLeft by remember { mutableStateOf(180) }
+    var showReportDialog by remember { mutableStateOf(false) }
+    var reportMessage by remember { mutableStateOf("") }
+    var isSubmittingReport by remember { mutableStateOf(false) }
+    var reportResult by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(resendKey) {
+        secondsLeft = 180
+        while (secondsLeft > 0) {
+            kotlinx.coroutines.delay(1000)
+            secondsLeft--
+        }
+    }
+
+    Spacer(Modifier.height(4.dp))
+    if (secondsLeft > 0) {
+        Text(
+            text = "Code läuft ab in %d:%02d".format(secondsLeft / 60, secondsLeft % 60),
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    } else {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = "Der Code ist abgelaufen.",
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.error
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onResendCode, modifier = Modifier.weight(1f)) {
+                    Text("Code erneut anfordern", fontSize = 12.sp)
+                }
+                OutlinedButton(onClick = { showReportDialog = true }, modifier = Modifier.weight(1f)) {
+                    Text("Problem melden", fontSize = 12.sp)
+                }
+            }
+        }
+    }
+
+    if (showReportDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!isSubmittingReport) {
+                    showReportDialog = false
+                    reportResult = null
+                }
+            },
+            title = { Text("Problem melden", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Du hast keinen SMS-Code erhalten? Beschreibe kurz das Problem – wir melden uns unter $phoneNumber.",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = reportMessage,
+                        onValueChange = { if (it.length <= 500) reportMessage = it },
+                        label = { Text("Nachricht (optional)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 3
+                    )
+                    reportResult?.let {
+                        Text(text = it, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        isSubmittingReport = true
+                        reportResult = null
+                        viewModel.submitOtpSupportTicket(phoneNumber, reportMessage) { success, msg ->
+                            isSubmittingReport = false
+                            reportResult = msg
+                            if (success) showReportDialog = false
+                        }
+                    },
+                    enabled = !isSubmittingReport
+                ) {
+                    if (isSubmittingReport) {
+                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Ticket erstellen")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showReportDialog = false; reportResult = null },
+                    enabled = !isSubmittingReport
+                ) {
+                    Text("Schließen")
                 }
             }
         )

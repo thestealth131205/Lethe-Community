@@ -24,6 +24,18 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.137",
+            title = "Sicherheits-Updates & Nearby-Blockierung",
+            items = listOf(
+                "Behoben: Blockierte Nutzer konnten in Lethe Nearby trotzdem im Umkreis-Feed erscheinen, Profile ansehen oder dich liken \u2013 Blockierungen werden jetzt in Nearby vollst\u00e4ndig durchgesetzt",
+                "Neu: Bei der Eingabe des SMS-Codes zeigt die App jetzt einen Countdown \u2013 danach kannst du den Code erneut anfordern oder ein Problem melden",
+                "Verbessert: SMS-Codes sind jetzt zus\u00e4tzlich pro Telefonnummer gegen Missbrauch abgesichert",
+                "Behoben: Der Preis f\u00fcr 3D-Datei-K\u00e4ufe im Chat wird jetzt ausschlie\u00dflich vom Server festgelegt statt vom Ger\u00e4t des K\u00e4ufers",
+            ),
+            shortSummary = "Nearby-Blockierungen werden jetzt vollst\u00e4ndig durchgesetzt, dazu ein neuer SMS-Code-Timer und mehr Schutz gegen Missbrauch"
+        ),
+
+        ChangelogEntry(
             version = "10.4.136",
             title = "OpenStreetMap-Karten & Video-Editor-Verbesserungen",
             items = listOf(
@@ -58,16 +70,6 @@ object AppChangelog {
                 "Verbessert: Die Bedienelemente im Videocall wurden neu angeordnet \u2013 mit direktem Zugriff auf Emoji-Reaktionen",
             ),
             shortSummary = "Amazon-Kurzlinks zeigen wieder die Produktvorschau, und der Videocall wurde gegen versehentliches Umschalten und Auflegen abgesichert"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.133",
-            title = "Gruppen-Chats im Web-Chat entschlüsseln jetzt korrekt",
-            items = listOf(
-                "Behoben: Gruppen-Nachrichten im Web-Chat konnten nicht entschlüsselt werden (\u201eGruppen-Entschlüsselung fehlgeschlagen\u201c bzw. \u201ekein Schlüssel\u201c) \u2013 dein Handy überträgt die Gruppen-Schlüssel jetzt beim Verbinden sicher an den Web-Chat",
-                "Verbessert: Der Web-Chat nutzt jetzt denselben Gruppen-Schlüssel wie dein Handy, sodass deine im Web geschriebenen Gruppen-Nachrichten von allen Mitgliedern gelesen werden und die Verlaufshistorie korrekt erscheint",
-            ),
-            shortSummary = "Web-Chat entschlüsselt Gruppen-Nachrichten jetzt korrekt \u2013 die Gruppen-Schlüssel werden sicher vom Handy übertragen"
         ),
 
     )

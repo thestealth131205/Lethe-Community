@@ -10,6 +10,17 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+
+        <!-- Android Auto: Vollbild-Anrufbenachrichtigung + Play-Services-Versionsdeklaration.
+             `@integer/google_play_services_version` wird von den Play-Services-Bibliotheken
+             (z. B. firebase-messaging) selbst bereitgestellt – nur playstore-Flavor. -->
+        <meta-data
+            android:name="com.google.android.gms.version"
+            android:value="@integer/google_play_services_version" />
+
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
     </application>
 
 </manifest>

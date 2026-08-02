@@ -17,8 +17,8 @@ android {
         applicationId = "com.Lethe.app"
         minSdk = 26
         targetSdk = 36 // Geändert von 35 auf 36
-        versionCode = 100536
-        versionName = "10.4.136"
+        versionCode = 100537
+        versionName = "10.4.137"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -236,24 +236,29 @@ dependencies {
     // Chromecast – Google-freier CASTV2-Client (ChromecastV2Client, mDNS via NsdManager).
     // Ersetzt play-services-cast-framework in BEIDEN Flavors (F-Droid-tauglich).
 
-    // Google Drive API – Backup-Upload zu Google Drive.
-    // play-services-auth (Google-Sign-In) ist proprietär und NUR playstore-Flavor
-    // (siehe backup/GoogleAuthProvider.kt). google-api-client-android + google-api-services-drive
-    // sind reine Apache-2.0-REST-Clients OHNE GMS-Abhängigkeit und bleiben in BEIDEN Flavors
-    // (MainViewModel.exportToGoogleDrive nutzt nur diese beiden + ein bereits vorhandenes Account).
+    // Google Drive API – Backup-Upload zu Google Drive. NUR playstore-Flavor: play-services-auth
+    // (Google-Sign-In) ist proprietär (siehe backup/GoogleAuthProvider.kt). Der
+    // google-api-client-android-Adapter für Android (GoogleAccountCredential) bindet ebenfalls
+    // transitiv play-services-auth ein, google-api-services-drive ist der zugehörige REST-Client
+    // – beide daher ebenfalls playstoreImplementation-only (siehe backup/DriveBackupProvider.kt,
+    // Upload-Logik liegt im PlaystoreDriveBackupProvider, foss nutzt FossDriveBackupProvider).
     "playstoreImplementation"("com.google.android.gms:play-services-auth:21.3.0")
-    implementation("com.google.api-client:google-api-client-android:2.2.0") {
+    "playstoreImplementation"("com.google.api-client:google-api-client-android:2.2.0") {
         exclude(group = "org.apache.httpcomponents")
     }
-    implementation("com.google.apis:google-api-services-drive:v3-rev20231128-2.0.0") {
+    "playstoreImplementation"("com.google.apis:google-api-services-drive:v3-rev20231128-2.0.0") {
         exclude(group = "org.apache.httpcomponents")
     }
 
     // Android Auto / Car App Library – Messaging-Oberfläche im Fahrzeug (Konversationsliste)
     implementation("androidx.car.app:app:1.7.0")
 
-    // Stripe Android SDK – Payment Sheet für alternative Zahlungsmethode
-    implementation("com.stripe:stripe-android:21.4.1")
+    // Stripe Android SDK – Payment Sheet für alternative Zahlungsmethode. NUR playstore-Flavor:
+    // die PaymentSheet-UI bietet Google Pay an und bindet dafür transitiv play-services-wallet
+    // ein (proprietär, F-Droid-inkompatibel). foss nutzt stattdessen dieselbe Stripe-Web-
+    // Aufladeseite wie der Play-Billing-Fallback (siehe ui/screens/StripeTopupTab.kt in
+    // beiden Flavor-Sourcesets).
+    "playstoreImplementation"("com.stripe:stripe-android:21.4.1")
 }
 
 // google-services-Plugin (FCM) nur anwenden, wenn ein playstore-Task gebaut wird.

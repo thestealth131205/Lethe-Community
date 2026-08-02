@@ -1583,10 +1583,11 @@ data class SknChUpdateSettingsRequest(
 
 data class AdminSupportTicket(
     val id: String,
-    @SerializedName("user_id") val userId: String,
+    @SerializedName("user_id") val userId: String?,
     @SerializedName("user_fake_number") val userFakeNumber: String?,
     @SerializedName("user_name") val userName: String?,
     @SerializedName("user_avatar") val userAvatar: String?,
+    @SerializedName("phone_number") val phoneNumber: String?,
     val category: String,
     val title: String,
     val description: String,

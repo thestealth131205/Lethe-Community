@@ -9738,12 +9738,14 @@ internal fun MessageBubble(
                                 onOpen = { onNavigateTo3DViewer?.invoke(meta.fileUrl, meta.filename, meta.textureUrl) },
                                 onNavigateToCoins = onNavigateToCoins,
                                 onPurchase = { onPaid ->
-                                    viewModel?.purchase3DFile(
-                                        senderId = message.senderId,
-                                        price = meta.price,
-                                        onSuccess = { _ -> onPaid() },
-                                        onError = { /* Fehler wird im Dialog gezeigt */ }
-                                    )
+                                    val msgId = message.messageId
+                                    if (msgId != null) {
+                                        viewModel?.purchase3DFile(
+                                            messageId = msgId,
+                                            onSuccess = { _ -> onPaid() },
+                                            onError = { /* Fehler wird im Dialog gezeigt */ }
+                                        )
+                                    }
                                 }
                             )
                         } else {
