@@ -36,8 +36,17 @@ class CastDiscoveryManager @Inject constructor(
 ) : DefaultLifecycleObserver {
 
     companion object {
-        /** App-ID des Lethe-Custom-Cast-Receivers. */
+        /** App-ID des Lethe-Custom-Cast-Receivers (Spark-Overlay, Kommentare, TV-Fernbedienung). */
         const val RECEIVER_APP_ID = "8622B21C"
+
+        /**
+         * Googles offizieller Default Media Receiver. Läuft garantiert auch auf reinen
+         * Audio-Lautsprechern (Nest/Google Home Mini etc.), die den Lethe-Custom-Receiver
+         * (volle HTML/CSS-Seite mit Video-Overlays) oft nicht korrekt starten – LAUNCH
+         * meldet Erfolg (Bestätigungston), aber die JS-Seite initialisiert sich auf reinen
+         * Lautsprechern nicht zuverlässig, wodurch das LOAD nie in "PLAYING" mündet.
+         */
+        const val DEFAULT_MEDIA_RECEIVER_APP_ID = "CC1AD845"
     }
 
     // ---- Geräte-Liste & Picker ---------------------------------------------------
@@ -142,10 +151,16 @@ class CastDiscoveryManager @Inject constructor(
         _showPicker.value = false
     }
 
-    /** Verbindet zum gewählten Gerät und startet den Lethe-Receiver. */
+    /**
+     * Verbindet zum gewählten Gerät und startet den passenden Receiver.
+     * Nur wenn ein Spark aktiv gecastet wird (Bild-/Kommentar-Overlay, TV-Fernbedienung),
+     * wird der Lethe-Custom-Receiver benötigt – reine Musik-/Video-URLs laufen über Googles
+     * Default Media Receiver, der auch auf Audio-only-Lautsprechern zuverlässig funktioniert.
+     */
     fun connectToDevice(device: ChromecastV2Client.CastDevice) {
         _showPicker.value = false
-        v2.connect(device, RECEIVER_APP_ID)
+        val appId = if (pendingCastSparkId != null) RECEIVER_APP_ID else DEFAULT_MEDIA_RECEIVER_APP_ID
+        v2.connect(device, appId)
     }
 
     // ---- Pending-Media laden -----------------------------------------------------

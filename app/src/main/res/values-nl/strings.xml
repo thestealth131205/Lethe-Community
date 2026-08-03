@@ -1296,6 +1296,13 @@
     <string name="app_settings_enter_to_send">Enter = Verzenden</string>
     <string name="app_settings_enter_to_send_on">Enter verzendt het bericht</string>
     <string name="app_settings_enter_to_send_off">Enter maakt een nieuwe alinea</string>
+    <string name="app_settings_chat_backup_title">Chatback-up (platte tekst op server)</string>
+    <string name="app_settings_chat_backup_on">Aan – berichten worden als platte tekst op de server opgeslagen</string>
+    <string name="app_settings_chat_backup_off">Uit – berichten blijven end-to-end versleuteld</string>
+    <string name="app_settings_chat_backup_consent_title">Chatback-up inschakelen?</string>
+    <string name="app_settings_chat_backup_consent_text">Als je de chatback-up inschakelt, worden je ontsleutelde tekstberichten als platte tekst op de server opgeslagen. Zo kun je je chats op een nieuw apparaat herstellen.</string>
+    <string name="app_settings_chat_backup_consent_warning">Let op: dit doorbreekt de end-to-end-versleuteling. De betrokken berichten – ook die door anderen aan jou zijn gestuurd – worden leesbaar voor de serverbeheerder. Dit kan niet ongedaan worden gemaakt; als je het uitschakelt, blijft reeds opgeslagen platte tekst op de server totdat deze wordt verwijderd.</string>
+    <string name="app_settings_chat_backup_consent_confirm">Begrepen &amp; inschakelen</string>
     <string name="app_settings_section_display">Weergave &amp; Privacy</string>
     <string name="app_settings_design_title">Ontwerp en weergave</string>
     <string name="app_settings_design_subtitle">Kleuren, thema en lettergrootte</string>

@@ -92,6 +92,7 @@ data class UserPreferences(
     val audioQuality: String = "AUTO",                 // Allgemeine Audio-Qualität in Anrufen: "AUTO" | "LOW" | "HIGH"
     val audioOutputChannel: String = "SYSTEM",         // Genutzter Audio-Ausgang: "SYSTEM" | "EARPIECE" | "SPEAKER" | "BLUETOOTH"
     val bluetoothHeadsetEnabled: Boolean = true,       // Bluetooth-Headset-Unterstützung (HFP) in Anrufen
+    val chatBackupEnabled: Boolean = false,            // Opt-in Chat-Backup: entschlüsselte Nachrichten als Klartext auf Server sichern (durchbricht E2EE bewusst)
 )
 
 /**
@@ -172,6 +173,7 @@ class UserPreferencesRepository @Inject constructor(
     private val AUDIO_QUALITY = stringPreferencesKey("audio_quality")
     private val AUDIO_OUTPUT_CHANNEL = stringPreferencesKey("audio_output_channel")
     private val BLUETOOTH_HEADSET_ENABLED = booleanPreferencesKey("bluetooth_headset_enabled")
+    private val CHAT_BACKUP = booleanPreferencesKey("chat_backup_enabled")
 
 
     /**
@@ -245,6 +247,7 @@ class UserPreferencesRepository @Inject constructor(
                 audioQuality = preferences[AUDIO_QUALITY] ?: "AUTO",
                 audioOutputChannel = preferences[AUDIO_OUTPUT_CHANNEL] ?: "SYSTEM",
                 bluetoothHeadsetEnabled = preferences[BLUETOOTH_HEADSET_ENABLED] ?: true,
+                chatBackupEnabled = preferences[CHAT_BACKUP] ?: false,
             )
         }
 
@@ -329,6 +332,7 @@ class UserPreferencesRepository @Inject constructor(
     suspend fun setAudioQuality(quality: String) { profileDataStore.edit { it[AUDIO_QUALITY] = quality } }
     suspend fun setAudioOutputChannel(channel: String) { profileDataStore.edit { it[AUDIO_OUTPUT_CHANNEL] = channel } }
     suspend fun setBluetoothHeadsetEnabled(enabled: Boolean) { profileDataStore.edit { it[BLUETOOTH_HEADSET_ENABLED] = enabled } }
+    suspend fun setChatBackupEnabled(enabled: Boolean) { profileDataStore.edit { it[CHAT_BACKUP] = enabled } }
     /** Aktiviert/deaktiviert P2P für einen einzelnen Kontakt (lokale Override-Liste). */
     suspend fun setP2pContactEnabled(userId: String, enabled: Boolean) {
         profileDataStore.edit { prefs ->

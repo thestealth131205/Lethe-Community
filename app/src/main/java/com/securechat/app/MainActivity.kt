@@ -2129,7 +2129,9 @@ class MainActivity : FragmentActivity() {
                                 onNavigateToAudio = { navController.navigate("settings/audio") },
                                 onNavigateToMyMusic = { navController.navigate("my_music_library") },
                                 enterToSend = preferences.enterToSend,
-                                onEnterToSendChange = { viewModel.setEnterToSend(it) }
+                                onEnterToSendChange = { viewModel.setEnterToSend(it) },
+                                chatBackupEnabled = preferences.chatBackupEnabled,
+                                onChatBackupChange = { viewModel.setChatBackup(it) }
                             )
                         }
 

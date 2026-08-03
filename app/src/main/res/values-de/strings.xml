@@ -1356,6 +1356,13 @@
     <string name="app_settings_enter_to_send">Enter = Senden</string>
     <string name="app_settings_enter_to_send_on">Enter sendet die Nachricht</string>
     <string name="app_settings_enter_to_send_off">Enter erstellt einen neuen Absatz</string>
+    <string name="app_settings_chat_backup_title">Chat-Backup (Server-Klartext)</string>
+    <string name="app_settings_chat_backup_on">Aktiv – Nachrichten werden im Klartext auf dem Server gesichert</string>
+    <string name="app_settings_chat_backup_off">Aus – Nachrichten bleiben Ende-zu-Ende-verschlüsselt</string>
+    <string name="app_settings_chat_backup_consent_title">Chat-Backup aktivieren?</string>
+    <string name="app_settings_chat_backup_consent_text">Wenn du das Chat-Backup aktivierst, werden deine entschlüsselten Textnachrichten im Klartext auf dem Server gespeichert. So kannst du deine Chats auf einem neuen Gerät wiederherstellen.</string>
+    <string name="app_settings_chat_backup_consent_warning">Achtung: Dies durchbricht die Ende-zu-Ende-Verschlüsselung. Die betroffenen Nachrichten – auch die dir von anderen gesendeten – sind dann für den Serverbetreiber lesbar. Ein Zurückrollen ist nicht möglich; beim Ausschalten bleibt bereits gesicherter Klartext auf dem Server, bis er gelöscht wird.</string>
+    <string name="app_settings_chat_backup_consent_confirm">Verstanden &amp; aktivieren</string>
     <string name="app_settings_section_display">Darstellung &amp; Privatsphäre</string>
     <string name="app_settings_design_title">Design und Darstellung</string>
     <string name="app_settings_design_subtitle">Farben, Theme und Schriftgröße</string>

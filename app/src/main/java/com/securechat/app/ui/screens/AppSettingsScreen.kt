@@ -44,8 +44,12 @@ fun AppSettingsScreen(
     onNavigateToAudio: (() -> Unit)? = null,
     onNavigateToMyMusic: (() -> Unit)? = null,
     enterToSend: Boolean = false,
-    onEnterToSendChange: (Boolean) -> Unit = {}
+    onEnterToSendChange: (Boolean) -> Unit = {},
+    chatBackupEnabled: Boolean = false,
+    onChatBackupChange: (Boolean) -> Unit = {}
 ) {
+    // Chat-Backup Zustimmungsdialog (nur beim Einschalten)
+    var showChatBackupConsentDialog by remember { mutableStateOf(false) }
     // Key-Backup Dialog State
     var showBackupDialog by remember { mutableStateOf(false) }
     var showRestoreDialog by remember { mutableStateOf(false) }
@@ -113,6 +117,25 @@ fun AppSettingsScreen(
                     Switch(
                         checked = enterToSend,
                         onCheckedChange = onEnterToSendChange
+                    )
+                }
+                HorizontalDivider()
+                SettingsItem(
+                    icon = Icons.Default.CloudUpload,
+                    title = stringResource(R.string.app_settings_chat_backup_title),
+                    subtitle = if (chatBackupEnabled) stringResource(R.string.app_settings_chat_backup_on) else stringResource(R.string.app_settings_chat_backup_off)
+                ) {
+                    Switch(
+                        checked = chatBackupEnabled,
+                        onCheckedChange = { wantEnabled ->
+                            if (wantEnabled) {
+                                // Einschalten erfordert Pflicht-Zustimmung (E2EE-Bruch, DSGVO)
+                                showChatBackupConsentDialog = true
+                            } else {
+                                // Ausschalten sofort; Hinweis auf verbleibenden Server-Klartext (Stufe 3 Purge)
+                                onChatBackupChange(false)
+                            }
+                        }
                     )
                 }
                 if (onNavigateToAudio != null) {
@@ -716,6 +739,44 @@ fun AppSettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showImportDialog = false }) { Text(stringResource(R.string.app_settings_backup_cancel)) }
+            }
+        )
+    }
+
+    // === CHAT-BACKUP ZUSTIMMUNGS-DIALOG (Pflicht beim Einschalten) ===
+    if (showChatBackupConsentDialog) {
+        AlertDialog(
+            onDismissRequest = { showChatBackupConsentDialog = false },
+            icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text(stringResource(R.string.app_settings_chat_backup_consent_title)) },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.verticalScroll(rememberScrollState())
+                ) {
+                    Text(
+                        stringResource(R.string.app_settings_chat_backup_consent_text),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        stringResource(R.string.app_settings_chat_backup_consent_warning),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showChatBackupConsentDialog = false
+                        onChatBackupChange(true)
+                    }
+                ) { Text(stringResource(R.string.app_settings_chat_backup_consent_confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showChatBackupConsentDialog = false }) {
+                    Text(stringResource(R.string.general_cancel))
+                }
             }
         )
     }

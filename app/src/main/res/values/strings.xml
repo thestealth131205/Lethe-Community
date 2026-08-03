@@ -1361,6 +1361,13 @@
     <string name="app_settings_enter_to_send">Enter = Send</string>
     <string name="app_settings_enter_to_send_on">Enter sends the message</string>
     <string name="app_settings_enter_to_send_off">Enter creates a new paragraph</string>
+    <string name="app_settings_chat_backup_title">Chat backup (server plaintext)</string>
+    <string name="app_settings_chat_backup_on">On – messages are backed up as plaintext on the server</string>
+    <string name="app_settings_chat_backup_off">Off – messages stay end-to-end encrypted</string>
+    <string name="app_settings_chat_backup_consent_title">Enable chat backup?</string>
+    <string name="app_settings_chat_backup_consent_text">When you enable chat backup, your decrypted text messages are stored as plaintext on the server. This lets you restore your chats on a new device.</string>
+    <string name="app_settings_chat_backup_consent_warning">Warning: This breaks end-to-end encryption. The affected messages – including those sent to you by others – become readable by the server operator. This cannot be undone; when you turn it off, already backed-up plaintext stays on the server until it is deleted.</string>
+    <string name="app_settings_chat_backup_consent_confirm">Understood &amp; enable</string>
     <string name="app_settings_section_display">Display &amp; Privacy</string>
     <string name="app_settings_design_title">Design and Display</string>
     <string name="app_settings_design_subtitle">Colors, theme and font size</string>

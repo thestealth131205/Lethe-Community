@@ -24,6 +24,15 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.140",
+            title = "Musik-Cast-Fix f\u00fcr Lautsprecher",
+            items = listOf(
+                "Behoben: Musik-Streaming per Cast auf reine Audio-Lautsprecher (z.B. Google/Nest Mini) blieb auf \u201epausiert\u201c stehen, obwohl die Verbindung erfolgreich war \u2013 Musik wird jetzt \u00fcber Googles Standard-Empf\u00e4nger gestreamt und startet zuverl\u00e4ssig",
+            ),
+            shortSummary = "Musik-Streaming per Cast auf Lautsprecher funktioniert jetzt zuverl\u00e4ssig"
+        ),
+
+        ChangelogEntry(
             version = "10.4.139",
             title = "Absturz-Fix beim App-Start",
             items = listOf(
@@ -54,19 +63,6 @@ object AppChangelog {
                 "Behoben: Der Preis f\u00fcr 3D-Datei-K\u00e4ufe im Chat wird jetzt ausschlie\u00dflich vom Server festgelegt statt vom Ger\u00e4t des K\u00e4ufers",
             ),
             shortSummary = "Nearby-Blockierungen werden jetzt vollst\u00e4ndig durchgesetzt, dazu ein neuer SMS-Code-Timer und mehr Schutz gegen Missbrauch"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.136",
-            title = "OpenStreetMap-Karten & Video-Editor-Verbesserungen",
-            items = listOf(
-                "Neu: Die Karten f\u00fcr Live-Standort, Standort-Teilen und Profil-Umkreis nutzen jetzt OpenStreetMap",
-                "Behoben: Beim Anpassen der Helligkeit im Video-Editor blieb die Vorschau stehen und lie\u00df sich nicht mehr fortsetzen \u2013 die Vorschau l\u00e4uft jetzt w\u00e4hrend der Anpassung weiter",
-                "Behoben: Beim Senden eines Videos aus dem Video-Editor verschwand die Video-Nachricht in manchen F\u00e4llen spurlos \u2013 gro\u00dfe Videos werden jetzt zuverl\u00e4ssig verarbeitet und gesendet",
-                "Behoben: Gruppen zeigten in der App-internen Teilen-Liste kein Gruppenbild, sondern nur einen Platzhalter \u2013 jetzt wird das echte Gruppenbild angezeigt",
-                "Behoben: Der QR-Code bzw. Einladungslink im Konto lud in manchen F\u00e4llen endlos \u2013 bei einem Fehler erscheint jetzt ein Hinweis mit Wiederholen-Option",
-            ),
-            shortSummary = "Karten nutzen jetzt OpenStreetMap, der Video-Editor wurde stabiler und Gruppenbilder erscheinen in der Teilen-Liste"
         ),
 
     )

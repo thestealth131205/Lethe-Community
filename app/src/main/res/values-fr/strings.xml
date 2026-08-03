@@ -1296,6 +1296,13 @@
     <string name="app_settings_enter_to_send">Entrée = Envoyer</string>
     <string name="app_settings_enter_to_send_on">Entrée envoie le message</string>
     <string name="app_settings_enter_to_send_off">Entrée crée un nouveau paragraphe</string>
+    <string name="app_settings_chat_backup_title">Sauvegarde du chat (texte clair sur le serveur)</string>
+    <string name="app_settings_chat_backup_on">Activé – les messages sont sauvegardés en texte clair sur le serveur</string>
+    <string name="app_settings_chat_backup_off">Désactivé – les messages restent chiffrés de bout en bout</string>
+    <string name="app_settings_chat_backup_consent_title">Activer la sauvegarde du chat ?</string>
+    <string name="app_settings_chat_backup_consent_text">Si vous activez la sauvegarde du chat, vos messages texte déchiffrés sont stockés en texte clair sur le serveur. Cela vous permet de restaurer vos conversations sur un nouvel appareil.</string>
+    <string name="app_settings_chat_backup_consent_warning">Attention : cela rompt le chiffrement de bout en bout. Les messages concernés – y compris ceux que d\'autres vous ont envoyés – deviennent lisibles par l\'exploitant du serveur. Cette action est irréversible ; lorsque vous la désactivez, le texte clair déjà sauvegardé reste sur le serveur jusqu\'à sa suppression.</string>
+    <string name="app_settings_chat_backup_consent_confirm">Compris et activer</string>
     <string name="app_settings_section_display">Affichage &amp; Confidentialité</string>
     <string name="app_settings_design_title">Design et affichage</string>
     <string name="app_settings_design_subtitle">Couleurs, thème et taille de police</string>

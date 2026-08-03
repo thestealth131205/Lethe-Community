@@ -20075,6 +20075,15 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch { prefsRepository.setBluetoothHeadsetEnabled(enabled) }
     }
 
+    /**
+     * Opt-in Chat-Backup (Stufe 1): setzt nur das lokale Flag.
+     * Achtung: Bei Aktivierung werden ab Stufe 2 entschlüsselte Text-Nachrichten als
+     * Klartext auf dem Server abgelegt (durchbricht E2EE bewusst). Nur nach Zustimmung im UI aufrufen.
+     */
+    fun setChatBackup(enabled: Boolean) {
+        viewModelScope.launch { prefsRepository.setChatBackupEnabled(enabled) }
+    }
+
     fun saveAppLockPin(pin: String) { prefsRepository.saveAppLockPin(pin) }
     fun hasAppLockPin(): Boolean = prefsRepository.hasAppLockPin()
     fun verifyAppLockPin(pin: String): Boolean = prefsRepository.verifyAppLockPin(pin)

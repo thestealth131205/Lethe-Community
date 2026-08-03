@@ -1296,6 +1296,13 @@
     <string name="app_settings_enter_to_send">Invio = Invia</string>
     <string name="app_settings_enter_to_send_on">Invio manda il messaggio</string>
     <string name="app_settings_enter_to_send_off">Invio crea un nuovo paragrafo</string>
+    <string name="app_settings_chat_backup_title">Backup della chat (testo in chiaro sul server)</string>
+    <string name="app_settings_chat_backup_on">Attivo – i messaggi vengono salvati in chiaro sul server</string>
+    <string name="app_settings_chat_backup_off">Disattivato – i messaggi restano cifrati end-to-end</string>
+    <string name="app_settings_chat_backup_consent_title">Attivare il backup della chat?</string>
+    <string name="app_settings_chat_backup_consent_text">Se attivi il backup della chat, i tuoi messaggi di testo decifrati vengono memorizzati in chiaro sul server. Questo ti consente di ripristinare le chat su un nuovo dispositivo.</string>
+    <string name="app_settings_chat_backup_consent_warning">Attenzione: questo interrompe la crittografia end-to-end. I messaggi interessati – compresi quelli inviati a te da altri – diventano leggibili dal gestore del server. L\'operazione non è reversibile; quando lo disattivi, il testo in chiaro già salvato rimane sul server finché non viene eliminato.</string>
+    <string name="app_settings_chat_backup_consent_confirm">Ho capito e attiva</string>
     <string name="app_settings_section_display">Display &amp; Privacy</string>
     <string name="app_settings_design_title">Design e display</string>
     <string name="app_settings_design_subtitle">Colori, tema e dimensione del testo</string>
