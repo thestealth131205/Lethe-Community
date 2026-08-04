@@ -370,6 +370,11 @@ class ChromecastV2Client @Inject constructor(
         val apps = status.optJSONArray("applications") ?: return
         for (i in 0 until apps.length()) {
             val app = apps.optJSONObject(i) ?: continue
+            // WICHTIG: Nur den Eintrag der gerade gestarteten App akzeptieren. Bleibt vom
+            // vorherigen Connect noch eine andere App (z.B. der Lethe-Custom-Receiver) im
+            // "applications"-Array stehen, würde sonst deren transportId übernommen und
+            // LOAD ginge an die falsche App – Verbindungston klingt, es wird aber nie geladen.
+            if (app.optString("appId") != receiverAppId) continue
             val transportId = app.optString("transportId").takeIf { it.isNotBlank() } ?: continue
             sessionId = app.optString("sessionId").takeIf { it.isNotBlank() } ?: sessionId
             if (mediaTransportId != transportId) {

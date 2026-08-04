@@ -183,6 +183,24 @@ interface MessageDao {
     @Query("SELECT COUNT(*) FROM messages WHERE messageId = :messageId AND isDeliveredAsNotification = 1")
     suspend fun isDeliveredAsNotification(messageId: String): Int
 
+    /** Opt-in Chat-Backup: markiert eine Nachricht als bereits als Klartext gesichert (Dedup). */
+    @Query("UPDATE messages SET backedUp = 1 WHERE messageId = :messageId")
+    suspend fun markBackedUp(messageId: String)
+
+    /** Prüft ob eine Nachricht bereits per Chat-Backup gesichert wurde (Dedup-Guard). */
+    @Query("SELECT COUNT(*) FROM messages WHERE messageId = :messageId AND backedUp = 1")
+    suspend fun isBackedUp(messageId: String): Int
+
+    /** Opt-in Chat-Backup Stufe 3 (Backfill): alle lokal bereits im Klartext vorliegenden
+     * Text-Nachrichten, die noch nicht gesichert wurden. */
+    @Query("SELECT * FROM messages WHERE backedUp = 0 AND mediaType = 'text' AND messageId IS NOT NULL AND content IS NOT NULL AND content != ''")
+    suspend fun getUnbackedUpTextMessages(): List<MessageEntity>
+
+    /** Opt-in Chat-Backup Stufe 3 (Purge bei Deaktivierung): setzt alle Dedup-Flags lokal zurück,
+     * damit ein späteres Re-Aktivieren wieder sauber backfillt. */
+    @Query("UPDATE messages SET backedUp = 0 WHERE backedUp = 1")
+    suspend fun resetAllBackedUp()
+
     /** Setzt oder entfernt eine Emoji-Reaktion auf eine Nachricht (per Server-ID). */
     @Query("UPDATE messages SET reaction = :emoji WHERE messageId = :messageId")
     suspend fun setReactionByServerId(messageId: String, emoji: String?): Int

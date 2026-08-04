@@ -8,7 +8,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [UserEntity::class, ContactEntity::class, MessageEntity::class, StatusEntity::class, PollEntity::class, GroupEntity::class, GroupSenderKeyEntity::class, MusicMetadataEntity::class],
-    version = 37,
+    version = 38,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -327,6 +327,13 @@ abstract class AppDatabase : RoomDatabase() {
                 // Externer Link (z.B. APK-Download) auf Bild-Statuses, beim Tippen extern geöffnet
                 db.execSQL("ALTER TABLE statuses ADD COLUMN linkUrl TEXT")
                 db.execSQL("ALTER TABLE statuses ADD COLUMN linkLabel TEXT")
+            }
+        }
+
+        val MIGRATION_37_38 = object : Migration(37, 38) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Opt-in Chat-Backup: Dedup-Flag, verhindert erneuten Upload bereits gesicherter Nachrichten
+                db.execSQL("ALTER TABLE messages ADD COLUMN backedUp INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

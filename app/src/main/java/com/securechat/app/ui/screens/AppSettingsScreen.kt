@@ -46,7 +46,8 @@ fun AppSettingsScreen(
     enterToSend: Boolean = false,
     onEnterToSendChange: (Boolean) -> Unit = {},
     chatBackupEnabled: Boolean = false,
-    onChatBackupChange: (Boolean) -> Unit = {}
+    onChatBackupChange: (Boolean) -> Unit = {},
+    chatBackupProgress: Float = -1f
 ) {
     // Chat-Backup Zustimmungsdialog (nur beim Einschalten)
     var showChatBackupConsentDialog by remember { mutableStateOf(false) }
@@ -137,6 +138,22 @@ fun AppSettingsScreen(
                             }
                         }
                     )
+                }
+                if (chatBackupProgress in 0f..1f) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(start = 56.dp, end = 16.dp, bottom = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        LinearProgressIndicator(
+                            progress = { chatBackupProgress },
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "${(chatBackupProgress * 100).toInt()}%",
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
                 }
                 if (onNavigateToAudio != null) {
                     HorizontalDivider()

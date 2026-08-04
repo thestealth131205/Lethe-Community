@@ -9279,6 +9279,78 @@ class MainViewModel @Inject constructor(
     }
 
     /**
+     * Opt-in Chat-Backup (chat_backup_plan.md Stufe 2): sichert einen frisch entschlüsselten
+     * Klartext serverseitig via WS "backup_store" – nur wenn der Nutzer es lokal aktiviert hat.
+     * Bewusster, einseitiger E2EE-Bruch (siehe Plan): server-side Gate + Rate-Limit schützen vor
+     * Missbrauch, ein lokales Room-Dedup-Flag verhindert wiederholten Upload derselben Nachricht.
+     */
+    private fun maybeBackupPlaintext(messageId: String?, plaintext: String, groupId: String? = null) {
+        if (!_userPrefs.value.chatBackupEnabled) return
+        viewModelScope.launch(Dispatchers.IO) { backupPlaintextNow(messageId, plaintext, groupId) }
+    }
+
+    /**
+     * Eigentliche Backup-Logik (suspend, sequentiell aufrufbar) – von [maybeBackupPlaintext] (fire-and-
+     * forget an den Decrypt-Punkten) UND vom Stufe-3-Backfill (gedrosselt, sequentiell) genutzt.
+     * Gibt true zurück, wenn tatsächlich ein "backup_store" verschickt wurde (für die Backfill-Drosselung).
+     */
+    private suspend fun backupPlaintextNow(messageId: String?, plaintext: String, groupId: String? = null): Boolean {
+        if (messageId.isNullOrBlank()) return false
+        if (plaintext.isBlank()) return false
+        // Nur echten Klartext sichern – keine Fehlermeldungen und keinen noch verschlüsselten Blob
+        if (plaintext.startsWith("v2:") || plaintext.startsWith("v3:")) return false
+        if (plaintext.startsWith("\uD83D\uDD10") || plaintext.startsWith("🔐") || plaintext.startsWith("⚠️")) return false
+        if (messageDao.isBackedUp(messageId) > 0) return false
+        webSocketManager.sendMessage(
+            "backup_store",
+            groupId ?: messageId,
+            buildMap<String, Any> {
+                put("message_id", messageId)
+                put("content", plaintext)
+                if (groupId != null) put("group_id", groupId)
+            }
+        )
+        messageDao.markBackedUp(messageId)
+        return true
+    }
+
+    private var chatBackupBackfillJob: Job? = null
+
+    /** -1 = inaktiv, sonst 0f..1f Fortschritt. Für UI-Fortschrittsanzeige beim Backfill (Stufe 3). */
+    private val _chatBackupProgress = MutableStateFlow(-1f)
+    val chatBackupProgress: StateFlow<Float> = _chatBackupProgress.asStateFlow()
+
+    /**
+     * Opt-in Chat-Backup Stufe 3 (Backfill): beim Einschalten werden alle bereits lokal im Klartext
+     * vorliegenden Alt-Nachrichten (Room, `backedUp == false`) nachträglich per "backup_store" gesichert.
+     * Kein erneutes Entschlüsseln nötig – Room hält den Klartext bereits. Gedrosselt (600ms zwischen
+     * Sends), um sicher unter dem Server-Rate-Limit von 120/min zu bleiben (main.py
+     * `_BACKUP_STORE_MAX_PER_MINUTE`). Idempotent: Server-Guard + Room-`backedUp`-Flag verhindern
+     * Doppel-Uploads bei Abbruch/Neustart.
+     */
+    private fun startChatBackupBackfill() {
+        chatBackupBackfillJob?.cancel()
+        chatBackupBackfillJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val pending = messageDao.getUnbackedUpTextMessages()
+                if (pending.isEmpty()) return@launch
+                _chatBackupProgress.value = 0f
+                val total = pending.size
+                pending.forEachIndexed { index, msg ->
+                    // Nutzer könnte während des laufenden Backfills wieder deaktiviert haben
+                    if (!_userPrefs.value.chatBackupEnabled) return@launch
+                    val isGroup = groupDao.getGroupById(msg.chatId) != null
+                    val sent = backupPlaintextNow(msg.messageId, msg.content ?: "", if (isGroup) msg.chatId else null)
+                    _chatBackupProgress.value = (index + 1).toFloat() / total
+                    if (sent) delay(600)
+                }
+            } finally {
+                _chatBackupProgress.value = -1f
+            }
+        }
+    }
+
+    /**
      * Entschlüsselt den content_blob einer Gruppen-Nachricht mit dem Sender-Key des Absenders.
      * Falls der Key lokal fehlt, wird er vom Server nachgeladen.
      * Gibt Klartext zurück, oder eine lesbare Fehlermeldung wenn Entschlüsselung fehlschlägt.
@@ -9382,6 +9454,7 @@ class MainViewModel @Inject constructor(
                                 && !serverContent.startsWith("[🔐") && !serverContent.startsWith("v2:")) {
                                 messageDao.editMessageByServerId(item.id, serverContent)
                             }
+                            maybeBackupPlaintext(item.id, serverContent, groupId)
                         }
                     } else {
                         val existing = messageDao.getMessageByClientId(item.clientMessageId ?: "")
@@ -9433,6 +9506,9 @@ class MainViewModel @Inject constructor(
                                     deliveryStatus = groupDeliveryStatus
                                 )
                             )
+                            if (item.mediaType == "text") {
+                                maybeBackupPlaintext(item.id, decryptedContent, groupId)
+                            }
                         }
                     }
                 }
@@ -9609,6 +9685,11 @@ class MainViewModel @Inject constructor(
                     replyToMessageId = replyToMessageId
                 )
                 messageDao.insertMessage(newMessage)
+
+                // Opt-in Chat-Backup: frisch entschlüsselten Klartext ggf. serverseitig sichern
+                if (mediaType == "text" && messageId != null) {
+                    maybeBackupPlaintext(messageId, contentBlob)
+                }
 
                 // Systemnachrichten: keine Benachrichtigung anzeigen
                 if (isSystemMsg) return
@@ -20076,12 +20157,37 @@ class MainViewModel @Inject constructor(
     }
 
     /**
-     * Opt-in Chat-Backup (Stufe 1): setzt nur das lokale Flag.
-     * Achtung: Bei Aktivierung werden ab Stufe 2 entschlüsselte Text-Nachrichten als
-     * Klartext auf dem Server abgelegt (durchbricht E2EE bewusst). Nur nach Zustimmung im UI aufrufen.
+     * Opt-in Chat-Backup: setzt das lokale Flag UND das serverseitige Gate (User.chat_backup_enabled).
+     * Das Server-Gate ist zwingend nötig, da der Server dem Client bei "backup_store" nicht vertraut
+     * (never trust the client) – ohne serverseitige Aktivierung lehnt er Klartext-Uploads ab.
+     * Achtung: Bei Aktivierung werden entschlüsselte Text-Nachrichten als Klartext auf dem Server
+     * abgelegt (durchbricht E2EE bewusst). Nur nach Zustimmung im UI aufrufen.
+     *
+     * Stufe 3 (chat_backup_plan.md): Einschalten stößt einen Backfill der Alt-Nachrichten an,
+     * Ausschalten purgt den bereits serverseitig gesicherten Klartext (Re-Encrypt unmöglich, da
+     * destruktiv überschrieben – siehe "backup_store").
      */
     fun setChatBackup(enabled: Boolean) {
-        viewModelScope.launch { prefsRepository.setChatBackupEnabled(enabled) }
+        viewModelScope.launch {
+            prefsRepository.setChatBackupEnabled(enabled)
+            if (enabled) {
+                try {
+                    apiService.updateChatBackupSetting(ChatBackupToggleRequest(true))
+                    startChatBackupBackfill()
+                } catch (e: Exception) {
+                    Timber.tag("ChatBackup").w("Server-Gate für Chat-Backup konnte nicht gesetzt werden: ${e.message}")
+                }
+            } else {
+                chatBackupBackfillJob?.cancel()
+                _chatBackupProgress.value = -1f
+                try {
+                    apiService.purgeChatBackup()
+                } catch (e: Exception) {
+                    Timber.tag("ChatBackup").w("Chat-Backup-Purge fehlgeschlagen: ${e.message}")
+                }
+                withContext(Dispatchers.IO) { messageDao.resetAllBackedUp() }
+            }
+        }
     }
 
     fun saveAppLockPin(pin: String) { prefsRepository.saveAppLockPin(pin) }

@@ -414,6 +414,11 @@ data class P2pSettingRequest(
     @SerializedName("enabled") val enabled: Boolean
 )
 
+// Request für PUT /users/me/chat-backup (Opt-in Chat-Backup ein-/ausschalten, Server-Gate für "backup_store")
+data class ChatBackupToggleRequest(
+    @SerializedName("enabled") val enabled: Boolean
+)
+
 data class BotStartResponse(
     @SerializedName("bot_id") val botId: String,
     @SerializedName("bot_name") val botName: String,

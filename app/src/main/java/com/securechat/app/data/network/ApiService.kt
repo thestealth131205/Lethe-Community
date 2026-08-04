@@ -149,6 +149,12 @@ interface ApiService {
     @PUT("users/me/p2p")
     suspend fun updateP2pSetting(@Body request: P2pSettingRequest): Response<Map<String, Any>>
 
+    @PUT("users/me/chat-backup")
+    suspend fun updateChatBackupSetting(@Body request: ChatBackupToggleRequest): Response<Map<String, Any>>
+
+    @DELETE("users/me/chat-backup")
+    suspend fun purgeChatBackup(): Response<Map<String, Any>>
+
     @POST("users/me/online")
     suspend fun setOnline(): Response<Map<String, String>>
 

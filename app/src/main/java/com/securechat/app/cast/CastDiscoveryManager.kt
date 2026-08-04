@@ -149,6 +149,11 @@ class CastDiscoveryManager @Inject constructor(
     /** Schließt den Geräte-Picker ohne zu verbinden. */
     fun dismissPicker() {
         _showPicker.value = false
+        // Ohne dies bleibt z.B. ein pendingCastSparkId von einem abgebrochenen
+        // Spark-Cast-Versuch stehen und sorgt beim NÄCHSTEN (Musik-)Cast-Versuch
+        // dafür, dass fälschlich wieder der Custom-Receiver statt Googles Default
+        // Media Receiver gewählt wird (connectToDevice prüft pendingCastSparkId).
+        clearPending()
     }
 
     /**

@@ -2027,6 +2027,7 @@ class MainActivity : FragmentActivity() {
                             var pendingImportPassword by remember { mutableStateOf("") }
 
                             val backupProgress by viewModel.backupProgress.collectAsState()
+                            val chatBackupProgress by viewModel.chatBackupProgress.collectAsState()
                             val keyBackupInfo by viewModel.keyBackupInfo.collectAsState()
 
                             // Backup-Metadaten beim Öffnen der Einstellungen frisch laden
@@ -2131,7 +2132,8 @@ class MainActivity : FragmentActivity() {
                                 enterToSend = preferences.enterToSend,
                                 onEnterToSendChange = { viewModel.setEnterToSend(it) },
                                 chatBackupEnabled = preferences.chatBackupEnabled,
-                                onChatBackupChange = { viewModel.setChatBackup(it) }
+                                onChatBackupChange = { viewModel.setChatBackup(it) },
+                                chatBackupProgress = chatBackupProgress
                             )
                         }
 

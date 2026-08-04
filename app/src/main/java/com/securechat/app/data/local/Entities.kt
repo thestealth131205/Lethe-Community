@@ -125,7 +125,8 @@ data class MessageEntity(
     val isEncrypted: Boolean = false,      // False = Altlast/Klartext, True = E2EE AES-256-GCM
     val senderDeviceId: String? = null,    // UUID des sendenden Linked-Device (null = primäres Android)
     val replyToMessageId: String? = null,  // Server-ID der zitierten Nachricht (für Scroll-to-Quote)
-    val isP2pDelivered: Boolean = false    // Nachricht wurde direkt per WebRTC DataChannel (P2P) übertragen
+    val isP2pDelivered: Boolean = false,   // Nachricht wurde direkt per WebRTC DataChannel (P2P) übertragen
+    val backedUp: Boolean = false          // Opt-in Chat-Backup: Klartext wurde bereits via "backup_store" gesichert (Dedup)
 )
 
 @Entity(tableName = "groups")
