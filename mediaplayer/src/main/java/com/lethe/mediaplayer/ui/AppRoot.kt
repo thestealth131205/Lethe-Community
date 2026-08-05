@@ -45,6 +45,7 @@ fun AppRoot() {
     var showArtistArea by remember { mutableStateOf(false) }
     var showAdminArtists by remember { mutableStateOf(false) }
     var showAdminPlaylists by remember { mutableStateOf(false) }
+    var showJamInvite by remember { mutableStateOf(false) }
 
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         when (val s = session) {
@@ -98,7 +99,8 @@ fun AppRoot() {
                         onOpenArtistArea = { showArtistArea = true },
                         onOpenAdminArea = { showAdminArtists = true },
                         onOpenAdminPlaylists = { showAdminPlaylists = true },
-                        onOpenAppInfo = { showAppInfo = true }
+                        onOpenAppInfo = { showAppInfo = true },
+                        onOpenJam = { showJamInvite = true }
                     )
                 }
 
@@ -203,6 +205,17 @@ fun AppRoot() {
                     BackHandler { showAdminPlaylists = false }
                     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                         AdminPlaylistsScreen(vm = vm, onBack = { showAdminPlaylists = false })
+                    }
+                }
+
+                AnimatedVisibility(
+                    visible = showJamInvite,
+                    enter = slideInVertically { it },
+                    exit = slideOutVertically { it }
+                ) {
+                    BackHandler { showJamInvite = false }
+                    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                        JamInviteScreen(vm = vm, onBack = { showJamInvite = false })
                     }
                 }
 

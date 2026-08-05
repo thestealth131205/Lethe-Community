@@ -458,6 +458,10 @@ class ChromecastV2Client @Inject constructor(
                     .put("media", media)
                     .put("autoplay", true)
                     .put("requestId", requestId.getAndIncrement())
+                // WICHTIG: Ohne die Receiver-App-sessionId (aus RECEIVER_STATUS) ignoriert
+                // der Empfänger das LOAD stillschweigend – Verbindungston klingt, es wird
+                // aber nie wirklich Media geladen (bleibt dauerhaft "Pause"/IDLE).
+                sessionId?.let { msg.put("sessionId", it) }
                 _currentContentId.value = item.url
                 runCatching { sendMessage(transport, NS_MEDIA, msg.toString()) }
             }
@@ -483,6 +487,7 @@ class ChromecastV2Client @Inject constructor(
                     .put("queueData", queueData)
                     .put("autoplay", true)
                     .put("requestId", requestId.getAndIncrement())
+                sessionId?.let { msg.put("sessionId", it) }
                 _currentContentId.value = items.getOrNull(startIndex)?.url
                 runCatching { sendMessage(transport, NS_MEDIA, msg.toString()) }
             }

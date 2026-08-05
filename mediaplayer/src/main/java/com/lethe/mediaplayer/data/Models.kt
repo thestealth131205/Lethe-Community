@@ -99,6 +99,39 @@ data class FriendsMixTrackDto(
     @SerializedName("crossfade_start_seconds") val crossfadeStartSeconds: Float? = null
 )
 
+// ── Jam (geteilte Live-Playlist, per QR-Code beitretbar) ─────────────────────
+
+/** Ein Titel innerhalb einer Jam-Playlist (Client sendet/empfängt bereits absolute URLs). */
+data class JamTrackDto(
+    val id: String = "",
+    val title: String = "",
+    val artist: String = "",
+    @SerializedName("cover_url") val coverUrl: String? = null,
+    @SerializedName("audio_url") val audioUrl: String = "",
+    @SerializedName("duration_seconds") val durationSeconds: Int = 0,
+    val source: String = "user"
+)
+
+data class JamParticipantDto(
+    @SerializedName("user_id") val userId: String = "",
+    val name: String = "",
+    @SerializedName("profile_image_url") val profileImageUrl: String? = null
+)
+
+/** Voller Zustand eines Jams – Antwort aller Jam-Endpoints. */
+data class JamStateDto(
+    val id: String = "",
+    @SerializedName("host_user_id") val hostUserId: String = "",
+    @SerializedName("host_name") val hostName: String = "",
+    val active: Boolean = true,
+    val playlist: List<JamTrackDto> = emptyList(),
+    val participants: List<JamParticipantDto> = emptyList(),
+    @SerializedName("updated_at") val updatedAt: String? = null
+)
+
+data class JamCreateRequest(val playlist: List<JamTrackDto> = emptyList())
+data class JamAddTracksRequest(val tracks: List<JamTrackDto>)
+
 /** Antwort von GET /users/me (nur die für die App-Infos-Anzeige benötigten Felder). */
 data class UserMeDto(
     val name: String = "",

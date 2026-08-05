@@ -406,6 +406,9 @@ interface ApiService {
         @Query("limit") limit: Int = 1000
     ): Response<List<SyncMessageItem>>
 
+    @PUT("messages/{contact_id}/clear")
+    suspend fun clearChatMessagesOnServer(@Path("contact_id") contactId: String): Response<Map<String, String>>
+
     @GET("contacts")
     suspend fun getContacts(): Response<List<ContactListItem>>
 
@@ -626,6 +629,9 @@ interface ApiService {
         @Query("limit") limit: Int = 50,
         @Query("before_id") beforeId: String? = null
     ): Response<List<MessageItemResponse>>
+
+    @PUT("groups/{group_id}/clear")
+    suspend fun clearGroupChatMessagesOnServer(@Path("group_id") groupId: String): Response<Map<String, String>>
 
     @PATCH("groups/{group_id}")
     suspend fun updateGroup(

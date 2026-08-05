@@ -481,6 +481,112 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
+    // ── Jam (geteilte Live-Playlist, per QR-Code beitretbar) ──────────────────
+
+    private val _jamState = MutableStateFlow<com.lethe.mediaplayer.data.JamStateDto?>(null)
+    val jamState: StateFlow<com.lethe.mediaplayer.data.JamStateDto?> = _jamState
+
+    private val _jamError = MutableStateFlow<String?>(null)
+    val jamError: StateFlow<String?> = _jamError
+
+    private var jamPollJob: Job? = null
+
+    /** Eigene Nutzer-ID (für den Host-/Teilnehmer-Vergleich in der UI). */
+    val ownUserId: String?
+        get() = (_session.value as? SessionResult.Available)?.userId
+
+    /** Startet einen neuen Jam mit der aktuellen Warteschlange als Startplaylist. */
+    fun startJam() {
+        viewModelScope.launch {
+            _jamError.value = null
+            val initial = playerController.queue.value
+            val state = withContext(Dispatchers.IO) { repo.createJam(initial) }
+            if (state == null) {
+                _jamError.value = "Jam konnte nicht gestartet werden."
+                return@launch
+            }
+            _jamState.value = state
+            startJamPolling()
+        }
+    }
+
+    /** Tritt einem Jam anhand des gescannten QR-Codeinhalts bei ("lethejam:<id>"). */
+    fun joinJamFromQrContent(content: String) {
+        val jamId = content.removePrefix(JAM_QR_PREFIX).trim()
+        if (jamId.isBlank() || jamId == content) {
+            _jamError.value = "Ungültiger Jam-QR-Code."
+            return
+        }
+        viewModelScope.launch {
+            _jamError.value = null
+            val state = withContext(Dispatchers.IO) { repo.joinJam(jamId) }
+            if (state == null) {
+                _jamError.value = "Jam nicht gefunden oder bereits beendet."
+                return@launch
+            }
+            _jamState.value = state
+            val tracks = repo.jamTracksAsTracks(state)
+            if (tracks.isNotEmpty()) play(tracks, 0)
+            startJamPolling()
+        }
+    }
+
+    /** Fügt den aktuell spielenden Titel der geteilten Jam-Playlist hinzu. */
+    fun addCurrentTrackToJam() {
+        playerController.current.value?.let { addTrackToJam(it) }
+    }
+
+    /** Fügt einen Titel der geteilten Jam-Playlist hinzu (für alle Teilnehmer sichtbar). */
+    fun addTrackToJam(track: Track) {
+        val jamId = _jamState.value?.id ?: return
+        viewModelScope.launch {
+            val state = withContext(Dispatchers.IO) { repo.addTracksToJam(jamId, listOf(track)) }
+            if (state != null) _jamState.value = state
+        }
+    }
+
+    private fun startJamPolling() {
+        jamPollJob?.cancel()
+        var knownTrackIds = _jamState.value?.playlist?.map { it.id }?.toSet() ?: emptySet()
+        jamPollJob = viewModelScope.launch {
+            while (true) {
+                delay(4000)
+                val jamId = _jamState.value?.id ?: break
+                val updated = withContext(Dispatchers.IO) { repo.getJam(jamId) }
+                if (updated == null || !updated.active) {
+                    _jamState.value = null
+                    break
+                }
+                val newDtos = updated.playlist.filter { it.id !in knownTrackIds }
+                knownTrackIds = updated.playlist.map { it.id }.toSet()
+                if (newDtos.isNotEmpty()) {
+                    playerController.appendToQueue(repo.jamTracksAsTracks(updated.copy(playlist = newDtos)))
+                }
+                _jamState.value = updated
+            }
+        }
+    }
+
+    /** Verlässt den aktuellen Jam (beendet ihn für alle, falls man der Host ist). */
+    fun leaveJam() {
+        val jamId = _jamState.value?.id ?: return
+        jamPollJob?.cancel()
+        _jamState.value = null
+        viewModelScope.launch { withContext(Dispatchers.IO) { repo.leaveJam(jamId) } }
+    }
+
+    /** Beendet den Jam vorzeitig (nur als Host aufrufbar). */
+    fun endJam() {
+        val jamId = _jamState.value?.id ?: return
+        jamPollJob?.cancel()
+        _jamState.value = null
+        viewModelScope.launch { withContext(Dispatchers.IO) { repo.endJam(jamId) } }
+    }
+
+    companion object {
+        const val JAM_QR_PREFIX = "lethejam:"
+    }
+
     /** Startet den FriendsMix (Favoriten der Freunde) im Player mit fester Überblendung. */
     fun playFriendsMix() {
         val mix = _browse.value.friendsMix

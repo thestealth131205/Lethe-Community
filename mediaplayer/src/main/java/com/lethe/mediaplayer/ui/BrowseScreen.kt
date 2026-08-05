@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MusicNote
@@ -130,6 +131,7 @@ fun BrowseScreen(
     var playlistToDelete by remember { mutableStateOf<PlaylistDto?>(null) }
     var trackMenu by remember { mutableStateOf<Track?>(null) }
     var trackInfo by remember { mutableStateOf<Track?>(null) }
+    val jamState by vm.jamState.collectAsState()
     val autoDownloadEnabled by vm.autoDownloadManager.enabledKeys.collectAsState()
     val autoDownloadBusy by vm.autoDownloadManager.downloadingKeys.collectAsState()
 
@@ -405,6 +407,8 @@ fun BrowseScreen(
     trackMenu?.let { t ->
         TrackContextMenu(
             track = t,
+            jamActive = jamState != null,
+            onAddToJam = { vm.addTrackToJam(t); trackMenu = null },
             onInfo = { trackInfo = t; trackMenu = null },
             onDismiss = { trackMenu = null }
         )
@@ -427,7 +431,13 @@ fun BrowseScreen(
 
 /** Kontextmenü beim langen Drücken auf ein Lied: Infos anzeigen (i-Symbol). */
 @Composable
-private fun TrackContextMenu(track: Track, onInfo: () -> Unit, onDismiss: () -> Unit) {
+private fun TrackContextMenu(
+    track: Track,
+    jamActive: Boolean,
+    onAddToJam: () -> Unit,
+    onInfo: () -> Unit,
+    onDismiss: () -> Unit
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -441,6 +451,19 @@ private fun TrackContextMenu(track: Track, onInfo: () -> Unit, onDismiss: () -> 
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(12.dp))
+                if (jamActive) {
+                    Row(
+                        Modifier.fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable(onClick = onAddToJam)
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Filled.GroupAdd, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(16.dp))
+                        Text("Zum Jam hinzufügen")
+                    }
+                }
                 Row(
                     Modifier.fillMaxWidth()
                         .clip(RoundedCornerShape(8.dp))

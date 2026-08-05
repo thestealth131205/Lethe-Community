@@ -176,6 +176,19 @@ class PlayerController @Inject constructor(
         _queue.value = tracks
     }
 
+    /** Hängt Titel ans Ende der laufenden Warteschlange an, ohne die Wiedergabe zu unterbrechen
+     * (z.B. neu zu einer Jam hinzugefügte Titel). Bereits enthaltene IDs werden übersprungen. */
+    fun appendToQueue(tracks: List<Track>) {
+        val c = controller ?: return
+        val existingIds = currentQueueList.map { it.id }.toSet()
+        val toAdd = tracks.filter { it.id !in existingIds }
+        if (toAdd.isEmpty()) return
+        val items = toAdd.map { t -> trackById[t.id] = t; buildMediaItem(t) }
+        c.addMediaItems(items)
+        currentQueueList = currentQueueList + toAdd
+        _queue.value = currentQueueList
+    }
+
     /** Springt innerhalb der laufenden Warteschlange zu einem bestimmten Titel (z.B. aus der Warteschlangenansicht). */
     fun playAtIndex(index: Int) {
         val c = controller ?: return

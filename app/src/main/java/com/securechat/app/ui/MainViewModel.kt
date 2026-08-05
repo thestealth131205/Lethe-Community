@@ -16411,9 +16411,25 @@ class MainViewModel @Inject constructor(
     suspend fun contactHasStatus(userId: String): Boolean =
         statusDao.hasActiveStatus(userId, System.currentTimeMillis()) > 0
 
-    /** Löscht alle lokalen Nachrichten eines Chats. */
+    /**
+     * Löscht alle lokalen Nachrichten eines Chats ("Nachrichten löschen"/Chat leeren) und
+     * setzt zusätzlich einen serverseitigen Cleared-Marker für diesen Chat. Ohne den Marker
+     * würde der nächste Öffnen-Sync die lokal gelöschten Nachrichten vom Server wieder
+     * nachladen, da sie dort (für den Chatpartner bzw. andere Gruppenmitglieder) unverändert
+     * weiter existieren.
+     */
     fun clearChatMessages(chatId: String) = viewModelScope.launch {
         messageDao.clearMessagesForChat(chatId)
+        try {
+            val isGroup = groupDao.getGroupById(chatId) != null
+            if (isGroup) {
+                apiService.clearGroupChatMessagesOnServer(chatId)
+            } else {
+                apiService.clearChatMessagesOnServer(chatId)
+            }
+        } catch (e: Exception) {
+            Timber.tag("Chat").e(e, "Serverseitiger Cleared-Marker fehlgeschlagen für $chatId")
+        }
     }
 
     /** Löscht ausgewählte Nachrichten lokal und auf dem Server. */

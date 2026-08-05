@@ -763,8 +763,15 @@ private fun ShareContactItem(
             contentAlignment = Alignment.Center
         ) {
             if (!contact.profileImageUrl.isNullOrBlank()) {
+                // WICHTIG: Wie in ContactlistScreen relative Pfade absolutieren – sonst kann
+                // Coil die URL nicht als Cache-Key mit den anderen Screens teilen (Bild wird
+                // hier nie erfolgreich aus dem Cache geladen, sondern bei jedem Öffnen der
+                // Teilen-Liste neu vom Server geholt bzw. schlägt als "relativer Dateipfad" fehl).
+                val profileImageAbsoluteUrl = contact.profileImageUrl.let { url ->
+                    if (url.startsWith("http")) url else "https://letheapp.de$url"
+                }
                 Image(
-                    painter = rememberAsyncImagePainter(contact.profileImageUrl),
+                    painter = rememberAsyncImagePainter(profileImageAbsoluteUrl),
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop

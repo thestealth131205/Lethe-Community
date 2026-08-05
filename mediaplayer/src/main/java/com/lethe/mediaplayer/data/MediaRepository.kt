@@ -273,6 +273,48 @@ class MediaRepository @Inject constructor(
             )
         }.filter { it.audioUrl.isNotBlank() }
 
+    // ── Jam (geteilte Live-Playlist, per QR-Code beitretbar) ──────────────────
+
+    private fun Track.toJamTrackDto() = JamTrackDto(
+        id = id, title = title, artist = artist, coverUrl = coverUrl,
+        audioUrl = audioUrl, durationSeconds = durationSec, source = source
+    )
+
+    private fun JamTrackDto.toTrack() = Track(
+        id = id, title = title, artist = artist, coverUrl = coverUrl,
+        audioUrl = audioUrl, durationSec = durationSeconds, source = source
+    )
+
+    /** Startet einen neuen Jam mit der übergebenen Playlist (z.B. die aktuelle Warteschlange). */
+    suspend fun createJam(initialPlaylist: List<Track>): JamStateDto? = runCatching {
+        api.createJam(JamCreateRequest(initialPlaylist.map { it.toJamTrackDto() })).body()
+    }.getOrNull()
+
+    /** Aktueller Zustand eines Jams (Polling). */
+    suspend fun getJam(jamId: String): JamStateDto? = runCatching {
+        api.getJam(jamId).body()
+    }.getOrNull()
+
+    /** Tritt einem Jam bei (z.B. nach dem Scannen des QR-Codes). */
+    suspend fun joinJam(jamId: String): JamStateDto? = runCatching {
+        api.joinJam(jamId).body()
+    }.getOrNull()
+
+    /** Fügt der geteilten Jam-Playlist weitere Titel hinzu. */
+    suspend fun addTracksToJam(jamId: String, tracks: List<Track>): JamStateDto? = runCatching {
+        api.addJamTracks(jamId, JamAddTracksRequest(tracks.map { it.toJamTrackDto() })).body()
+    }.getOrNull()
+
+    suspend fun leaveJam(jamId: String): Boolean = runCatching {
+        api.leaveJam(jamId).isSuccessful
+    }.getOrDefault(false)
+
+    suspend fun endJam(jamId: String): Boolean = runCatching {
+        api.endJam(jamId).isSuccessful
+    }.getOrDefault(false)
+
+    fun jamTracksAsTracks(state: JamStateDto): List<Track> = state.playlist.map { it.toTrack() }
+
     // ── Künstler-Accounts (Media Player) ──────────────────────────────────────
 
     /** Registriert einen neuen Künstler-Account. Gibt null bei Erfolg, sonst eine Fehlermeldung. */

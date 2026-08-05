@@ -161,7 +161,7 @@ private fun FriendRow(
     }
 }
 
-private fun avatarInitials(name: String): String =
+internal fun avatarInitials(name: String): String =
     name.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
         .take(2).joinToString("") { it.first().uppercase() }
         .ifBlank { "?" }
@@ -175,7 +175,7 @@ private val AvatarGradients = listOf(
     Color(0xFF8E2DE2) to Color(0xFF4A00E0)
 )
 
-private fun avatarBrush(key: String): androidx.compose.ui.graphics.Brush {
+internal fun avatarBrush(key: String): androidx.compose.ui.graphics.Brush {
     val idx = Math.floorMod(key.hashCode(), AvatarGradients.size)
     val (a, b) = AvatarGradients[idx]
     return androidx.compose.ui.graphics.Brush.linearGradient(listOf(a, b))

@@ -44,6 +44,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
@@ -86,6 +87,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 import com.lethe.mediaplayer.data.PlaylistDto
 
 /** Farbverläufe für die Kacheln – deterministisch aus dem Namen abgeleitet. */
@@ -122,7 +125,8 @@ fun HomeScreen(
     onOpenArtistArea: () -> Unit,
     onOpenAdminArea: () -> Unit,
     onOpenAdminPlaylists: () -> Unit,
-    onOpenAppInfo: () -> Unit
+    onOpenAppInfo: () -> Unit,
+    onOpenJam: () -> Unit
 ) {
     val state by vm.browse.collectAsState()
     val current by vm.current.collectAsState()
@@ -131,6 +135,7 @@ fun HomeScreen(
     val artwork by vm.playerController.artwork.collectAsState()
     val isCasting by vm.castManager.isCasting.collectAsState()
     val accountInfo by vm.accountInfo.collectAsState()
+    val jamState by vm.jamState.collectAsState()
     val context = LocalContext.current
 
     // Titel jeder Playlist laden, damit die Kacheln eine Cover-Collage der Songs zeigen können.
@@ -144,6 +149,14 @@ fun HomeScreen(
     val filePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri -> if (uri != null) pendingUri = uri }
+
+    // Jam-QR-Scanner (ZXing) – zum Beitreten eines von einem Freund gestarteten Jams.
+    val jamScanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
+        result.contents?.let { qrContent ->
+            vm.joinJamFromQrContent(qrContent)
+            onOpenJam()
+        }
+    }
 
     // Rückmeldung nach dem Upload.
     LaunchedEffect(uploadState) {
@@ -181,6 +194,25 @@ fun HomeScreen(
                         Icon(Icons.Filled.MoreVert, contentDescription = "Menü")
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        DropdownMenuItem(
+                            text = { Text(if (jamState != null) "Jam anzeigen" else "Jam starten") },
+                            onClick = { menuOpen = false; onOpenJam() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Jam beitreten") },
+                            leadingIcon = { Icon(Icons.Filled.QrCodeScanner, contentDescription = null) },
+                            onClick = {
+                                menuOpen = false
+                                jamScanLauncher.launch(
+                                    ScanOptions().apply {
+                                        setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                                        setPrompt("Jam-QR-Code scannen")
+                                        setBeepEnabled(false)
+                                        setOrientationLocked(true)
+                                    }
+                                )
+                            }
+                        )
                         DropdownMenuItem(
                             text = { Text("Künstler") },
                             onClick = { menuOpen = false; onOpenArtists() }

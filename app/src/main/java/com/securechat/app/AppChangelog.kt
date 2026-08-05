@@ -24,6 +24,19 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.142",
+            title = "Cast-Fix, Gruppenbilder & Chat-Backup",
+            items = listOf(
+                "Behoben: Musik-/Video-Streaming per Cast blieb weiterhin manchmal auf \u201epausiert\u201c stehen \u2013 dem Wiedergabe-Befehl fehlte eine notwendige Sitzungskennung, die jetzt korrekt mitgeschickt wird",
+                "Behoben: Gruppenbilder in der \u201eKontakt teilen\u201c-Liste wurden bei jedem \u00d6ffnen neu geladen statt aus dem Zwischenspeicher \u2013 Bilder werden jetzt korrekt zwischengespeichert",
+                "Behoben: Gel\u00f6schte Chat-Nachrichten wurden beim n\u00e4chsten App-Start wieder nachgeladen \u2013 das L\u00f6schen wird jetzt auch mit dem Server synchronisiert",
+                "Chat-Backup erweitert: automatischer Hintergrund-Abgleich bestehender Nachrichten sowie vollst\u00e4ndiges L\u00f6schen der Server-Kopie beim Deaktivieren",
+                "Diverse Stabilit\u00e4tsverbesserungen bei Gruppen-Videoanrufen und der Konto-Anmeldung",
+            ),
+            shortSummary = "Fix f\u00fcr Cast-Streaming, Gruppenbilder beim Teilen und Chat-L\u00f6schen-Synchronisation"
+        ),
+
+        ChangelogEntry(
             version = "10.4.141",
             title = "Chat-Backup & weiterer Cast-Fix",
             items = listOf(
@@ -49,18 +62,6 @@ object AppChangelog {
                 "Behoben: Die App st\u00fcrzte bei manchen Nutzern direkt beim Start ab, nachdem der neue Konto-Switcher aus 10.4.138 hinzugekommen war",
             ),
             shortSummary = "Wichtiger Fix f\u00fcr einen Absturz beim App-Start"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.138",
-            title = "Account-Switcher & Mehr-Konten-Fix",
-            items = listOf(
-                "Neu: Konto-Switcher \u2013 wechsle im Login-Bildschirm oder unter Konto \u2192 Konto wechseln zwischen mehreren Lethe-Accounts auf diesem Ger\u00e4t, ohne das Passwort erneut einzugeben",
-                "Behoben: Beim Anlegen eines zweiten Accounts auf demselben Ger\u00e4t wurden manchmal noch Kontakte und Daten des vorherigen Accounts angezeigt \u2013 Konten werden jetzt zuverl\u00e4ssig sauber getrennt",
-                "Behoben: Videocalls in Gruppen konnten \u201enicht erreichbar\u201c melden und abbrechen, wenn Teilnehmer im Energiesparmodus waren \u2013 die Anruf-Benachrichtigung wird jetzt zuverl\u00e4ssig zugestellt",
-                "Behoben: Ein seltener Absturz beim Empfang von Nachrichten im Hintergrund wurde behoben",
-            ),
-            shortSummary = "Neuer Konto-Switcher zum Wechseln zwischen mehreren Accounts ohne Passwort, dazu ein Fix f\u00fcr sauber getrennte Konten auf einem Ger\u00e4t"
         ),
 
     )

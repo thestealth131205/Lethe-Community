@@ -117,6 +117,29 @@ interface LetheMediaApi {
     @GET("friendsmix")
     suspend fun getFriendsMix(): Response<List<FriendsMixTrackDto>>
 
+    // ── Jam (geteilte Live-Playlist, per QR-Code beitretbar) ──
+
+    @POST("jam/create")
+    suspend fun createJam(@Body request: JamCreateRequest): Response<JamStateDto>
+
+    @GET("jam/{jamId}")
+    suspend fun getJam(@Path("jamId") jamId: String): Response<JamStateDto>
+
+    @POST("jam/{jamId}/join")
+    suspend fun joinJam(@Path("jamId") jamId: String): Response<JamStateDto>
+
+    @POST("jam/{jamId}/tracks")
+    suspend fun addJamTracks(
+        @Path("jamId") jamId: String,
+        @Body request: JamAddTracksRequest
+    ): Response<JamStateDto>
+
+    @POST("jam/{jamId}/leave")
+    suspend fun leaveJam(@Path("jamId") jamId: String): Response<Unit>
+
+    @DELETE("jam/{jamId}")
+    suspend fun endJam(@Path("jamId") jamId: String): Response<Unit>
+
     // ── Künstler-Accounts (Media Player) ──
     // register/login benötigen keine Auth; die /artist/me-Endpoints tragen den Künstler-Token
     // explizit als @Header, damit der Interceptor ihn nicht durch den Lethe-User-Token ersetzt.
