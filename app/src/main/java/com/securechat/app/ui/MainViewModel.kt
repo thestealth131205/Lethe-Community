@@ -35,8 +35,10 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
@@ -2082,9 +2084,6 @@ class MainViewModel @Inject constructor(
     /** Welche Chats laden gerade ältere Nachrichten nach (für Lade-Indikator in der UI). */
     private val _isLoadingOlderMessages = MutableStateFlow<Set<String>>(emptySet())
     val isLoadingOlderMessages: StateFlow<Set<String>> = _isLoadingOlderMessages.asStateFlow()
-
-    /** Queue-Zähler für ausstehende Nachrichten-Lade-Anfragen pro Chat (schnelles Scrollen). */
-    private val _olderMessagesQueueCount = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicInteger>()
 
     /** Media-Download-Queue: Warteschlange für Videos/Sprachnachrichten (maximal 2 gleichzeitig). */
     private val mediaDownloadSemaphore = kotlinx.coroutines.sync.Semaphore(2)
@@ -7230,7 +7229,7 @@ class MainViewModel @Inject constructor(
 
     // --- ACCOUNT-SWITCHER ---
     private val _savedAccounts = MutableStateFlow<List<ProfileManager.SavedAccount>>(emptyList())
-    /** Andere auf diesem Gerät gespeicherte Accounts (ohne den aktuell aktiven). */
+    /** Alle auf diesem Gerät gespeicherten Accounts. */
     val savedAccounts: StateFlow<List<ProfileManager.SavedAccount>> = _savedAccounts.asStateFlow()
 
     init {
@@ -7349,7 +7348,27 @@ class MainViewModel @Inject constructor(
         // 2. Bestehende Sitzung laden und WebSocket-Verbindung herstellen
         viewModelScope.launch {
             try {
-                val user = userDao.getCurrentUser()
+                var user = userDao.getCurrentUser()
+                // Integritätscheck gegen Profil-Vermischung: Das aktive Token (von login()/
+                // switchAccount() bereits VOR diesem Neustart korrekt profilspezifisch gesetzt)
+                // muss zum lokalen user_me-Datensatz DIESES Profils passen. Weicht die userId ab,
+                // enthält diese Profil-DB fälschlich Daten eines ANDEREN Accounts (z.B. Altlast aus
+                // einer früheren, inzwischen gefixten Rennbedingung) → Profil komplett bereinigen
+                // und wie eine leere DB behandeln, damit autoRestoreSession() sauber neu synchronisiert.
+                if (user != null && tokenManager.hasToken() && user.userId != tokenManager.getUserId()) {
+                    Timber.tag("MainViewModel").w(
+                        "Profil-Integritätscheck fehlgeschlagen: lokaler User ${user.userId} " +
+                        "≠ Token-User ${tokenManager.getUserId()} – bereinige Profil-DB und synchronisiere neu"
+                    )
+                    userDao.clearUser()
+                    contactDao.clearAll()
+                    messageDao.clearAll()
+                    groupDao.clearAll()
+                    groupSenderKeyDao.clearAll()
+                    statusDao.clearAll()
+                    pollDao.clearAll()
+                    user = null
+                }
                 _currentUser.value = user
                 if (user != null) {
                     Timber.tag("MainViewModel").d("Sitzung wiederhergestellt für User ID: ${user.userId}")
@@ -7542,16 +7561,30 @@ class MainViewModel @Inject constructor(
                     tokenManager.saveToken(accessToken, userId, profileKeyForRegistry)
                     Timber.tag("MainViewModel").d("Token gespeichert für User: $userId")
 
+                    // WICHTIG: Profil-Wechsel früh erkennen. Steht ein Wechsel bevor, darf NICHTS mehr
+                    // in die aktuell geöffnete (alte) Room-DB geschrieben werden – sonst landet der neue
+                    // Account-Datensatz in der user_me-Tabelle des ALTEN Profils. Da getCurrentUser()
+                    // ein simples "SELECT * FROM user_me LIMIT 1" ohne Filter/Sortierung ist, würde ein
+                    // solcher Fremd-Eintrag beim nächsten Öffnen des alten Profils fälschlich als aktiver
+                    // User zurückgegeben ("Multiaccount landet immer im Hauptaccount"-Bug). autoRestoreSession()
+                    // legt den lokalen User-Datensatz nach dem Neustart bereits sauber im richtigen (neuen)
+                    // Profil an, daher hier gefahrlos übersprungen.
+                    val willSwitchProfile = ProfileManager.getActiveProfile(context) != profileKeyForRegistry
+
                     // Pseudo-TokenResponse für die Weiterverarbeitung
                     val tokenData = TokenResponse(accessToken = accessToken, tokenType = loginData.tokenType ?: "bearer", userId = userId)
 
-                    // Speichern im DataStore für zukünftige Logins/Biometrie
-                    prefsRepository.updateCredentials(fakeNumber, password, remember)
-                    prefsRepository.setAutoLoginEnabled(autoLogin)
+                    // Speichern im DataStore für zukünftige Logins/Biometrie. Der profil-lokale Teil
+                    // wird bei einem Profil-Wechsel übersprungen (siehe willSwitchProfile-Kommentar oben) –
+                    // sonst landen die neuen Zugangsdaten im DataStore-File des ALTEN Profils.
+                    prefsRepository.updateCredentials(fakeNumber, password, remember, persistToProfile = !willSwitchProfile)
+                    if (!willSwitchProfile) {
+                        prefsRepository.setAutoLoginEnabled(autoLogin)
 
-                    // Biometrie-Angebot bei erstem Erfolg
-                    if (biometricHelper.canAuthenticate() && !userPrefs.value.biometricEnabled) {
-                        prefsRepository.setBiometricEnabled(true)
+                        // Biometrie-Angebot bei erstem Erfolg
+                        if (biometricHelper.canAuthenticate() && !userPrefs.value.biometricEnabled) {
+                            prefsRepository.setBiometricEnabled(true)
+                        }
                     }
 
                     // Vollständiges Profil vom Server abrufen (enthält publicKey und name)
@@ -7582,7 +7615,9 @@ class MainViewModel @Inject constructor(
                         youtube = profile?.youtube,
                         isVerified = profile?.isVerified ?: false
                     )
-                    userDao.insertUser(newUser)
+                    if (!willSwitchProfile) {
+                        userDao.insertUser(newUser)
+                    }
                     _currentUser.value = newUser
                     ProfileManager.saveAccountToRegistry(
                         context,
@@ -7611,7 +7646,9 @@ class MainViewModel @Inject constructor(
                                 if (restoredPub != null) {
                                     val softPriv = CryptoManager.exportSoftPrivateKey()
                                     val restored = newUser.copy(privateKey = softPriv, publicKey = restoredPub)
-                                    userDao.insertUser(restored)
+                                    if (!willSwitchProfile) {
+                                        userDao.insertUser(restored)
+                                    }
                                     _currentUser.value = restored
                                     Timber.tag("LETHE_KEYS").i("Key-Backup bei Login automatisch wiederhergestellt (pub=${restoredPub.take(20)}…)")
                                 }
@@ -7632,7 +7669,9 @@ class MainViewModel @Inject constructor(
                         val exportedSoftKey = CryptoManager.exportSoftPrivateKey()
                         if (exportedSoftKey != null && exportedSoftKey != softPrivKey) {
                             val updated = newUser.copy(privateKey = exportedSoftKey)
-                            userDao.insertUser(updated)
+                            if (!willSwitchProfile) {
+                                userDao.insertUser(updated)
+                            }
                             _currentUser.value = updated
                         }
                         // Key-Upload im Hintergrund (nicht-blockierend)
@@ -7674,6 +7713,7 @@ class MainViewModel @Inject constructor(
                         val sanitizedNew2 = ProfileManager.sanitize(fakeNumber)
                         ProfileManager.setActiveProfile(context, fakeNumber)
                         if (previousProfile2 != sanitizedNew2) {
+                            ProfileManager.markPendingRestart(context)
                             android.os.Process.killProcess(android.os.Process.myPid())
                             return@launch
                         }
@@ -7703,6 +7743,7 @@ class MainViewModel @Inject constructor(
                         // Token ist bereits gespeichert. autoRestoreSession() wird beim
                         // nächsten Start die Sitzung aus dem Token wiederherstellen.
                         Timber.tag("MainViewModel").i("Profil-Wechsel: $previousProfile → $sanitizedNew, starte neu")
+                        ProfileManager.markPendingRestart(context)
                         android.os.Process.killProcess(android.os.Process.myPid())
                         return@launch
                     }
@@ -8826,9 +8867,7 @@ class MainViewModel @Inject constructor(
     // --- ACCOUNT-SWITCHER ---
 
     fun loadSavedAccounts() {
-        val activeProfileKey = ProfileManager.getActiveProfile(context)
         _savedAccounts.value = ProfileManager.getSavedAccounts(context)
-            .filterNot { it.profileKey == activeProfileKey }
     }
 
     /** Wechselt ohne erneute Passworteingabe zu einem zuvor gespeicherten Account. */
@@ -8847,6 +8886,7 @@ class MainViewModel @Inject constructor(
             }
             ProfileManager.setActiveProfile(context, account.fakeNumber)
             Timber.tag("MainViewModel").i("Account-Switcher: Wechsel zu ${account.profileKey}, starte neu")
+            ProfileManager.markPendingRestart(context)
             android.os.Process.killProcess(android.os.Process.myPid())
         }
     }
@@ -9093,15 +9133,26 @@ class MainViewModel @Inject constructor(
                 // 1. Verpasste Delivery-Status-Updates (gesendet/zugestellt/gelesen) nachholen
                 syncDeliveryStatuses()
 
-                // 2. Neue Nachrichten für alle Kontakte laden
+                // 2. Neue Nachrichten für alle Kontakte laden – mit begrenzter Parallelität statt
+                // Fire-and-Forget für ALLE Kontakte gleichzeitig. Direkt nach einem Reconnect (z.B.
+                // nach nächtlichem Doze-/Prozess-Kill) kann die Funkverbindung noch instabil sein;
+                // ein unbegrenzter Request-Burst bei vielen Kontakten ließ hintere Anfragen per
+                // Timeout scheitern, sodass einzelne Chats trotz zugestellter FCM-Notification erst
+                // nach einem kompletten App-Neustart korrekt nachgeladen wurden. loadMessagesSuspend()/
+                // loadGroupMessagesSuspend() werden hier awaited statt nur gestartet.
+                val syncSemaphore = Semaphore(4)
                 val allContacts = contactDao.getAllContacts().first()
-                allContacts.forEach { contact ->
-                    loadMessages(contact.userId)
+                coroutineScope {
+                    allContacts.map { contact ->
+                        launch { syncSemaphore.withPermit { loadMessagesSuspend(contact.userId) } }
+                    }.joinAll()
                 }
                 // Auch Gruppen-Nachrichten synchronisieren
                 val allGroups = groupDao.getAllGroups().first()
-                allGroups.forEach { group ->
-                    loadGroupMessages(group.groupId)
+                coroutineScope {
+                    allGroups.map { group ->
+                        launch { syncSemaphore.withPermit { loadGroupMessagesSuspend(group.groupId) } }
+                    }.joinAll()
                 }
             } catch (e: Exception) {
                 Timber.tag("LETHE_WS").e("syncMissedMessages fehlgeschlagen", e)
@@ -9184,6 +9235,14 @@ class MainViewModel @Inject constructor(
         // 2. Neuen Sender-Key erzeugen
         val rawKey = CryptoManager.generateGroupSenderKey()
         val keyBase64 = android.util.Base64.encodeToString(rawKey, android.util.Base64.NO_WRAP)
+        // Version = Epoch-Sekunden statt hartkodiert 1: fetchAndStoreGroupSenderKeys() anderer
+        // Mitglieder vergleicht "existing.version >= entry.version" um bereits bekannte Keys nicht
+        // erneut zu laden. Bei hartkodierter 1 würde eine spätere Neugenerierung (z.B. nach lokalem
+        // DB-Wipe durch die Profil-Selbstheilung) denselben Versionswert liefern → andere Mitglieder
+        // überspringen den neuen Key fälschlich und entschlüsseln weiter mit dem alten, ungültigen
+        // Key ("Schlüssel nicht verfügbar"). Ein monoton steigender Wert stellt sicher, dass jede
+        // Neugenerierung als neuere Version erkannt und nachgeladen wird.
+        val newVersion = (System.currentTimeMillis() / 1000L).toInt()
 
         // 3. Für jedes Mitglied ein verschlüsseltes Bundle erstellen
         val bundles = mutableListOf<SenderKeyBundle>()
@@ -9200,7 +9259,7 @@ class MainViewModel @Inject constructor(
                 bundles.add(SenderKeyBundle(
                     recipientId = member.userId,
                     encryptedKeyBundle = encryptedBundle,
-                    version = 1
+                    version = newVersion
                 ))
             } else {
                 Timber.tag("LETHE_E2EE").w("Kein Shared Secret für ${member.userId} – Bundle übersprungen")
@@ -9210,7 +9269,7 @@ class MainViewModel @Inject constructor(
         // 4. Bundles hochladen (auch wenn bundles leer ist – löscht alte Keys des Owners)
         try {
             val uploadResponse = apiService.distributeGroupSenderKeys(
-                groupId, DistributeKeysRequest(bundles = bundles, version = 1)
+                groupId, DistributeKeysRequest(bundles = bundles, version = newVersion)
             )
             if (uploadResponse.isSuccessful) {
                 // 5. Eigenen Klartext-Key lokal speichern
@@ -9218,7 +9277,7 @@ class MainViewModel @Inject constructor(
                     groupId = groupId,
                     ownerId = me.userId,
                     keyBase64 = keyBase64,
-                    version = 1,
+                    version = newVersion,
                     storedAt = System.currentTimeMillis()
                 ))
                 Timber.tag("LETHE_E2EE").d("Sender-Key generiert & verteilt: $groupId (${bundles.size} Bundles)")
@@ -9402,13 +9461,16 @@ class MainViewModel @Inject constructor(
     // ──────────────────────────────────────────────────────────────────────────
 
     fun loadGroupMessages(groupId: String) {
-        viewModelScope.launch {
-            // E2EE sicherstellen bevor Nachrichten geladen werden
-            launch(Dispatchers.IO) { ensureGroupE2EE(groupId) }
-            // Initial nur die neuesten 50 laden (statt der kompletten Historie) –
-            // ältere werden beim Hochscrollen via loadOlderMessages nachgeladen.
-            doLoadGroupMessagesFromServer(groupId, limit = 50, beforeId = null)
-        }
+        viewModelScope.launch { loadGroupMessagesSuspend(groupId) }
+    }
+
+    /** Kernlogik von [loadGroupMessages] als suspend-Funktion (siehe [loadMessagesSuspend]). */
+    private suspend fun loadGroupMessagesSuspend(groupId: String) {
+        // E2EE sicherstellen bevor Nachrichten geladen werden (nicht blockierend)
+        viewModelScope.launch(Dispatchers.IO) { ensureGroupE2EE(groupId) }
+        // Initial nur die neuesten 50 laden (statt der kompletten Historie) –
+        // ältere werden beim Hochscrollen via loadOlderMessages nachgeladen.
+        doLoadGroupMessagesFromServer(groupId, limit = 50, beforeId = null)
     }
 
     /**
@@ -12043,49 +12105,56 @@ class MainViewModel @Inject constructor(
      * Stellt sicher dass auch verpasste Nachrichten (wenn offline) angezeigt werden.
      */
     fun loadMessages(contactId: String) {
-        viewModelScope.launch {
-            // Self-Notes sind rein lokal – kein Server-Abruf nötig
-            if (contactId == "self_notes") return@launch
+        viewModelScope.launch { loadMessagesSuspend(contactId) }
+    }
 
-            // Guard: verhindert gleichzeitige Server-Abfragen für denselben Chat
-            val shouldRun = loadMessagesMutex.withLock {
-                if (contactId in loadMessagesInProgress) {
-                    Timber.tag("Chat").d("loadMessages($contactId) übersprungen – läuft bereits")
-                    false
-                } else {
-                    loadMessagesInProgress.add(contactId)
-                    true
+    /**
+     * Kernlogik von [loadMessages] als suspend-Funktion. Wird auch von [syncMissedMessages]
+     * mit begrenzter Parallelität (Semaphore) direkt awaited, statt wie zuvor pro Kontakt
+     * fire-and-forget über [loadMessages] gestartet zu werden.
+     */
+    private suspend fun loadMessagesSuspend(contactId: String) {
+        // Self-Notes sind rein lokal – kein Server-Abruf nötig
+        if (contactId == "self_notes") return
+
+        // Guard: verhindert gleichzeitige Server-Abfragen für denselben Chat
+        val shouldRun = loadMessagesMutex.withLock {
+            if (contactId in loadMessagesInProgress) {
+                Timber.tag("Chat").d("loadMessages($contactId) übersprungen – läuft bereits")
+                false
+            } else {
+                loadMessagesInProgress.add(contactId)
+                true
+            }
+        }
+        if (!shouldRun) return
+
+        try {
+            val localCount = messageDao.getLocalMessageCount(contactId)
+            val newestLocalId = messageDao.getNewestServerMessageId(contactId)
+
+            if (localCount > 0 && newestLocalId != null) {
+                // INKREMENTELLER SYNC: Lokale Nachrichten vorhanden → nur neue vom Server laden
+                Timber.tag("Chat").d("Inkrementeller Sync für $contactId (lokal: $localCount, newestId: $newestLocalId)")
+                doIncrementalSync(contactId, newestLocalId)
+            } else {
+                // ERSTLADEN: Keine lokalen Nachrichten → 300 neueste vom Server laden
+                Timber.tag("Chat").d("Erstladen für $contactId (keine lokalen Nachrichten)")
+                doLoadMessagesFromServer(contactId, limit = 300, beforeId = null)
+            }
+
+            // Oldest-ID für Pagination setzen (für loadOlderMessages)
+            val oldestLocalId = messageDao.getOldestServerMessageId(contactId)
+            if (oldestLocalId != null) {
+                _oldestServerMessageId[contactId] = oldestLocalId
+                // Wenn wir lokal weniger als 300 haben, gibt es wahrscheinlich noch mehr auf dem Server
+                if (_hasMoreMessages[contactId] == null) {
+                    _hasMoreMessages[contactId] = true
                 }
             }
-            if (!shouldRun) return@launch
-
-            try {
-                val localCount = messageDao.getLocalMessageCount(contactId)
-                val newestLocalId = messageDao.getNewestServerMessageId(contactId)
-
-                if (localCount > 0 && newestLocalId != null) {
-                    // INKREMENTELLER SYNC: Lokale Nachrichten vorhanden → nur neue vom Server laden
-                    Timber.tag("Chat").d("Inkrementeller Sync für $contactId (lokal: $localCount, newestId: $newestLocalId)")
-                    doIncrementalSync(contactId, newestLocalId)
-                } else {
-                    // ERSTLADEN: Keine lokalen Nachrichten → 300 neueste vom Server laden
-                    Timber.tag("Chat").d("Erstladen für $contactId (keine lokalen Nachrichten)")
-                    doLoadMessagesFromServer(contactId, limit = 300, beforeId = null)
-                }
-
-                // Oldest-ID für Pagination setzen (für loadOlderMessages)
-                val oldestLocalId = messageDao.getOldestServerMessageId(contactId)
-                if (oldestLocalId != null) {
-                    _oldestServerMessageId[contactId] = oldestLocalId
-                    // Wenn wir lokal weniger als 300 haben, gibt es wahrscheinlich noch mehr auf dem Server
-                    if (_hasMoreMessages[contactId] == null) {
-                        _hasMoreMessages[contactId] = true
-                    }
-                }
-            } finally {
-                // Guard freigeben damit spätere Aufrufe wieder durchkommen
-                loadMessagesMutex.withLock { loadMessagesInProgress.remove(contactId) }
-            }
+        } finally {
+            // Guard freigeben damit spätere Aufrufe wieder durchkommen
+            loadMessagesMutex.withLock { loadMessagesInProgress.remove(contactId) }
         }
     }
 
@@ -12201,25 +12270,22 @@ class MainViewModel @Inject constructor(
     }
 
     /**
-     * Queue-basiertes Nachladen älterer Nachrichten (Paginierung beim Hochscrollen).
-     * Bei schnellem Scrollen werden Anfragen in einer Queue gezählt.
-     * Es werden immer erst 20 Nachrichten geladen, dann der Zähler reduziert,
-     * und erst danach die nächsten 20 geladen – so wird der Server nicht überlastet.
-     * Nutzt die älteste lokale Server-ID als before_id für korrekte Paginierung.
+     * Batch-Nachladen älterer Nachrichten (Paginierung): wird nur ausgelöst, wenn der Nutzer
+     * tatsächlich zum oberen Rand der aktuell geladenen Nachrichten hochgescrollt hat (ChatScreen
+     * triggert dies erst, wenn das Lade-Sentinel am oberen Listenende sichtbar wird – kein
+     * kontinuierliches Nachladen mehr während des Scrollens). Lädt genau einen Batch von 50
+     * Nachrichten, zeigt währenddessen den Ladekreis, und lädt erst beim erneuten Erreichen
+     * des oberen Randes den nächsten Batch. Ein bereits laufender Ladevorgang für denselben
+     * Chat wird nicht doppelt gestartet.
      */
     fun loadOlderMessages(contactId: String) {
         if (_hasMoreMessages[contactId] != true) return
         if (_oldestServerMessageId[contactId] == null) return
 
-        val counter = _olderMessagesQueueCount.getOrPut(contactId) { java.util.concurrent.atomic.AtomicInteger(0) }
-        val newCount = counter.incrementAndGet()
-        Timber.tag("Chat").d("loadOlderMessages($contactId) queue count: $newCount")
-
         viewModelScope.launch {
-            // Nur ein Worker pro Chat – wenn bereits einer läuft, übernimmt er die Queue
             val shouldRun = loadMessagesMutex.withLock {
                 if (contactId in loadMessagesInProgress) {
-                    Timber.tag("Chat").d("loadOlderMessages($contactId) Worker läuft bereits, Queue: ${counter.get()}")
+                    Timber.tag("Chat").d("loadOlderMessages($contactId) läuft bereits – übersprungen")
                     false
                 } else {
                     loadMessagesInProgress.add(contactId)
@@ -12230,23 +12296,16 @@ class MainViewModel @Inject constructor(
 
             _isLoadingOlderMessages.update { it + contactId }
             try {
+                val oldestId = _oldestServerMessageId[contactId] ?: return@launch
                 // Gruppe vs. 1:1 erkennen – Gruppen-Nachrichten kommen aus einer anderen Tabelle/Endpoint.
                 val isGroup = withContext(Dispatchers.IO) { groupDao.getGroupById(contactId) != null }
-                // Queue abarbeiten: solange Zähler > 0, jeweils 20 Nachrichten laden
-                while (counter.get() > 0 && _hasMoreMessages[contactId] == true) {
-                    // Älteste lokale Server-ID als Ankerpunkt nutzen
-                    val oldestId = _oldestServerMessageId[contactId] ?: break
-                    if (isGroup) {
-                        doLoadGroupMessagesFromServer(contactId, limit = 20, beforeId = oldestId)
-                    } else {
-                        doLoadMessagesFromServer(contactId, limit = 20, beforeId = oldestId)
-                    }
-                    getDisplayLimitFlow(contactId).update { it + 20 }
-                    counter.decrementAndGet()
-                    Timber.tag("Chat").d("loadOlderMessages($contactId) batch geladen, verbleibende Queue: ${counter.get()}")
+                if (isGroup) {
+                    doLoadGroupMessagesFromServer(contactId, limit = 50, beforeId = oldestId)
+                } else {
+                    doLoadMessagesFromServer(contactId, limit = 50, beforeId = oldestId)
                 }
-                // Queue leeren falls keine weiteren Nachrichten mehr vorhanden
-                counter.set(0)
+                getDisplayLimitFlow(contactId).update { it + 50 }
+                Timber.tag("Chat").d("loadOlderMessages($contactId) Batch (50) geladen")
             } finally {
                 loadMessagesMutex.withLock { loadMessagesInProgress.remove(contactId) }
                 _isLoadingOlderMessages.update { it - contactId }
@@ -12471,7 +12530,10 @@ class MainViewModel @Inject constructor(
                             content = decryptedContent,
                             mediaType = item.mediaType,
                             mediaUrl = item.mediaUrl,
-                            timestamp = System.currentTimeMillis(),
+                            timestamp = item.timestamp?.let {
+                                try { java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US).parse(it)?.time }
+                                catch (e: Exception) { System.currentTimeMillis() }
+                            } ?: System.currentTimeMillis(),
                             isSent = item.senderId == myId,
                             isRead = item.isRead,
                             replyToContent = item.replyToContent,

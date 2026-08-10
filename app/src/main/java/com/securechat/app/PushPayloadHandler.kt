@@ -95,7 +95,11 @@ class PushPayloadHandler @Inject constructor(
                     val alreadyShownByWs = messageId != null &&
                         (messageDao.isDeliveredAsNotification(messageId) == 1 ||
                          FcmMessageBus.wasNotificationShownByFcm(messageId))
-                    if (!alreadyShownByWs) {
+                    // Bereits lokal vorhanden (z.B. durch syncMissedMessages()/Reconnect-Resync bereits
+                    // nachgeladen, bevor die verzögerte FCM-Push-Nachricht ankam) → keine Notification,
+                    // sonst erscheinen für nachgeladene/resyncte Nachrichten fälschlich Benachrichtigungen.
+                    val alreadyExistsLocally = messageId != null && messageDao.getMessageById(messageId) != null
+                    if (!alreadyShownByWs && !alreadyExistsLocally) {
                         // FCM als einzige Benachrichtigungs-Quelle markieren (verhindert Duplikat vom WS-Handler)
                         if (messageId != null) FcmMessageBus.markNotificationShown(messageId)
                         // Profilbild des Kontakts laden, damit Android Auto / Wear OS den Avatar
@@ -114,7 +118,10 @@ class PushPayloadHandler @Inject constructor(
                             mediaHttpUrl = absMediaUrl
                         )
                     } else {
-                        Timber.tag("LETHE_PUSH").d("Push-Notification übersprungen (WS hat bereits gezeigt): $messageId")
+                        Timber.tag("LETHE_PUSH").d(
+                            "Push-Notification übersprungen (bereits gezeigt/nachgeladen): $messageId " +
+                            "shownByWs=$alreadyShownByWs existsLocally=$alreadyExistsLocally"
+                        )
                     }
                 }
             }
@@ -131,6 +138,20 @@ class PushPayloadHandler @Inject constructor(
                 // ViewModel benachrichtigen damit Gruppennachrichten nachgeladen werden
                 FcmMessageBus.notifyNewMessage(groupId)
                 CoroutineScope(Dispatchers.IO).launch {
+                    // Dedup: bereits vom WS-Handler gezeigt ODER bereits lokal vorhanden (z.B. durch
+                    // syncMissedMessages()/Reconnect-Resync bereits nachgeladen, bevor die verzögerte
+                    // FCM-Push-Nachricht ankam) → keine Notification für nachgeladene/resyncte Nachrichten.
+                    val alreadyShownByWs = messageId != null &&
+                        (messageDao.isDeliveredAsNotification(messageId) == 1 ||
+                         FcmMessageBus.wasNotificationShownByFcm(messageId))
+                    val alreadyExistsLocally = messageId != null && messageDao.getMessageById(messageId) != null
+                    if (alreadyShownByWs || alreadyExistsLocally) {
+                        Timber.tag("LETHE_PUSH").d(
+                            "Gruppen-Push-Notification übersprungen (bereits gezeigt/nachgeladen): $messageId " +
+                            "shownByWs=$alreadyShownByWs existsLocally=$alreadyExistsLocally"
+                        )
+                        return@launch
+                    }
                     val messagePreview = when {
                         mediaType == "audio"    -> "$senderName: 🎤 Sprachnachricht"
                         mediaType == "image"    -> "$senderName: 📷 Bild"

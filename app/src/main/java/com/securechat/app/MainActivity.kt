@@ -142,7 +142,13 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+        // Nach einem Profil-/Account-Wechsel (Process.killProcess() in MainViewModel.login()/
+        // switchAccount()) bleibt die Task in den Recents erhalten – Android würde sonst die
+        // SavedInstanceState-Bundle (NavController-Backstack inkl. offener Chat-Route mit
+        // contactId des ALTEN Profils) restaurieren und kurzzeitig/dauerhaft Inhalte des
+        // falschen Accounts zeigen. Bundle in diesem Fall verwerfen für einen sauberen Neustart.
+        val restoredState = if (com.securechat.app.data.local.ProfileManager.consumePendingRestart(this)) null else savedInstanceState
+        super.onCreate(restoredState)
         // Pflicht für targetSdk >= 35 (Android 15+) — erzwingt Edge-to-Edge Handling
         enableEdgeToEdge()
 

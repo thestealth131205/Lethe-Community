@@ -15,6 +15,7 @@ object ProfileManager {
     private const val KEY_FAKE_NUMBER = "active_fake_number"
     private const val KEY_ORIGINAL_FAKE_NUMBER = "original_fake_number"
     private const val KEY_SAVED_ACCOUNTS = "saved_accounts_json"
+    private const val KEY_PENDING_RESTART = "pending_profile_switch_restart"
 
     private val gson = Gson()
 
@@ -72,6 +73,33 @@ object ProfileManager {
         val profile = getActiveProfile(context)
         return if (profile.isEmpty()) "secure_chat_settings"
         else "secure_chat_settings_$profile"
+    }
+
+    /**
+     * Markiert einen bevorstehenden Profil-Wechsel-Neustart (vor Process.killProcess() aufzurufen).
+     * MainActivity.onCreate() verwirft dadurch die vom System zwischengespeicherte SavedInstanceState
+     * (NavController-Backstack inkl. Routen-Argumenten wie einer offenen Chat-contactId) beim nächsten
+     * Start. Sonst überlebt diese Bundle-Restauration einen selbst ausgelösten killProcess() (die Task
+     * bleibt in den Recents erhalten) und zeigt kurzzeitig/dauerhaft Inhalte des ALTEN Profils an (z.B.
+     * eine Chat-Route mit einer contactId, die im neuen Profil zufällig auf einen anderen Kontakt trifft).
+     * Ein manuelles Beenden über die Recents-Liste entfernt die Task dagegen komplett und verwirft die
+     * Bundle von selbst – deckt sich mit der Beobachtung "erst nach komplettem Neustart wieder korrekt".
+     */
+    fun markPendingRestart(context: Context) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_PENDING_RESTART, true)
+            .commit()
+    }
+
+    /** Liest das Flag aus Schritt oben und löscht es sofort wieder (einmalig wirksam). */
+    fun consumePendingRestart(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val pending = prefs.getBoolean(KEY_PENDING_RESTART, false)
+        if (pending) {
+            prefs.edit().putBoolean(KEY_PENDING_RESTART, false).commit()
+        }
+        return pending
     }
 
     // ── Account-Switcher-Registry ──────────────────────────────────────────

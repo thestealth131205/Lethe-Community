@@ -20,4 +20,5 @@ dependencyResolutionManagement {
 rootProject.name = "SecureChat"
 include(":app")  // ← WICHTIG! Diese Zeile muss da sein
 include(":mediaplayer")  // Eigenständige Companion-App „Lethe Medie Player"
+include(":adminapp")  // Native App für die Backend-Verwaltung (admin.letheapp.de)
  

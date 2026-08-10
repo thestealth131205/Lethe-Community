@@ -346,6 +346,66 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
+    /** Ob eine aus der Lethe-Haupt-App (Chat-Cast-Symbol) übergebene Stream-URL wartet (reaktiv für Compose). */
+    val pendingStreamUrl: StateFlow<String?> = importBridge.pendingStreamUrl
+
+    /**
+     * Streamt eine aus der Lethe-Haupt-App (Chat-Cast-Symbol) übergebene vollständige Musik-URL.
+     * Liest vorab die ID3-Tags (Titel, Künstler, Dauer, eingebettetes Cover) über
+     * MediaMetadataRetriever aus, baut daraus einen Track und startet die Wiedergabe. ExoPlayer
+     * streamt die URL direkt (kein Download in den Cache); von dort kann der Nutzer casten.
+     */
+    fun playPendingExternalStreamIfAny() {
+        val url = importBridge.pendingStreamUrl.value ?: return
+        importBridge.consumeStream()
+        viewModelScope.launch {
+            try {
+                val track = withContext(Dispatchers.IO) { buildStreamTrack(url) }
+                play(listOf(track), 0)
+                _externalPlaybackEvent.tryEmit(Unit)
+            } catch (_: Exception) {
+                // URL nicht abspielbar – wird stillschweigend ignoriert
+            }
+        }
+    }
+
+    /** Liest die ID3-Tags einer entfernten Musik-URL (Titel, Künstler, Dauer, Cover) und baut einen Stream-Track. */
+    private fun buildStreamTrack(url: String): Track {
+        var title: String? = null
+        var artist: String? = null
+        var durationSec = 0
+        var coverUri: String? = null
+        val retriever = MediaMetadataRetriever()
+        try {
+            retriever.setDataSource(url, HashMap<String, String>())
+            title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)?.trim()?.takeIf { it.isNotBlank() }
+            artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)?.trim()?.takeIf { it.isNotBlank() }
+            durationSec = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                ?.toLongOrNull()?.let { (it / 1000L).toInt() } ?: 0
+            retriever.embeddedPicture?.let { pic ->
+                val coverFile = File(appContext.cacheDir, "stream_cover_${UUID.randomUUID()}.jpg")
+                coverFile.writeBytes(pic)
+                coverUri = Uri.fromFile(coverFile).toString()
+            }
+        } catch (_: Exception) {
+            // Metadaten nicht lesbar (z.B. kein ID3) – dann streamt der Player trotzdem;
+            // ExoPlayer extrahiert eingebettete Cover zusätzlich automatisch in playerController.artwork.
+        } finally {
+            runCatching { retriever.release() }
+        }
+        val fallbackName = url.substringAfterLast('/').substringBefore('?')
+            .substringBeforeLast('.').replace('_', ' ').trim().ifBlank { "Musik" }
+        return Track(
+            id = "stream_${url.hashCode()}",
+            title = title ?: fallbackName,
+            artist = artist ?: "",
+            coverUrl = coverUri,
+            audioUrl = url,
+            durationSec = durationSec,
+            source = "external_stream"
+        )
+    }
+
     /** Kopiert eine externe Audio-URI in den SmartCache-Importordner und liest Metadaten aus. */
     private fun importExternalAudioTrack(uri: Uri): Track {
         val local = readLocalAudio(uri)
@@ -783,6 +843,43 @@ class PlayerViewModel @Inject constructor(
         }
         return LocalAudio(bytes, fileName, mime, title, artist, durationSec)
     }
+
+    /**
+     * Baut den teilbaren Song-Link, der beim Empfänger den Lethe Media Player mit genau diesem
+     * Lied öffnet. Entfernte (http/https) Titel werden direkt verlinkt; lokale Gerätedateien
+     * (content://) werden dafür einmalig hochgeladen, damit der Empfänger sie überhaupt abrufen
+     * kann. Gibt null zurück, wenn kein teilbarer Link erzeugt werden konnte.
+     */
+    suspend fun buildShareSongLink(track: Track): String? {
+        if (track.audioUrl.startsWith("http")) {
+            return buildSongLink(
+                track.audioUrl, track.title, track.artist,
+                track.coverUrl?.takeIf { it.startsWith("http") }
+            )
+        }
+        val uri = runCatching { Uri.parse(track.audioUrl) }.getOrNull() ?: return null
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val local = readLocalAudio(uri)
+                val uploaded = repo.uploadForShare(local) ?: return@runCatching null
+                buildSongLink(
+                    uploaded.mediaUrl, track.title, track.artist,
+                    uploaded.coverUrl?.takeIf { it.startsWith("http") }
+                )
+            }.getOrNull()
+        }
+    }
+
+    private fun buildSongLink(audioUrl: String, title: String, artist: String, coverUrl: String?): String =
+        buildString {
+            append("https://letheapp.de/song.php?u=")
+            append(Uri.encode(audioUrl))
+            append("&t=").append(Uri.encode(title))
+            append("&a=").append(Uri.encode(artist))
+            coverUrl?.takeIf { it.isNotBlank() }?.let {
+                append("&c=").append(Uri.encode(it))
+            }
+        }
 
     /** Gruppiert Favoriten nach Künstler und sortiert nach Anzahl der Herzen absteigend. */
     private fun deriveArtists(favorites: List<Track>): List<ArtistItem> =

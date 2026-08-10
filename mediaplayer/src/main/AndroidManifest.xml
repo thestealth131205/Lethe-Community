@@ -77,6 +77,26 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="audio/*" />
             </intent-filter>
+
+            <!-- Song-Teilen-Link (Custom-Scheme): lethemp://song?u={audioUrl} öffnet den Player mit dem
+                 geteilten Titel. Wird von der Web-Fallback-Seite song.php aufgerufen und öffnet die App
+                 auch dann zuverlässig, wenn der https-App-Link (unten) nicht verifiziert ist. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="lethemp" android:host="song" />
+            </intent-filter>
+
+            <!-- Song-Teilen-Link (App-Link): https://letheapp.de/song.php?u={audioUrl} öffnet bei
+                 verifizierter Domain direkt den Player. Ohne App/Verifikation liefert der Server die
+                 Web-Fallback-Seite (Web-Wiedergabe + APK-Download). -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="letheapp.de" android:pathPrefix="/song.php" />
+            </intent-filter>
         </activity>
 
         <!-- Hintergrund-Wiedergabe via MediaLibraryService (Media-Notification, Lockscreen, Auto).

@@ -205,10 +205,18 @@ fun NowPlayingScreen(
                     isSharing = true
                     coroutineScope.launch {
                         val imageUri = ShareCardGenerator.generate(context, track, artwork)
+                        // Teilbaren Song-Link erzeugen: entfernte Titel direkt, lokale Gerätedateien
+                        // werden dafür einmalig hochgeladen (sonst wären sie beim Empfänger nicht
+                        // abrufbar). Schlägt das fehl → APK-Empfehlung als Rückfall.
+                        val songLink = vm.buildShareSongLink(track)
                         isSharing = false
                         if (imageUri != null) {
-                            val recommendationText = "Hör dir \"${track.title}\" von ${track.artist} im Lethe Media Player an: " +
-                                "https://letheapp.de/downloads/mediaplayer/lethe-mediaplayer-latest.apk"
+                            val recommendationText = if (songLink != null) {
+                                "Hör dir \"${track.title}\" von ${track.artist} im Lethe Media Player an: $songLink"
+                            } else {
+                                "Hör dir \"${track.title}\" von ${track.artist} im Lethe Media Player an: " +
+                                    "https://letheapp.de/downloads/mediaplayer/lethe-mediaplayer-latest.apk"
+                            }
                             val sendIntent = Intent(Intent.ACTION_SEND).apply {
                                 type = "image/png"
                                 putExtra(Intent.EXTRA_STREAM, imageUri)

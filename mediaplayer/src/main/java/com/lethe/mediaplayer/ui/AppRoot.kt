@@ -28,6 +28,7 @@ fun AppRoot() {
     val vm: PlayerViewModel = hiltViewModel()
     val session by vm.session.collectAsState()
     val pendingImportUri by vm.pendingImportUri.collectAsState()
+    val pendingStreamUrl by vm.pendingStreamUrl.collectAsState()
     val context = LocalContext.current
 
     LaunchedEffect(Unit) { vm.loadSession() }
@@ -226,6 +227,12 @@ fun AppRoot() {
                 // (MainActivity.onNewIntent) -> sofort importieren, statt nur beim App-Start.
                 LaunchedEffect(pendingImportUri) {
                     if (pendingImportUri != null) vm.importPendingExternalAudioIfAny()
+                }
+
+                // Aus dem Chat-Cast-Symbol übergebene vollständige Stream-URL: direkt streamen
+                // (ID3-Tags werden dabei ausgelesen), danach kann von hier gecastet werden.
+                LaunchedEffect(pendingStreamUrl) {
+                    if (pendingStreamUrl != null) vm.playPendingExternalStreamIfAny()
                 }
 
                 // Sobald der Import fertig ist und die Wiedergabe startet: Now-Playing öffnen.

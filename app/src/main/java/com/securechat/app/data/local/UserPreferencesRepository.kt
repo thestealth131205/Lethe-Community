@@ -267,7 +267,13 @@ class UserPreferencesRepository @Inject constructor(
 
     // --- SETTER FUNKTIONEN ---
 
-    suspend fun updateCredentials(num: String, pass: String, remember: Boolean) {
+    /**
+     * @param persistToProfile Bei einem bevorstehenden Profil-Wechsel (Multiaccount) auf false setzen:
+     * [profileDataStore] ist als Hilt-Singleton fest an das beim App-Start AKTIVE (alte) Profil gebunden –
+     * ein Schreibzugriff hier würde die Zugangsdaten des NEUEN Accounts fälschlich im ALTEN Profil ablegen.
+     * Der globale Store (für Login-Vorbefüllung/Biometrie/Auto-Login) wird unabhängig davon immer aktualisiert.
+     */
+    suspend fun updateCredentials(num: String, pass: String, remember: Boolean, persistToProfile: Boolean = true) {
         // Passwort verschlüsselt im KeyStore speichern (nicht im Klartext-DataStore)
         encryptedCredentialStore.savePassword(if (remember) pass else "")
         // Fake-Number und Remember-Me im globalen DataStore (kein Passwort mehr)
@@ -275,10 +281,12 @@ class UserPreferencesRepository @Inject constructor(
             it[FAKE_NUMBER] = if (remember) num else ""
             it[REMEMBER_ME] = remember
         }
-        // Auch im Profil-Store (kein Passwort mehr)
-        profileDataStore.edit {
-            it[FAKE_NUMBER] = num
-            it[REMEMBER_ME] = remember
+        // Auch im Profil-Store (kein Passwort mehr) – nur wenn dieses Profil aktiv bleibt
+        if (persistToProfile) {
+            profileDataStore.edit {
+                it[FAKE_NUMBER] = num
+                it[REMEMBER_ME] = remember
+            }
         }
     }
 

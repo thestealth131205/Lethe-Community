@@ -24,44 +24,45 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
-            version = "10.4.142",
-            title = "Cast-Fix, Gruppenbilder & Chat-Backup",
+            version = "10.4.146",
+            title = "Gruppen-Verschlüsselung & fl\u00fcssigeres Laden im Chat",
             items = listOf(
-                "Behoben: Musik-/Video-Streaming per Cast blieb weiterhin manchmal auf \u201epausiert\u201c stehen \u2013 dem Wiedergabe-Befehl fehlte eine notwendige Sitzungskennung, die jetzt korrekt mitgeschickt wird",
-                "Behoben: Gruppenbilder in der \u201eKontakt teilen\u201c-Liste wurden bei jedem \u00d6ffnen neu geladen statt aus dem Zwischenspeicher \u2013 Bilder werden jetzt korrekt zwischengespeichert",
-                "Behoben: Gel\u00f6schte Chat-Nachrichten wurden beim n\u00e4chsten App-Start wieder nachgeladen \u2013 das L\u00f6schen wird jetzt auch mit dem Server synchronisiert",
-                "Chat-Backup erweitert: automatischer Hintergrund-Abgleich bestehender Nachrichten sowie vollst\u00e4ndiges L\u00f6schen der Server-Kopie beim Deaktivieren",
-                "Diverse Stabilit\u00e4tsverbesserungen bei Gruppen-Videoanrufen und der Konto-Anmeldung",
+                "Behoben: In seltenen F\u00e4llen konnten Chatpartner in Gruppen \u201eSchl\u00fcssel nicht verf\u00fcgbar\u201c statt der Nachricht sehen, wenn sich der eigene Gruppen-Schl\u00fcssel zwischenzeitlich \u00e4ndern musste \u2013 die Schl\u00fcsselversionierung wurde korrigiert, sodass alle Mitglieder den neuen Schl\u00fcssel zuverl\u00e4ssig erhalten",
+                "Bilder, Videos und Sprachnachrichten im Chat werden jetzt nacheinander statt gleichzeitig geladen \u2013 das sorgt f\u00fcr fl\u00fcssigeres Scrollen in Chats mit vielen Medien",
             ),
-            shortSummary = "Fix f\u00fcr Cast-Streaming, Gruppenbilder beim Teilen und Chat-L\u00f6schen-Synchronisation"
+            shortSummary = "Fix f\u00fcr Gruppen-Verschl\u00fcsselung und fl\u00fcssigeres Laden von Medien im Chat"
         ),
 
         ChangelogEntry(
-            version = "10.4.141",
-            title = "Chat-Backup & weiterer Cast-Fix",
+            version = "10.4.145",
+            title = "Benachrichtigungen & Chat-Verlauf laden",
             items = listOf(
-                "Neu: Optionales Chat-Backup in den App-Einstellungen \u2013 speichert Nachrichten zus\u00e4tzlich lesbar auf dem Server, damit sie bei Ger\u00e4teverlust wiederherstellbar sind (bewusst opt-in, da dies das Ende-zu-Ende-Prinzip f\u00fcr diese Nachrichten aufhebt; l\u00e4sst sich jederzeit wieder deaktivieren, wobei bereits gesicherte Nachrichten dann vom Server entfernt werden)",
-                "Behoben: Musik-Cast auf Lautsprecher blieb in manchen F\u00e4llen weiterhin auf \u201epausiert\u201c stehen, wenn zuvor ein Spark-Cast abgebrochen oder mehrere Ger\u00e4te-Apps gleichzeitig aktiv waren \u2013 Ger\u00e4te-Auswahl und Wiedergabe-Ziel werden jetzt zuverl\u00e4ssig zur\u00fcckgesetzt",
+                "Behoben: Nachrichten, die beim erneuten Verbinden oder im Hintergrund nachgeladen wurden, l\u00f6sten manchmal versehentlich eine Benachrichtigung aus, obwohl sie bereits bekannt waren \u2013 das passiert jetzt nicht mehr",
+                "Beim Hochscrollen im Chatverlauf werden \u00e4ltere Nachrichten jetzt in klaren 50er-Bl\u00f6cken nachgeladen (mit Ladekreis), statt fortlaufend im Hintergrund nachzuladen",
             ),
-            shortSummary = "Neues optionales Chat-Backup, dazu ein weiterer Fix f\u00fcr zuverl\u00e4ssigeres Musik-Casting"
+            shortSummary = "Weniger unn\u00f6tige Benachrichtigungen, dazu \u00fcbersichtlicheres Nachladen \u00e4lterer Chat-Nachrichten"
         ),
 
         ChangelogEntry(
-            version = "10.4.140",
-            title = "Musik-Cast-Fix f\u00fcr Lautsprecher",
+            version = "10.4.144",
+            title = "Musik im Media Player streamen & Nachrichten-Nachladen",
             items = listOf(
-                "Behoben: Musik-Streaming per Cast auf reine Audio-Lautsprecher (z.B. Google/Nest Mini) blieb auf \u201epausiert\u201c stehen, obwohl die Verbindung erfolgreich war \u2013 Musik wird jetzt \u00fcber Googles Standard-Empf\u00e4nger gestreamt und startet zuverl\u00e4ssig",
+                "Neu: Tippt man im Chat auf das Cast-Symbol einer Musiknachricht, \u00f6ffnet sich jetzt direkt der Lethe Media Player und streamt den Titel \u2013 inklusive Titel, K\u00fcnstler und Cover. Von dort l\u00e4sst sich wie gewohnt auf Lautsprecher casten",
+                "Behoben: Nach l\u00e4ngerer Zeit im Hintergrund (z.B. \u00fcber Nacht) konnte es passieren, dass einzelne per Benachrichtigung angezeigte Nachrichten nicht im Chatverlauf auftauchten \u2013 fehlende Nachrichten werden beim Wiederverbinden jetzt zuverl\u00e4ssiger nachgeladen",
             ),
-            shortSummary = "Musik-Streaming per Cast auf Lautsprecher funktioniert jetzt zuverl\u00e4ssig"
+            shortSummary = "Musiknachrichten \u00f6ffnen direkt den Lethe Media Player, dazu zuverl\u00e4ssigeres Nachladen fehlender Nachrichten"
         ),
 
         ChangelogEntry(
-            version = "10.4.139",
-            title = "Absturz-Fix beim App-Start",
+            version = "10.4.143",
+            title = "Mehrkonten-Fix & Medien-Player-Download",
             items = listOf(
-                "Behoben: Die App st\u00fcrzte bei manchen Nutzern direkt beim Start ab, nachdem der neue Konto-Switcher aus 10.4.138 hinzugekommen war",
+                "Behoben: Beim Wechseln zwischen mehreren Konten auf demselben Ger\u00e4t landete man nach einem Neustart manchmal im falschen Konto \u2013 Anmeldedaten werden jetzt zuverl\u00e4ssig dem richtigen Konto zugeordnet",
+                "Behoben: In der Konto-Liste des Konto-Wechslers fehlten teilweise gespeicherte Konten",
+                "Zwischengespeicherte Medien (Bilder/Videos) werden jetzt sauber pro Konto getrennt abgelegt, statt sich bei mehreren Konten auf demselben Ger\u00e4t zu vermischen",
+                "Neu: Tippt man im Chat auf das Cast-Symbol und der Lethe Media Player ist nicht installiert, \u00f6ffnet sich jetzt eine Download-Seite daf\u00fcr",
             ),
-            shortSummary = "Wichtiger Fix f\u00fcr einen Absturz beim App-Start"
+            shortSummary = "Fix f\u00fcr Mehrkonten-Wechsel und neue Download-Seite f\u00fcr den Lethe Media Player"
         ),
 
     )

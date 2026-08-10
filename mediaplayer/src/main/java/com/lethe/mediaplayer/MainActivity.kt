@@ -56,7 +56,33 @@ class MainActivity : FragmentActivity() {
      * PlayerViewModel weiter (über die Bridge, da MainActivity kein ViewModel hält).
      */
     private fun handleIncomingIntent(intent: Intent?) {
-        val uri = when (intent?.action) {
+        if (intent == null) return
+
+        // Aus der Lethe-Haupt-App (Chat-Cast-Symbol) übergebene vollständige Stream-URL: der Player
+        // streamt sie direkt und liest die ID3-Tags (Titel, Künstler, Cover) selbst aus – kein
+        // Kopieren in den Cache, da es sich um eine entfernte Musikdatei handelt.
+        val streamUrl = intent.getStringExtra(EXTRA_STREAM_URL)
+        if (!streamUrl.isNullOrBlank()) {
+            importBridge.submitStream(streamUrl)
+            return
+        }
+
+        // Song-Teilen-Deeplink: lethemp://song?u={audioUrl} oder https://letheapp.de/song.php?u={audioUrl}.
+        // Die geteilte Audio-URL (Query-Parameter "u") wird direkt gestreamt; ID3-Tags (Titel, Künstler,
+        // Cover) liest der Player selbst aus – identisch zum Chat-Cast-Streamingpfad.
+        val data = intent.data
+        if (intent.action == Intent.ACTION_VIEW && data != null &&
+            (data.scheme == "lethemp" ||
+                (data.host == "letheapp.de" && data.path?.startsWith("/song") == true))
+        ) {
+            val songUrl = data.getQueryParameter("u")
+            if (!songUrl.isNullOrBlank()) {
+                importBridge.submitStream(songUrl)
+                return
+            }
+        }
+
+        val uri = when (intent.action) {
             Intent.ACTION_VIEW -> intent.data
             Intent.ACTION_SEND -> if (Build.VERSION.SDK_INT >= 33) {
                 intent.getParcelableExtra(Intent.EXTRA_STREAM, android.net.Uri::class.java)
@@ -67,5 +93,10 @@ class MainActivity : FragmentActivity() {
             else -> null
         } ?: return
         importBridge.submit(uri)
+    }
+
+    companion object {
+        /** Muss identisch zu com.securechat.app.MediaPlayerLauncher.EXTRA_STREAM_URL sein. */
+        const val EXTRA_STREAM_URL = "com.Lethe.mediaplayer.extra.STREAM_URL"
     }
 }

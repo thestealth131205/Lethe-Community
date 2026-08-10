@@ -425,6 +425,26 @@ class MediaRepository @Inject constructor(
     }
 
     /**
+     * Lädt einen lokalen Song ausschließlich zum Teilen hoch (ohne ihn der persönlichen Musik
+     * hinzuzufügen) und liefert die öffentlichen, absoluten URLs (Audio + Cover). So kann ein
+     * geteilter Link auch für Gerätedateien den Player beim Empfänger mit genau diesem Lied öffnen.
+     */
+    suspend fun uploadForShare(local: LocalAudio): MusicUploadResponse? = runCatching {
+        val body = local.bytes.toRequestBody(local.mimeType.toMediaTypeOrNull())
+        val part = MultipartBody.Part.createFormData("file", local.fileName, body)
+        val artistPart = local.artist?.takeIf { it.isNotBlank() }
+            ?.toRequestBody("text/plain".toMediaTypeOrNull())
+        val titlePart = local.title?.takeIf { it.isNotBlank() }
+            ?.toRequestBody("text/plain".toMediaTypeOrNull())
+        api.uploadMusic(part, artistPart, titlePart).body()?.let {
+            it.copy(
+                mediaUrl = absUrl(it.mediaUrl),
+                coverUrl = absUrl(it.coverUrl).ifBlank { null }
+            )
+        }
+    }.getOrNull()
+
+    /**
      * Lädt einen lokalen Song hoch, legt ihn in der persönlichen Musik an und
      * hängt ihn an die Ziel-Playlist (bestehend über [playlistId] oder neu über [playlistName]).
      */

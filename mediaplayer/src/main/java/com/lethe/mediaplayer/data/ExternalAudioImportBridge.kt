@@ -17,11 +17,27 @@ class ExternalAudioImportBridge @Inject constructor() {
     private val _pendingUri = MutableStateFlow<Uri?>(null)
     val pendingUri: StateFlow<Uri?> = _pendingUri
 
+    /**
+     * Vollständige Stream-URL, die aus der Lethe-Haupt-App (Chat-Cast-Symbol) übergeben wurde.
+     * Wird – anders als [pendingUri] – NICHT in den Cache kopiert, sondern direkt gestreamt;
+     * das PlayerViewModel liest dabei die ID3-Tags (Titel, Künstler, Cover) aus.
+     */
+    private val _pendingStreamUrl = MutableStateFlow<String?>(null)
+    val pendingStreamUrl: StateFlow<String?> = _pendingStreamUrl
+
     fun submit(uri: Uri) {
         _pendingUri.value = uri
     }
 
     fun consume() {
         _pendingUri.value = null
+    }
+
+    fun submitStream(url: String) {
+        _pendingStreamUrl.value = url
+    }
+
+    fun consumeStream() {
+        _pendingStreamUrl.value = null
     }
 }

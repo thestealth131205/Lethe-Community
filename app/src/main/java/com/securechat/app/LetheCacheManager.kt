@@ -1,6 +1,7 @@
 package com.securechat.app
 
 import android.content.Context
+import com.securechat.app.data.local.ProfileManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -10,17 +11,21 @@ import java.util.concurrent.TimeUnit
 /**
  * Smart Cache Manager für Lethe.
  *
- * Verwaltet den persistenten Medien-Cache (filesDir/media_cache/) sowie
- * temporäre Spiel-Dateien (cacheDir/temp/games/) mit drei Strategien:
+ * Verwaltet den persistenten Medien-Cache (filesDir/media_cache/<profil>/) des
+ * aktuell aktiven Accounts sowie temporäre Spiel-Dateien (cacheDir/temp/games/)
+ * mit drei Strategien:
  *  1. Sofortiges Löschen von Spiel-Temp-Dateien
  *  2. Zeit-basierte Eviction: Dateien älter als N Tage entfernen
  *  3. Größen-basierte Eviction: Cache auf maximal X MB begrenzen
  */
 class LetheCacheManager(private val context: Context) {
 
-    // Persistenter Medien-Cache (wird von MediaCache befüllt)
+    // Persistenter Medien-Cache des aktiven Profils (wird von MediaCache befüllt)
     private val mediaCacheRoot: File
-        get() = File(context.filesDir, "media_cache").also { it.mkdirs() }
+        get() {
+            val profile = ProfileManager.getActiveProfile(context).ifBlank { "default" }
+            return File(context.filesDir, "media_cache/$profile").also { it.mkdirs() }
+        }
 
     // Temporäre Spiel-Dateien im System-Cache (werden vom OS automatisch gelöscht)
     private val tempGamesDir: File

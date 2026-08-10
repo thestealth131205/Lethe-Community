@@ -194,7 +194,6 @@ import androidx.compose.ui.platform.LocalGraphicsContext
 import androidx.compose.ui.unit.IntOffset
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -1370,22 +1369,16 @@ fun ChatScreen(
     val currentUserForSound by viewModel.currentUser.collectAsState()
     val p2pConnectionStates by viewModel.p2pConnectionStates.collectAsState()
     val p2pState = if (!isGroup && !isSelfChat) p2pConnectionStates[chatId] else null
-    // Lazy-Loading für Bilder: Bilder werden erst geladen wenn Scrollen stoppt und sie sichtbar sind
-    var loadedImageUrls by remember { mutableStateOf(emptySet<String>()) }
-    var approvedImageUrls by remember { mutableStateOf(emptySet<String>()) }
-    // O(n)-Auflösung des aktuell ladenden Bildes NICHT pro Frame (derivedStateOf an messages),
-    // sondern nur wenn sich die Freigabe-/Geladen-Mengen ändern (Scroll-Stopp bzw. Bild fertig).
-    var activeLoadingImageUrl by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(Unit) {
-        snapshotFlow { approvedImageUrls to loadedImageUrls }
-            .distinctUntilChanged()
-            .collect { (approved, loaded) ->
-                activeLoadingImageUrl = messages
-                    .filter { it.mediaType == "image" && !it.mediaUrl.isNullOrBlank() }
-                    .filter { (it.mediaUrl ?: "") in approved }
-                    .firstOrNull { (it.mediaUrl ?: "") !in loaded }
-                    ?.mediaUrl
-            }
+    // Sequenzielles Medien-Laden: Bilder/Videos/Sprachnachrichten im sichtbaren Bereich werden
+    // NIE parallel geladen — erst wenn eine fertig ist (Erfolg oder Fehler), startet die nächste.
+    // Die sichtbare Reihenfolge (visibleMediaQueue) wird nur neu berechnet wenn nicht gescrollt
+    // wird (siehe Effekt weiter unten) — scrollt der Nutzer schneller als geladen werden kann,
+    // wird währenddessen nichts Neues angestoßen.
+    var loadedMediaUrls by remember { mutableStateOf(emptySet<String>()) }
+    var forcedMediaUrls by remember { mutableStateOf(emptySet<String>()) }
+    var visibleMediaQueue by remember { mutableStateOf(emptyList<String>()) }
+    val activeLoadingMediaUrl by remember {
+        derivedStateOf { visibleMediaQueue.firstOrNull { it !in loadedMediaUrls } }
     }
     val onboardingStep by viewModel.currentOnboardingStep.collectAsState()
     var showFirstMessageCelebration by remember { mutableStateOf(false) }
@@ -2454,56 +2447,41 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
         viewModel.preloadChatMedia(messages, chatId, 0, preloadEnd)
     }
 
-    // Scroll-basiertes Preloading: nur sichtbare Nachrichten vorladen (kein Vorladen außerhalb des Viewports)
+    // Scroll-basiertes Preloading: nur sichtbare Nachrichten vorladen (kein Vorladen außerhalb des
+    // Viewports) — feuert erst wenn das Scrollen stoppt, damit während schnellen Scrollens keine
+    // Netzwerk-/Dekodier-Last durch nachfolgende Bubbles entsteht.
     LaunchedEffect(Unit) {
-        snapshotFlow { listState.layoutInfo }
+        snapshotFlow {
+            if (listState.isScrollInProgress) null else listState.layoutInfo
+        }
             .distinctUntilChanged()
             .collect { layoutInfo ->
+                if (layoutInfo == null) return@collect
                 val first = layoutInfo.visibleItemsInfo.firstOrNull()?.index ?: return@collect
                 val last = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: return@collect
                 viewModel.preloadChatMedia(messages, chatId, first, last)
             }
     }
 
-    // Lazy-Image-Loading: Bilder erst genehmigen wenn Scrollen stoppt und sie sichtbar sind
-    LaunchedEffect(Unit) {
-        snapshotFlow { listState.isScrollInProgress }
-            .collect { scrolling ->
-                if (!scrolling) {
-                    delay(200)
-                    val visibleKeys = listState.layoutInfo.visibleItemsInfo.map { it.key }.toSet()
-                    val visibleImageUrls = messages
-                        .filter { it.localId in visibleKeys }
-                        .filter { it.mediaType == "image" && !it.mediaUrl.isNullOrBlank() }
-                        .mapNotNull { it.mediaUrl }
-                        .toSet()
-                    if (visibleImageUrls.isNotEmpty()) {
-                        approvedImageUrls = approvedImageUrls + visibleImageUrls
-                    }
-                }
-            }
-    }
-
-    // Sofort-Freigabe: neu eingetroffene bzw. selbst gesendete Bilder, die ins Sichtfeld kommen,
-    // werden direkt geladen – ohne dass der Nutzer erst scrollen muss. Reagiert auf Änderungen der
-    // sichtbaren Item-Keys (neue Bubble erscheint / Auto-Scroll zum neuesten Eintrag).
+    // Sequenzielle Sichtbarkeits-Warteschlange: wird NUR neu berechnet wenn nicht (mehr) gescrollt
+    // wird — während des Scrollens wird nichts Neues angestoßen, egal wie schnell gescrollt wird.
+    // Sobald das Scrollen stoppt, enthält visibleMediaQueue genau die aktuell sichtbaren Bild-/
+    // Video-/Sprachnachrichten-URLs (in Reihenfolge) — geladen wird davon immer nur die erste noch
+    // nicht fertige (activeLoadingMediaUrl), die nächste erst wenn diese fertig ist (siehe oben).
     LaunchedEffect(Unit) {
         snapshotFlow {
-            if (listState.isScrollInProgress) emptySet()
-            else listState.layoutInfo.visibleItemsInfo.map { it.key }.toSet()
+            if (listState.isScrollInProgress) null
+            else listState.layoutInfo.visibleItemsInfo.sortedBy { it.index }.map { it.key }
         }
             .distinctUntilChanged()
             .collect { visibleKeys ->
-                if (visibleKeys.isEmpty()) return@collect
-                val visibleImageUrls = messages
-                    .filter { it.localId in visibleKeys }
-                    .filter { it.mediaType == "image" && !it.mediaUrl.isNullOrBlank() }
+                if (visibleKeys == null) return@collect
+                delay(150)
+                if (listState.isScrollInProgress) return@collect
+                val byKey = messages.associateBy { it.localId }
+                visibleMediaQueue = visibleKeys.mapNotNull { byKey[it] }
+                    .filter { it.mediaType in setOf("image", "video", "audio") && !it.mediaUrl.isNullOrBlank() }
                     .mapNotNull { it.mediaUrl }
-                    .toSet()
-                val newOnes = visibleImageUrls - approvedImageUrls
-                if (newOnes.isNotEmpty()) {
-                    approvedImageUrls = approvedImageUrls + newOnes
-                }
             }
     }
 
@@ -2514,22 +2492,22 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
             .collect { userScrolledUp = it }
     }
 
-    // Scroll-basiertes Nachladen älterer Nachrichten:
-    // Triggert wenn der Nutzer in die Nähe der ältesten sichtbaren Nachrichten scrollt (reverseLayout!)
-    // Der Trigger wird direkt als Boolean berechnet (totalItems NICHT durchgereicht → kein erneutes
-    // Feuern bei jedem Listenwachstum) + debounce(250) gegen wiederholtes Auslösen in der Schwellenzone.
+    // Batch-Nachladen älterer Nachrichten: Triggert NUR wenn der Nutzer tatsächlich den oberen Rand
+    // der aktuell geladenen Nachrichten erreicht hat (das "load_more_indicator"-Sentinel-Item wird
+    // sichtbar) – kein kontinuierliches Nachladen mehr während des Scrollens. Nach dem Erreichen wird
+    // genau ein Batch von 50 Nachrichten geladen (Ladekreis erscheint), danach wird erst beim erneuten
+    // Erreichen des oberen Randes der nächste Batch nachgeladen.
     LaunchedEffect(chatId) {
         snapshotFlow {
             val layoutInfo = listState.layoutInfo
             val totalItems = layoutInfo.totalItemsCount
-            val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            // In reverseLayout: lastVisible nähert sich totalItems-1 beim Hochscrollen
-            totalItems > 0 && lastVisible >= totalItems - 15
+            val sentinelIndex = totalItems - 1
+            // In reverseLayout sitzt das Sentinel-Item (load_more_indicator) am oberen Bildschirmrand
+            totalItems > 0 && layoutInfo.visibleItemsInfo.any { it.index == sentinelIndex }
         }
             .distinctUntilChanged()
-            .debounce(250)
-            .collect { nearOldest ->
-                if (nearOldest && viewModel.hasMoreMessages(chatId)) {
+            .collect { reachedTop ->
+                if (reachedTop && viewModel.hasMoreMessages(chatId)) {
                     viewModel.loadOlderMessages(chatId)
                 }
             }
@@ -3942,10 +3920,10 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
                                             prevMusicUrl = musicPrevUrlMap[msg.mediaUrl],
                                             nextMusicUrl = musicNextUrlMap[msg.mediaUrl],
                                             allChatMusicUrls = allChatMusicUrls,
-                                            activeLoadingImageUrl = activeLoadingImageUrl,
-                                            onImageLoaded = { url -> loadedImageUrls = loadedImageUrls + url },
-                                            approvedImageUrls = approvedImageUrls,
-                                            onApproveImage = { url -> approvedImageUrls = approvedImageUrls + url },
+                                            activeLoadingMediaUrl = activeLoadingMediaUrl,
+                                            isMediaApproved = { url -> url == activeLoadingMediaUrl || url in loadedMediaUrls || url in forcedMediaUrls },
+                                            onMediaLoaded = { url -> loadedMediaUrls = loadedMediaUrls + url },
+                                            onForceLoadMedia = { url -> forcedMediaUrls = forcedMediaUrls + url },
                                             onStartVoiceRecording = {
                                                 // Wie "Senden-Button gehalten + hochgeschoben": direkt Aufnahme starten + sperren
                                                 startRecording()
@@ -7514,10 +7492,10 @@ internal fun MessageBubble(
     prevMusicUrl: String? = null,
     nextMusicUrl: String? = null,
     allChatMusicUrls: List<String> = emptyList(),
-    activeLoadingImageUrl: String? = null,
-    onImageLoaded: (String) -> Unit = {},
-    approvedImageUrls: Set<String> = emptySet(),
-    onApproveImage: (String) -> Unit = {},
+    activeLoadingMediaUrl: String? = null,
+    isMediaApproved: (String) -> Boolean = { true },
+    onMediaLoaded: (String) -> Unit = {},
+    onForceLoadMedia: (String) -> Unit = {},
     onStartVoiceRecording: (() -> Unit)? = null,
     onCallBack: ((isVideo: Boolean) -> Unit)? = null,
     onDetachMusicPlayer: () -> Unit = {}
@@ -8218,30 +8196,21 @@ internal fun MessageBubble(
                                 }
                             }
                         } else if (imageUrl != null) {
-                            // Auch eigene Bilder durch das Scroll-Stopp-Gate führen (nicht mehr
-                            // via isFromMe sofort laden): beim schnellen Hochscrollen in Chats mit
-                            // vielen selbst gesendeten Fotos löste jede Bubble sofort eine
-                            // 640×640-Bitmap-Dekodierung aus → Allokations-Lawine → OOM. Sichtbare
-                            // Bilder werden beim Scroll-Stopp ohnehin freigegeben (siehe approvedImageUrls).
-                            val imageApproved = imageUrl in approvedImageUrls
+                            // Sequenzielles Laden: nur das aktuell an der Reihe befindliche Bild
+                            // (activeLoadingMediaUrl) bzw. bereits fertig geladene/erzwungene Bilder
+                            // werden dekodiert. Bereits lokal vorhandene Bilder (öffentlicher Galerie-
+                            // Speicher) werden unabhängig von der Reihenfolge sofort angezeigt, da sie
+                            // keine Netzwerk-/Dekodier-Warteschlange belasten.
+                            val locallyAvailable = viewModel?.getPublicMediaUri(imageUrl, false) != null
+                            val imageApproved = locallyAvailable || isMediaApproved(imageUrl)
                             val imageShape = RoundedCornerShape(
                                 topStart = 16.dp, topEnd = 16.dp,
                                 bottomStart = if (isFromMe) 4.dp else 16.dp,
                                 bottomEnd = if (isFromMe) 16.dp else 4.dp
                             )
                             if (!imageApproved) {
-                                // Selbst-Freigabe beim Betrachten: Sobald diese Bild-Bubble sichtbar
-                                // in Ruhe ist, wird das Bild geladen und angezeigt – ohne dass der
-                                // Nutzer erst scrollen oder tippen muss. Ist das Bild bereits lokal
-                                // (öffentlicher Galerie-Speicher) vorhanden, sofort; andernfalls nach
-                                // kurzer Verzögerung, die beim schnellen Wegscrollen abgebrochen wird
-                                // (LaunchedEffect-Dispose) → verhindert die frühere OOM-Allokationslawine.
-                                LaunchedEffect(imageUrl) {
-                                    val locallyAvailable = viewModel?.getPublicMediaUri(imageUrl, false) != null
-                                    if (!locallyAvailable) delay(150)
-                                    onApproveImage(imageUrl)
-                                }
-                                // Platzhalter: Bild wird gerade geladen
+                                // Platzhalter: wartet auf sequenzielles Laden. Per Tap kann sofort
+                                // geladen werden, ohne auf die Reihenfolge zu warten.
                                 Box(
                                     modifier = Modifier
                                         .widthIn(min = 120.dp, max = 260.dp)
@@ -8249,7 +8218,7 @@ internal fun MessageBubble(
                                         .clip(imageShape)
                                         .background(MaterialTheme.colorScheme.surfaceVariant)
                                         .combinedClickable(
-                                            onClick = { if (!isSelectionMode) onApproveImage(imageUrl) },
+                                            onClick = { if (!isSelectionMode) onForceLoadMedia(imageUrl) },
                                             onLongClick = { onLongClick() }
                                         ),
                                     contentAlignment = Alignment.Center
@@ -8279,11 +8248,13 @@ internal fun MessageBubble(
                                     .build()
                             )
                             val imagePainterState = imagePainter.state
-                            val isActiveLoading = imageUrl == activeLoadingImageUrl
-                            // Wenn aktiv geladenes Bild fertig → als geladen melden
-                            LaunchedEffect(imagePainterState, isActiveLoading) {
-                                if (isActiveLoading && imagePainterState is AsyncImagePainter.State.Success) {
-                                    onImageLoaded(imageUrl)
+                            val isActiveLoading = imageUrl == activeLoadingMediaUrl
+                            // Fertig (Erfolg ODER Fehler) → als geladen melden, damit die Warteschlange
+                            // weiterrückt (ein fehlgeschlagenes Bild darf die Sequenz nicht blockieren).
+                            LaunchedEffect(imagePainterState, imageUrl) {
+                                if (imagePainterState is AsyncImagePainter.State.Success ||
+                                    imagePainterState is AsyncImagePainter.State.Error) {
+                                    onMediaLoaded(imageUrl)
                                 }
                             }
                             // Beim ersten Betrachten in den öffentlichen Pictures-Ordner verschieben.
@@ -8898,7 +8869,9 @@ internal fun MessageBubble(
                                 messageId = message.messageId,
                                 groupId = if (isGroup) chatId else null,
                                 nextAudioUrl = nextAudioUrl,
-                                isSelectionMode = isSelectionMode
+                                isSelectionMode = isSelectionMode,
+                                canLoad = isMediaApproved(message.mediaUrl ?: ""),
+                                onLoaded = { url -> onMediaLoaded(url) }
                             )
                         }
                     }
@@ -9121,7 +9094,9 @@ internal fun MessageBubble(
                                     url = videoUrl,
                                     viewModel = viewModel!!,
                                     modifier = Modifier.fillMaxSize(),
-                                    onAspectRatio = { ratio -> videoAspectRatio = ratio }
+                                    onAspectRatio = { ratio -> videoAspectRatio = ratio },
+                                    canLoad = isMediaApproved(videoUrl),
+                                    onLoaded = { onMediaLoaded(videoUrl) }
                                 )
                             }
                             // Aufruf tracken wenn Video im Gruppen-Chat geöffnet wird
@@ -10563,7 +10538,9 @@ fun AudioMessagePlayer(
     messageId: String? = null,
     groupId: String? = null,
     nextAudioUrl: String? = null,
-    isSelectionMode: Boolean = false
+    isSelectionMode: Boolean = false,
+    canLoad: Boolean = true,
+    onLoaded: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
     // ExoPlayer statt MediaPlayer: löst das 0:00-Dauer-Problem bei längeren Sprachnachrichten
@@ -10616,7 +10593,14 @@ fun AudioMessagePlayer(
         }
     }
 
-    LaunchedEffect(url) { viewModel.loadWaveformForUrl(url) }
+    // Waveform-Generierung nur anstoßen wenn diese Sprachnachricht an der Reihe ist (sequenzielles
+    // Laden, siehe canLoad im Aufrufer). Fertig → melden, damit die Sequenz weiterrückt.
+    LaunchedEffect(url, canLoad) {
+        if (canLoad) viewModel.loadWaveformForUrl(url)
+    }
+    LaunchedEffect(waveformData != null, url) {
+        if (waveformData != null) onLoaded(url)
+    }
 
     LaunchedEffect(playbackSpeed, isPrepared) {
         if (isPrepared) {
@@ -11139,6 +11123,7 @@ fun MusicMessagePlayer(
     val isActivelyCasting = isCasting && (castCurrentUrl == url || castCurrentUrl == castUrlTransformed)
 
     var showCastStatusDialog by remember { mutableStateOf(false) }
+    var showMediaPlayerInstallDialog by remember { mutableStateOf(false) }
 
     // ── Favorit + Playlist (persoenliche Musikbibliothek) ──────────────────────
     val favoriteMusicUrls by viewModel.favoriteMusicUrls.collectAsState()
@@ -11151,31 +11136,6 @@ fun MusicMessagePlayer(
         if (url.isBlank()) return@LaunchedEffect
         val (cachedTitle, cachedArtist) = viewModel.getCachedTitleArtist(url) ?: Pair(null, null)
         viewModel.saveMusicToLibrary(url, cachedTitle, cachedArtist, null)
-    }
-
-    val openCastChooser: () -> Unit = remember(context, url, allChatMusicUrls) {
-        {
-            val cdm = viewModel.castDiscoveryManager
-            val castUrls = allChatMusicUrls.map { viewModel.toCastUrl(it) }
-            val castUrl = viewModel.toCastUrl(url)
-            if (cdm.isCasting.value) {
-                // Session bereits aktiv: Queue direkt laden
-                val startIdx = castUrls.indexOf(castUrl).coerceAtLeast(0)
-                cdm.loadMusicQueue(castUrls, startIdx) { trackUrl ->
-                    viewModel.buildMusicCastMetadataForUrl(trackUrl)
-                }
-            } else {
-                // Noch keine Session: pending setzen, Queue wird nach Verbindungsaufbau geladen
-                cdm.pendingCastUrl = castUrl
-                cdm.pendingCastMediaMetadata = viewModel.buildMusicCastMetadataForUrl(castUrl)
-                cdm.pendingMusicQueue = castUrls
-                cdm.pendingMusicQueueStartIndex = castUrls.indexOf(castUrl).coerceAtLeast(0)
-                cdm.pendingMusicQueueMetadataBuilder = { trackUrl ->
-                    viewModel.buildMusicCastMetadataForUrl(trackUrl)
-                }
-                cdm.requestDevicePicker()
-            }
-        }
     }
 
     // Ist DIESER Player der aktive?
@@ -11254,6 +11214,13 @@ fun MusicMessagePlayer(
                     )
                 }
             }
+        )
+    }
+
+    // ── Media-Player nicht installiert: Download-Hinweis ──────────────────────
+    if (showMediaPlayerInstallDialog) {
+        com.securechat.app.MediaPlayerInstallDialog(
+            onDismiss = { showMediaPlayerInstallDialog = false }
         )
     }
 
@@ -11677,22 +11644,25 @@ fun MusicMessagePlayer(
                 }
             }
 
-            // ── Cast-Button oben rechts (nur wenn Cast-Gerät verfügbar) ───
-            if (castAvailable) {
-                IconButton(
-                    onClick = { if (isActivelyCasting) showCastStatusDialog = true else openCastChooser() },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .size(32.dp)
-                        .padding(4.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Cast,
-                        contentDescription = "Audio-Ausgabe wählen",
-                        tint = if (isActivelyCasting) Color(0xFF4FC3F7) else Color.White.copy(alpha = 0.55f),
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
+            // ── Cast-Button oben rechts: öffnet den Lethe Media Player mit der vollständigen
+            //    Stream-URL, damit dieser das Lied streamt (ID3-Tags) und von dort gecastet wird ──
+            IconButton(
+                onClick = {
+                    if (!com.securechat.app.MediaPlayerLauncher.openWithStreamUrl(context, viewModel.toCastUrl(url))) {
+                        showMediaPlayerInstallDialog = true
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(32.dp)
+                    .padding(4.dp)
+            ) {
+                Icon(
+                    Icons.Default.Cast,
+                    contentDescription = "Im Lethe Media Player casten",
+                    tint = if (isActivelyCasting) Color(0xFF4FC3F7) else Color.White.copy(alpha = 0.55f),
+                    modifier = Modifier.size(16.dp)
+                )
             }
         }
     }
@@ -11823,16 +11793,19 @@ fun VideoThumbnailImage(
     url: String,
     viewModel: MainViewModel,
     modifier: Modifier = Modifier,
-    onAspectRatio: (Float) -> Unit = {}
+    onAspectRatio: (Float) -> Unit = {},
+    canLoad: Boolean = true,
+    onLoaded: (String) -> Unit = {}
 ) {
     val thumbnailMap by viewModel.videoThumbnailMap.collectAsState()
     val failedUrls by viewModel.failedThumbnailUrls.collectAsState()
 
     val isFailed = url in failedUrls
 
-    // Netzwerk-Laden anstoßen falls noch kein Cache-Treffer und nicht bereits fehlgeschlagen
-    LaunchedEffect(url, isFailed) {
-        if (url.isNotEmpty() && thumbnailMap[url] == null && !isFailed) {
+    // Netzwerk-Laden nur anstoßen wenn noch kein Cache-Treffer, nicht bereits fehlgeschlagen und
+    // dieses Video an der Reihe ist (sequenzielles Laden, siehe canLoad im Aufrufer).
+    LaunchedEffect(url, isFailed, canLoad) {
+        if (url.isNotEmpty() && thumbnailMap[url] == null && !isFailed && canLoad) {
             viewModel.loadVideoThumbnailFromUrl(url)
         }
     }
@@ -11840,6 +11813,11 @@ fun VideoThumbnailImage(
     // displayBitmap reaktiv: aktualisiert sich wenn loadVideoThumbnailFromUrl fertig ist
     val displayBitmap = thumbnailMap[url]
     val isLoading = displayBitmap == null && url.isNotEmpty() && !isFailed
+
+    // Fertig (Erfolg oder Fehlschlag) → melden, damit die Sequenz weiterrückt
+    LaunchedEffect(displayBitmap != null, isFailed, url) {
+        if (displayBitmap != null || isFailed) onLoaded(url)
+    }
 
     // Seitenverhältnis melden sobald Bitmap da
     LaunchedEffect(displayBitmap) {
@@ -17799,42 +17777,21 @@ fun DetachedMusicPlayerOverlay(
                     Icon(Icons.Default.SkipNext, contentDescription = "Weiter",
                         modifier = Modifier.size(24.dp))
                 }
-                // Cast – nur wenn Cast-Gerät verfügbar
-                if (castAvailable) {
-                    IconButton(
-                        onClick  = {
-                            if (isActivelyCasting) {
-                                showCastDeviceDialog = true
-                            } else {
-                                val cdm = viewModel.castDiscoveryManager
-                                val castUrls = allChatMusicUrls.map { viewModel.toCastUrl(it) }
-                                val castUrl  = viewModel.toCastUrl(displayUrl)
-                                if (cdm.isCasting.value) {
-                                    val startIdx = castUrls.indexOf(castUrl).coerceAtLeast(0)
-                                    cdm.loadMusicQueue(castUrls, startIdx) { trackUrl ->
-                                        viewModel.buildMusicCastMetadataForUrl(trackUrl)
-                                    }
-                                } else {
-                                    cdm.pendingCastUrl = castUrl
-                                    cdm.pendingCastMediaMetadata = viewModel.buildMusicCastMetadataForUrl(castUrl)
-                                    cdm.pendingMusicQueue = castUrls
-                                    cdm.pendingMusicQueueStartIndex = castUrls.indexOf(castUrl).coerceAtLeast(0)
-                                    cdm.pendingMusicQueueMetadataBuilder = { trackUrl ->
-                                        viewModel.buildMusicCastMetadataForUrl(trackUrl)
-                                    }
-                                    cdm.requestDevicePicker()
-                                }
-                            }
-                        },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Cast,
-                            contentDescription = "Auf TV streamen",
-                            modifier = Modifier.size(20.dp),
-                            tint     = if (isActivelyCasting) Color(0xFF4FC3F7) else MaterialTheme.colorScheme.primary
-                        )
-                    }
+                // Cast – öffnet den Lethe Media Player mit der vollständigen Stream-URL
+                IconButton(
+                    onClick  = {
+                        if (!com.securechat.app.MediaPlayerLauncher.openWithStreamUrl(context, viewModel.toCastUrl(displayUrl))) {
+                            showMediaPlayerInstallDialog = true
+                        }
+                    },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Cast,
+                        contentDescription = "Im Lethe Media Player casten",
+                        modifier = Modifier.size(20.dp),
+                        tint     = if (isActivelyCasting) Color(0xFF4FC3F7) else MaterialTheme.colorScheme.primary
+                    )
                 }
             }
         }

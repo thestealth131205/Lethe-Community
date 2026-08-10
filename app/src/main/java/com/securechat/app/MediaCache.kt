@@ -1,6 +1,7 @@
 package com.securechat.app
 
 import android.content.Context
+import com.securechat.app.data.local.ProfileManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -15,8 +16,10 @@ import javax.inject.Singleton
  * Lokaler Medien-Cache für Lethe.
  *
  * Lädt Dateien von einer URL herunter und speichert sie dauerhaft im internen
- * App-Speicher (filesDir/media_cache/<subDir>/). Nachfolgende Aufrufe mit
- * derselben URL liefern sofort die gecachte Datei zurück, ohne Netzwerk-Anfrage.
+ * App-Speicher (filesDir/media_cache/<profil>/<subDir>/) – pro aktivem Profil
+ * (Account) isoliert, damit Medien verschiedener Accounts auf demselben Gerät
+ * nicht vermischt werden. Nachfolgende Aufrufe mit derselben URL liefern sofort
+ * die gecachte Datei zurück, ohne Netzwerk-Anfrage.
  *
  * Empfohlene subDir-Werte:
  *   "images"   – Profilbilder, Chat-Bilder
@@ -31,8 +34,12 @@ class MediaCache @Inject constructor(
     @ApplicationContext private val context: Context,
     private val okHttpClient: OkHttpClient
 ) {
+    /** Sanitizter Profil-Ordnername des aktuell aktiven Accounts. */
+    private fun profileFolder(): String =
+        ProfileManager.getActiveProfile(context).ifBlank { "default" }
+
     private val cacheRoot: File
-        get() = File(context.filesDir, "media_cache").also { it.mkdirs() }
+        get() = File(context.filesDir, "media_cache/${profileFolder()}").also { it.mkdirs() }
 
     // -------------------------------------------------------------------------
     // Public API
@@ -162,8 +169,8 @@ class MediaCache @Inject constructor(
     // -------------------------------------------------------------------------
 
     private fun publicRelativePath(isVideo: Boolean): String =
-        if (isVideo) "${android.os.Environment.DIRECTORY_MOVIES}/Lethe"
-        else "${android.os.Environment.DIRECTORY_PICTURES}/Lethe"
+        if (isVideo) "${android.os.Environment.DIRECTORY_MOVIES}/Lethe/${profileFolder()}"
+        else "${android.os.Environment.DIRECTORY_PICTURES}/Lethe/${profileFolder()}"
 
     /** Stabiler Anzeigename auf Basis des URL-Hashes (analog zum internen Cache). */
     private fun publicDisplayName(url: String, isVideo: Boolean): String {
@@ -201,7 +208,7 @@ class MediaCache @Inject constructor(
                 val type = if (isVideo) android.os.Environment.DIRECTORY_MOVIES
                 else android.os.Environment.DIRECTORY_PICTURES
                 @Suppress("DEPRECATION")
-                val dir = File(android.os.Environment.getExternalStoragePublicDirectory(type), "Lethe")
+                val dir = File(android.os.Environment.getExternalStoragePublicDirectory(type), "Lethe/${profileFolder()}")
                 val f = File(dir, displayName)
                 if (f.exists() && f.length() > 0) android.net.Uri.fromFile(f) else null
             }
@@ -265,7 +272,7 @@ class MediaCache @Inject constructor(
                     val type = if (isVideo) android.os.Environment.DIRECTORY_MOVIES
                     else android.os.Environment.DIRECTORY_PICTURES
                     @Suppress("DEPRECATION")
-                    val dir = File(android.os.Environment.getExternalStoragePublicDirectory(type), "Lethe")
+                    val dir = File(android.os.Environment.getExternalStoragePublicDirectory(type), "Lethe/${profileFolder()}")
                         .also { it.mkdirs() }
                     val dest = File(dir, displayName)
                     source.inputStream().use { input ->
