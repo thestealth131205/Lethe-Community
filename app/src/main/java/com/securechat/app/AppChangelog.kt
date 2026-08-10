@@ -24,6 +24,15 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.147",
+            title = "Lethe Media Player synchronisiert",
+            items = listOf(
+                "Der Lethe Media Player wird jetzt bei jedem App-Update zuverl\u00e4ssig mit aktualisiert, damit Versionsanzeige und Update-Erkennung im Player immer auf dem neuesten Stand sind",
+            ),
+            shortSummary = "Lethe Media Player wird jetzt zuverl\u00e4ssig mit der App aktualisiert"
+        ),
+
+        ChangelogEntry(
             version = "10.4.146",
             title = "Gruppen-Verschlüsselung & fl\u00fcssigeres Laden im Chat",
             items = listOf(
@@ -51,18 +60,6 @@ object AppChangelog {
                 "Behoben: Nach l\u00e4ngerer Zeit im Hintergrund (z.B. \u00fcber Nacht) konnte es passieren, dass einzelne per Benachrichtigung angezeigte Nachrichten nicht im Chatverlauf auftauchten \u2013 fehlende Nachrichten werden beim Wiederverbinden jetzt zuverl\u00e4ssiger nachgeladen",
             ),
             shortSummary = "Musiknachrichten \u00f6ffnen direkt den Lethe Media Player, dazu zuverl\u00e4ssigeres Nachladen fehlender Nachrichten"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.143",
-            title = "Mehrkonten-Fix & Medien-Player-Download",
-            items = listOf(
-                "Behoben: Beim Wechseln zwischen mehreren Konten auf demselben Ger\u00e4t landete man nach einem Neustart manchmal im falschen Konto \u2013 Anmeldedaten werden jetzt zuverl\u00e4ssig dem richtigen Konto zugeordnet",
-                "Behoben: In der Konto-Liste des Konto-Wechslers fehlten teilweise gespeicherte Konten",
-                "Zwischengespeicherte Medien (Bilder/Videos) werden jetzt sauber pro Konto getrennt abgelegt, statt sich bei mehreren Konten auf demselben Ger\u00e4t zu vermischen",
-                "Neu: Tippt man im Chat auf das Cast-Symbol und der Lethe Media Player ist nicht installiert, \u00f6ffnet sich jetzt eine Download-Seite daf\u00fcr",
-            ),
-            shortSummary = "Fix f\u00fcr Mehrkonten-Wechsel und neue Download-Seite f\u00fcr den Lethe Media Player"
         ),
 
     )
