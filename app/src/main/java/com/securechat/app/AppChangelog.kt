@@ -24,6 +24,17 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.148",
+            title = "Blockieren jetzt klar sichtbar",
+            items = listOf(
+                "Wenn du jemanden blockierst, wird das Eingabefeld im Chat jetzt deutlich gekennzeichnet, damit klar ist, dass keine Nachrichten mehr gesendet werden können",
+                "Auch die blockierte Person sieht jetzt direkt im Eingabefeld, dass sie dir nicht mehr schreiben kann",
+                "In der Kontaktliste zeigt das Menü bei bereits blockierten Kontakten jetzt \u201eBlockierung aufheben\u201c statt \u201eBlockieren\u201c an",
+            ),
+            shortSummary = "Blockieren ist jetzt für beide Seiten klar im Chat und in der Kontaktliste erkennbar"
+        ),
+
+        ChangelogEntry(
             version = "10.4.147",
             title = "Lethe Media Player synchronisiert",
             items = listOf(
@@ -50,16 +61,6 @@ object AppChangelog {
                 "Beim Hochscrollen im Chatverlauf werden \u00e4ltere Nachrichten jetzt in klaren 50er-Bl\u00f6cken nachgeladen (mit Ladekreis), statt fortlaufend im Hintergrund nachzuladen",
             ),
             shortSummary = "Weniger unn\u00f6tige Benachrichtigungen, dazu \u00fcbersichtlicheres Nachladen \u00e4lterer Chat-Nachrichten"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.144",
-            title = "Musik im Media Player streamen & Nachrichten-Nachladen",
-            items = listOf(
-                "Neu: Tippt man im Chat auf das Cast-Symbol einer Musiknachricht, \u00f6ffnet sich jetzt direkt der Lethe Media Player und streamt den Titel \u2013 inklusive Titel, K\u00fcnstler und Cover. Von dort l\u00e4sst sich wie gewohnt auf Lautsprecher casten",
-                "Behoben: Nach l\u00e4ngerer Zeit im Hintergrund (z.B. \u00fcber Nacht) konnte es passieren, dass einzelne per Benachrichtigung angezeigte Nachrichten nicht im Chatverlauf auftauchten \u2013 fehlende Nachrichten werden beim Wiederverbinden jetzt zuverl\u00e4ssiger nachgeladen",
-            ),
-            shortSummary = "Musiknachrichten \u00f6ffnen direkt den Lethe Media Player, dazu zuverl\u00e4ssigeres Nachladen fehlender Nachrichten"
         ),
 
     )

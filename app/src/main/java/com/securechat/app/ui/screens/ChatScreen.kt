@@ -1514,6 +1514,8 @@ fun ChatScreen(
     val isContactBlocked = remember(blockedUsers, chatId) {
         blockedUsers.any { it.blockedId == chatId }
     }
+    // Umgekehrter Fall: der Partner hat MICH blockiert (ich kann ihm nicht mehr schreiben)
+    val amIBlockedByContact = contact?.blockedByPartner == true
     var showEditGroupDialog by remember { mutableStateOf(false) }
     var showGroupEditScreen by remember { mutableStateOf(false) }
     var showGroupCalendarSheet by remember { mutableStateOf(false) }
@@ -3308,8 +3310,8 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
                                     }
                                 )
                             }
-                            // Lumis-Effekt senden (nur wenn nicht blockiert)
-                            if (!isContactBlocked) {
+                            // Lumis-Effekt senden (nur wenn nicht blockiert, in keine Richtung)
+                            if (!isContactBlocked && !amIBlockedByContact) {
                                 DropdownMenuItem(
                                     text = { Text("Lumis senden") },
                                     leadingIcon = { Icon(Icons.Default.AutoAwesome, null) },
@@ -4714,6 +4716,57 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
                             placeholder = {
                                 Text(
                                     "Diese Funktion steht nicht zur Verfügung",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                                )
+                            },
+                            colors = TextFieldDefaults.colors(
+                                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                disabledIndicatorColor = Color.Transparent
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        IconButton(onClick = {}, enabled = false, modifier = Modifier.size(40.dp)) {
+                            Icon(
+                                Icons.Default.AttachFile,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                            )
+                        }
+                        IconButton(onClick = {}, enabled = false, modifier = Modifier.size(40.dp)) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.Send,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                            )
+                        }
+                    }
+                }
+            } else if (amIBlockedByContact) {
+                // Partner hat MICH blockiert — komplett ausgegraut, keine Funktionen
+                Surface(tonalElevation = 8.dp) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = {}, enabled = false, modifier = Modifier.size(40.dp)) {
+                            Icon(
+                                Icons.Default.EmojiEmotions,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                            )
+                        }
+                        TextField(
+                            value = TextFieldValue(""),
+                            onValueChange = {},
+                            enabled = false,
+                            modifier = Modifier.weight(1f),
+                            placeholder = {
+                                Text(
+                                    "Du kannst diesem Kontakt keine Nachrichten mehr senden",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                                 )

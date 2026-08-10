@@ -8,7 +8,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [UserEntity::class, ContactEntity::class, MessageEntity::class, StatusEntity::class, PollEntity::class, GroupEntity::class, GroupSenderKeyEntity::class, MusicMetadataEntity::class],
-    version = 38,
+    version = 39,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -334,6 +334,13 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 // Opt-in Chat-Backup: Dedup-Flag, verhindert erneuten Upload bereits gesicherter Nachrichten
                 db.execSQL("ALTER TABLE messages ADD COLUMN backedUp INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        val MIGRATION_38_39 = object : Migration(38, 39) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // True = der Partner hat MICH blockiert (ich kann ihm nicht mehr schreiben)
+                db.execSQL("ALTER TABLE contacts ADD COLUMN blockedByPartner INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

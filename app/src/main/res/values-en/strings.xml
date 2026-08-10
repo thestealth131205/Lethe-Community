@@ -683,6 +683,7 @@
     <string name="contacts_block_title">Block?</string>
     <string name="contacts_block_text">Block %1$s?\n\nThis person can no longer send you messages. The contact remains in your list, you can delete them separately.</string>
     <string name="contacts_block_confirm">Block</string>
+    <string name="contacts_unblock_confirm">Unblock</string>
     <string name="contacts_menu_age_verify">Verify Age</string>
 
     <!-- ── BATCH 1 EXTRA ── -->

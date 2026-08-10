@@ -682,6 +682,7 @@
     <string name="contacts_block_title">Bloquer ?</string>
     <string name="contacts_block_text">Bloquer %1$s ?\n\nCette personne ne pourra plus vous envoyer de messages. Le contact reste dans votre liste, vous pouvez le supprimer séparément.</string>
     <string name="contacts_block_confirm">Bloquer</string>
+    <string name="contacts_unblock_confirm">Débloquer</string>
     <string name="contacts_menu_age_verify">Vérifier l\'âge</string>
 
     <!-- ── BATCH 1 EXTRA ── -->

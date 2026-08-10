@@ -682,6 +682,7 @@
     <string name="contacts_block_title">Blokkeren?</string>
     <string name="contacts_block_text">%1$s blokkeren?\n\nDeze persoon kan je geen berichten meer sturen. Het contact blijft in je lijst, je kunt het apart verwijderen.</string>
     <string name="contacts_block_confirm">Blokkeren</string>
+    <string name="contacts_unblock_confirm">Deblokkeren</string>
     <string name="contacts_menu_age_verify">Leeftijd verifiëren</string>
 
     <!-- ── BATCH 1 EXTRA ── -->

@@ -15,8 +15,8 @@ android {
         minSdk = 26
         targetSdk = 36
         // Version gespiegelt von der Haupt-App
-        versionCode = 100547
-        versionName = "10.4.147"
+        versionCode = 100548
+        versionName = "10.4.148"
     }
 
     signingConfigs {

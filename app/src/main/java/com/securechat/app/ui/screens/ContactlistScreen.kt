@@ -1687,6 +1687,10 @@ fun ContactlistScreen(
     // ── Long-Press Aktions-Dialog ─────────────────────────────────────────────
     longPressContact?.let { contact ->
         val isContactPinned = contact.userId in pinnedContactIds
+        val blockedUsersLp by viewModel.blockedUsers.collectAsState()
+        val isContactBlockedLp = remember(blockedUsersLp, contact.userId) {
+            blockedUsersLp.any { it.blockedId == contact.userId }
+        }
         AlertDialog(
             onDismissRequest = { longPressContact = null },
             title = { Text(contact.customAlias ?: contact.username ?: contact.fakeNumber) },
@@ -1753,11 +1757,21 @@ fun ContactlistScreen(
                     TextButton(
                         onClick = {
                             longPressContact = null
-                            blockTargetContact = contact
+                            if (isContactBlockedLp) {
+                                viewModel.unblockUser(contact.userId)
+                            } else {
+                                blockTargetContact = contact
+                            }
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(stringResource(com.securechat.app.R.string.contacts_block_confirm), color = MaterialTheme.colorScheme.error)
+                        Text(
+                            if (isContactBlockedLp)
+                                stringResource(com.securechat.app.R.string.contacts_unblock_confirm)
+                            else
+                                stringResource(com.securechat.app.R.string.contacts_block_confirm),
+                            color = MaterialTheme.colorScheme.error
+                        )
                     }
                 }
             },

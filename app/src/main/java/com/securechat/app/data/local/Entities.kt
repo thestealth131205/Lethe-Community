@@ -52,7 +52,8 @@ data class ContactEntity(
     val youtube: String? = null,
     val info: String? = null,
     val letheId: String? = null,      // Eindeutige LetheID des Kontakts (für anonymen Chat-Flow)
-    val isVerified: Boolean = false   // Bezahlter Verifizierungshaken
+    val isVerified: Boolean = false,  // Bezahlter Verifizierungshaken
+    val blockedByPartner: Boolean = false // True = der Partner hat MICH blockiert (ich kann ihm nicht mehr schreiben)
 )
 
 /**

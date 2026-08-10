@@ -406,7 +406,8 @@ data class ContactListItem(
     @SerializedName("partner_youtube") val partnerYoutube: String? = null,
     @SerializedName("partner_info") val partnerInfo: String? = null,
     @SerializedName("partner_is_verified") val partnerIsVerified: Boolean = false,
-    @SerializedName("partner_p2p_enabled") val partnerP2pEnabled: Boolean = false
+    @SerializedName("partner_p2p_enabled") val partnerP2pEnabled: Boolean = false,
+    @SerializedName("blocked_by_partner") val blockedByPartner: Boolean = false
 )
 
 // Request für PUT /users/me/p2p (P2P-Internet ein-/ausschalten)

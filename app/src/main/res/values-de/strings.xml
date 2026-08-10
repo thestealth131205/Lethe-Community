@@ -743,6 +743,7 @@
     <string name="contacts_block_title">Blockieren?</string>
     <string name="contacts_block_text">%1$s blockieren?\n\nDiese Person kann dir keine Nachrichten mehr schicken. Der Kontakt bleibt in deiner Liste, du kannst ihn separat löschen.</string>
     <string name="contacts_block_confirm">Blockieren</string>
+    <string name="contacts_unblock_confirm">Blockierung aufheben</string>
     <string name="contacts_menu_age_verify">Alter verifizieren</string>
 
     <!-- ── BATCH 1 EXTRA ── -->

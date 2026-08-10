@@ -7753,6 +7753,7 @@ class MainViewModel @Inject constructor(
                     val pmLogin = context.getSystemService(Context.POWER_SERVICE) as PowerManager
                     updateOnlineStatus(_isAppInForeground.value && pmLogin.isInteractive)
                     loadContacts()
+                    loadBlockedUsers()
                     loadLinkedDevices()
                     loadEnrolledDevices()
                     loadGroups()
@@ -8985,6 +8986,7 @@ class MainViewModel @Inject constructor(
                     val pmAutoRestore = context.getSystemService(Context.POWER_SERVICE) as PowerManager
                     updateOnlineStatus(_isAppInForeground.value && pmAutoRestore.isInteractive)
                     loadContacts()
+                    loadBlockedUsers()
                     loadLinkedDevices()
                     loadEnrolledDevices()
                     loadGroups()
@@ -15758,7 +15760,8 @@ class MainViewModel @Inject constructor(
                                 youtube = item.partnerYoutube,
                                 info = item.partnerInfo,
                                 letheId = item.partnerLetheId,
-                                isVerified = item.partnerIsVerified
+                                isVerified = item.partnerIsVerified,
+                                blockedByPartner = item.blockedByPartner
                             )
                         )
                         withContext(Dispatchers.IO) {
