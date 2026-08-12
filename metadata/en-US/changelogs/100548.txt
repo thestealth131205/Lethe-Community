@@ -1,0 +1,5 @@
+Blocking is now clearly visible
+
+- When you block someone, the message input field in the chat is now clearly marked, so it's obvious that no more messages can be sent
+- The blocked person also now sees directly in the input field that they can no longer write to you
+- In the contact list, the menu for already blocked contacts now shows "Unblock" instead of "Block"

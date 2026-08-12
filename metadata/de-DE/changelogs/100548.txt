@@ -1,0 +1,5 @@
+Blockieren jetzt klar sichtbar
+
+- Wenn du jemanden blockierst, wird das Eingabefeld im Chat jetzt deutlich gekennzeichnet, damit klar ist, dass keine Nachrichten mehr gesendet werden können
+- Auch die blockierte Person sieht jetzt direkt im Eingabefeld, dass sie dir nicht mehr schreiben kann
+- In der Kontaktliste zeigt das Menü bei bereits blockierten Kontakten jetzt "Blockierung aufheben" statt "Blockieren" an

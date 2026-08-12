@@ -1,0 +1,7 @@
+# CODEOWNERS
+# Legt fest, wer für Änderungen an diesem Repository verantwortlich ist
+# und automatisch als Reviewer vorgeschlagen wird.
+# Syntax: https://docs.gitlab.com/user/project/codeowners/reference/
+# (GitHub verwendet dasselbe Format: https://docs.github.com/articles/about-code-owners)
+
+* @thestealth131205
