@@ -1,0 +1,16 @@
+Lethe is an end-to-end encrypted communication app that combines messaging, dating and creator content in a single free application. The goal: absolute security and real comfort, without compromising on privacy.
+
+Features:
+
+* End-to-end encryption for all chats, calls and shared media
+* Optional peer-to-peer mode for messages via WebRTC, directly between devices
+* Optional routing through the Tor network to hide your IP address
+* Multi-device key sync between your phone and the web client
+* Voice and video calls, group chats, polls, status updates
+* Dating feature with location-based matching
+* Creator portal with posts, short videos and live streaming
+* Fully open source under the GPL-3.0-or-later license
+
+This FOSS build of Lethe is deliberately free of proprietary dependencies: no Google Play Services, no Firebase Cloud Messaging, no Google Maps, no proprietary payment or advertising SDKs. Push notifications, maps, in-app purchases and every other feature run on open alternatives instead.
+
+The server operator only ever stores encrypted content and cannot read your messages. The source code can be inspected, audited and improved by anyone at any time.
