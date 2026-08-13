@@ -1,0 +1,5 @@
+Lethe Assistant leichter finden & Galerie-Fix
+
+- Der offizielle Lethe-Bot (Lethe Assistant) ist jetzt für alle Nutzer direkt beim Hinzufügen eines Kontakts unter „Bots" sichtbar – ohne Suche
+- Behoben: Nachrichten mit mehreren Bildern wurden in der Medien-Galerie eines Chats manchmal nicht korrekt angezeigt – jedes Bild erscheint dort jetzt einzeln
+- Geteilte Song-Links aus dem Lethe Media Player nutzen jetzt eine kürzere Adresse (songs.letheapp.de) – bereits geteilte alte Links funktionieren weiterhin

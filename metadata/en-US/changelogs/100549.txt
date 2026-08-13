@@ -1,0 +1,5 @@
+Easier to find the Lethe Assistant & gallery fix
+
+- The official Lethe bot (Lethe Assistant) is now visible to all users directly under "Bots" when adding a contact – no search needed
+- Fixed: messages with multiple images were sometimes not shown correctly in a chat's media gallery – each image now appears individually
+- Shared song links from the Lethe Media Player now use a shorter address (songs.letheapp.de) – previously shared links keep working
