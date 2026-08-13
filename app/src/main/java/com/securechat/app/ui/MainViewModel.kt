@@ -15706,6 +15706,23 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    /** Lädt die offiziellen Lethe-Bots (z.B. Lethe Assistant) — für alle User ohne Suche sichtbar. */
+    fun getFeaturedBots(onResult: (List<com.securechat.app.data.network.BotPublicResponse>) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val response = apiService.getFeaturedBots()
+                if (response.isSuccessful) {
+                    onResult(response.body() ?: emptyList())
+                } else {
+                    onResult(emptyList())
+                }
+            } catch (e: Exception) {
+                Timber.tag("Bots").e("Laden der offiziellen Bots fehlgeschlagen", e)
+                onResult(emptyList())
+            }
+        }
+    }
+
     fun respondToContactRequest(entryId: String, action: String) {
         viewModelScope.launch {
             try {

@@ -38,6 +38,8 @@ fun AddContactDialog(
     onAddContact: (fakeNumber: String, name: String) -> Unit,
     onLookupByPhone: ((phoneE164: String, onResult: (fakeNumber: String?) -> Unit) -> Unit)? = null,
     onSearchBots: ((query: String, onResult: (List<BotPublicResponse>) -> Unit) -> Unit)? = null,
+    /** Lädt die offiziellen Lethe-Bots (z.B. Lethe Assistant) — für alle User ohne Suche sichtbar. */
+    onLoadFeaturedBots: ((onResult: (List<BotPublicResponse>) -> Unit) -> Unit)? = null,
     /** Sendet ein Nearby-Like per Benutzername (NearbyID). */
     onSendNearbyLike: ((username: String, onResult: (Boolean) -> Unit) -> Unit)? = null,
     isAdmin: Boolean = false,
@@ -52,7 +54,7 @@ fun AddContactDialog(
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    // Tab: 0 = Telefon, 1 = Direkt, 2 = NearbyID, 3 = Bots (admin)
+    // Tab: 0 = Telefon, 1 = Direkt, 2 = NearbyID, 3 = Bots
     var selectedTab by remember { mutableStateOf(0) }
     var directId by remember { mutableStateOf("") }
 
@@ -60,10 +62,23 @@ fun AddContactDialog(
     var nearbyUsername by remember { mutableStateOf("") }
     var nearbyResult by remember { mutableStateOf<String?>(null) }
 
-    // Bot-Suche
+    // Bot-Suche (nur Admin)
     var botQuery by remember { mutableStateOf("") }
     var botResults by remember { mutableStateOf<List<BotPublicResponse>>(emptyList()) }
     var botSearchLoading by remember { mutableStateOf(false) }
+
+    // Offizielle Bots (z.B. Lethe Assistant) - fuer alle User ohne Suche
+    var featuredBots by remember { mutableStateOf<List<BotPublicResponse>>(emptyList()) }
+    var featuredBotsLoading by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (onLoadFeaturedBots != null) {
+            featuredBotsLoading = true
+            onLoadFeaturedBots { results ->
+                featuredBots = results
+                featuredBotsLoading = false
+            }
+        }
+    }
 
     Dialog(onDismissRequest = { if (!isLoading) onDismiss() }) {
         Surface(
@@ -99,11 +114,9 @@ fun AddContactDialog(
                     Tab(selected = selectedTab == 2, onClick = { selectedTab = 2; errorMessage = null; nearbyResult = null },
                         icon = { Icon(Icons.Default.Favorite, contentDescription = null, modifier = Modifier.size(16.dp)) },
                         text = { Text(stringResource(R.string.contact_add_tab_nearby), fontSize = 12.sp) })
-                    if (isAdmin) {
-                        Tab(selected = selectedTab == 3, onClick = { selectedTab = 3; errorMessage = null; nearbyResult = null },
-                            icon = { Icon(Icons.Default.SmartToy, contentDescription = null, modifier = Modifier.size(16.dp)) },
-                            text = { Text(stringResource(R.string.contact_add_tab_bots), fontSize = 12.sp) })
-                    }
+                    Tab(selected = selectedTab == 3, onClick = { selectedTab = 3; errorMessage = null; nearbyResult = null },
+                        icon = { Icon(Icons.Default.SmartToy, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                        text = { Text(stringResource(R.string.contact_add_tab_bots), fontSize = 12.sp) })
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -296,8 +309,8 @@ fun AddContactDialog(
                         }
                     }
 
-                    // ── Tab 3: Bot-Suche ──────────────────────────────────
-                    3 -> {
+                    // ── Tab 3: Bots ────────────────────────────────────────
+                    3 -> if (isAdmin) {
                         OutlinedTextField(
                             value = botQuery,
                             onValueChange = { botQuery = it },
@@ -334,50 +347,32 @@ fun AddContactDialog(
                         if (botResults.isNotEmpty()) {
                             LazyColumn(modifier = Modifier.heightIn(max = 220.dp)) {
                                 items(botResults) { bot ->
-                                    ListItem(
-                                        headlineContent = {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Text(bot.name, fontWeight = FontWeight.SemiBold)
-                                                Spacer(Modifier.width(6.dp))
-                                                Surface(
-                                                    shape = RoundedCornerShape(4.dp),
-                                                    color = MaterialTheme.colorScheme.primaryContainer
-                                                ) {
-                                                    Text(stringResource(R.string.contact_add_bot_tag), fontSize = 9.sp, fontWeight = FontWeight.Bold,
-                                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp))
-                                                }
-                                            }
-                                        },
-                                        supportingContent = {
-                                            Text(
-                                                bot.description ?: bot.fakeNumber,
-                                                fontSize = 12.sp,
-                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                                maxLines = 1
-                                            )
-                                        },
-                                        leadingContent = {
-                                            Surface(
-                                                modifier = Modifier.size(40.dp),
-                                                shape = RoundedCornerShape(10.dp),
-                                                color = MaterialTheme.colorScheme.secondaryContainer
-                                            ) {
-                                                Box(contentAlignment = Alignment.Center) {
-                                                    Icon(Icons.Default.SmartToy, contentDescription = null,
-                                                        modifier = Modifier.size(22.dp),
-                                                        tint = MaterialTheme.colorScheme.primary)
-                                                }
-                                            }
-                                        },
-                                        modifier = Modifier.clickable {
-                                            onAddContact(bot.fakeNumber, bot.name)
-                                        }
-                                    )
+                                    BotListItem(bot = bot, onClick = { onAddContact(bot.fakeNumber, bot.name) })
                                     HorizontalDivider(thickness = 0.5.dp)
                                 }
                             }
                         } else if (!botSearchLoading && botQuery.isNotBlank()) {
+                            Text(
+                                stringResource(R.string.contact_add_bot_not_found),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        }
+                    } else {
+                        // Normale User: keine Suche, nur die offiziellen Lethe-Bots (z.B. Lethe Assistant)
+                        if (featuredBotsLoading) {
+                            Box(modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                            }
+                        } else if (featuredBots.isNotEmpty()) {
+                            LazyColumn(modifier = Modifier.heightIn(max = 220.dp)) {
+                                items(featuredBots) { bot ->
+                                    BotListItem(bot = bot, onClick = { onAddContact(bot.fakeNumber, bot.name) })
+                                    HorizontalDivider(thickness = 0.5.dp)
+                                }
+                            }
+                        } else {
                             Text(
                                 stringResource(R.string.contact_add_bot_not_found),
                                 style = MaterialTheme.typography.bodySmall,
@@ -390,4 +385,46 @@ fun AddContactDialog(
             }
         }
     }
+}
+
+@Composable
+private fun BotListItem(bot: BotPublicResponse, onClick: () -> Unit) {
+    ListItem(
+        headlineContent = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(bot.name, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.width(6.dp))
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Text(stringResource(R.string.contact_add_bot_tag), fontSize = 9.sp, fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp))
+                }
+            }
+        },
+        supportingContent = {
+            Text(
+                bot.description ?: bot.fakeNumber,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                maxLines = 1
+            )
+        },
+        leadingContent = {
+            Surface(
+                modifier = Modifier.size(40.dp),
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.SmartToy, contentDescription = null,
+                        modifier = Modifier.size(22.dp),
+                        tint = MaterialTheme.colorScheme.primary)
+                }
+            }
+        },
+        modifier = Modifier.clickable { onClick() }
+    )
 }

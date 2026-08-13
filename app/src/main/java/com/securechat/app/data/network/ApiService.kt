@@ -1181,6 +1181,10 @@ interface ApiService {
     @GET("bots/list")
     suspend fun searchBots(@Query("q") query: String): Response<List<BotPublicResponse>>
 
+    /** Offizielle Lethe-Bots (z.B. Lethe Assistant) für alle User ohne Suche/Admin. */
+    @GET("bots/featured")
+    suspend fun getFeaturedBots(): Response<List<BotPublicResponse>>
+
     /** Startet einen Bot-Chat (auto-accepted, kein Handshake). */
     @POST("bots/{botFakeNumber}/start")
     suspend fun startBotChat(@Path("botFakeNumber") botFakeNumber: String): Response<BotStartResponse>

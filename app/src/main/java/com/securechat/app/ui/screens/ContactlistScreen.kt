@@ -1660,6 +1660,9 @@ fun ContactlistScreen(
             onSearchBots = { query, onResult ->
                 viewModel.searchBots(query, onResult)
             },
+            onLoadFeaturedBots = { onResult ->
+                viewModel.getFeaturedBots(onResult)
+            },
             onSendNearbyLike = { username, onResult ->
                 viewModel.sendNearbyLikeByUsername(username, onResult)
             },

@@ -11938,6 +11938,39 @@ fun VideoThumbnailImage(
 // Medien-Galerie Dialog
 // ======================================================================
 
+// Parst die JSON-URL-Liste einer "multi_image"-Nachricht (mediaType == "multi_image").
+// Fallback für alte/korrumpierte Nachrichten deckt einen früheren Bug ab, bei dem
+// "https://letheapp.de" versehentlich vor das JSON-Array geschrieben wurde.
+private fun parseMultiImageUrls(json: String): List<String> {
+    fun parseUrls(str: String): List<String>? = try {
+        val arr = org.json.JSONArray(str)
+        List(arr.length()) { arr.getString(it) }
+            .map { if (it.startsWith("http")) it else "https://letheapp.de$it" }
+            .takeIf { it.isNotEmpty() }
+    } catch (_: Exception) { null }
+    return parseUrls(json) ?: parseUrls(json.removePrefix("https://letheapp.de")) ?: emptyList()
+}
+
+// Ein einzelnes Foto/Video-Kachel-Eintrag in der Medien-Galerie. Bei "multi_image"-
+// Nachrichten wird EINE MessageEntity in mehrere GalleryEntry (eins pro enthaltenem
+// Bild) aufgeteilt, statt die rohe JSON-URL-Liste als ein einzelnes (nicht render-
+// bares) Bild anzuzeigen.
+private data class GalleryEntry(val message: MessageEntity, val url: String?, val entryKey: String)
+
+private fun buildGalleryEntries(items: List<MessageEntity>): List<GalleryEntry> =
+    items.flatMap { m ->
+        if (m.mediaType == "multi_image") {
+            val urls = m.mediaUrl?.let { parseMultiImageUrls(it) } ?: emptyList()
+            if (urls.isNotEmpty()) {
+                urls.mapIndexed { idx, u -> GalleryEntry(m, u, "${m.localId}_$idx") }
+            } else {
+                listOf(GalleryEntry(m, null, "${m.localId}_0"))
+            }
+        } else {
+            listOf(GalleryEntry(m, m.mediaUrl, m.localId.toString()))
+        }
+    }
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 private fun ChatMediaDialog(
@@ -11963,6 +11996,7 @@ private fun ChatMediaDialog(
     var fullscreenImageUrl by remember { mutableStateOf<String?>(null) }
     var fullscreenVideoUrl by remember { mutableStateOf<String?>(null) }
     var mediaActionMessage by remember { mutableStateOf<MessageEntity?>(null) }
+    var mediaActionUrl by remember { mutableStateOf<String?>(null) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -12044,7 +12078,9 @@ private fun ChatMediaDialog(
                     val items = groupedMedia[tabName] ?: emptyList()
 
                     if (tabName == "Fotos & Videos" || tabName == "Sticker/GIFs") {
-                        // 3-spaltiges Grid
+                        // 3-spaltiges Grid. "multi_image"-Nachrichten werden in einzelne
+                        // GalleryEntry (ein Eintrag pro enthaltenem Bild) aufgesplittet.
+                        val galleryEntries = remember(items) { buildGalleryEntries(items) }
                         androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
                             columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(3),
                             modifier = Modifier.fillMaxSize(),
@@ -12052,18 +12088,22 @@ private fun ChatMediaDialog(
                             horizontalArrangement = Arrangement.spacedBy(3.dp),
                             verticalArrangement = Arrangement.spacedBy(3.dp)
                         ) {
-                            lazyGridItems(items = items, key = { it.localId }) { msg ->
+                            lazyGridItems(items = galleryEntries, key = { it.entryKey }) { entry ->
+                                val msg = entry.message
                                 Box(
                                     modifier = Modifier
                                         .aspectRatio(1f)
                                         .clip(RoundedCornerShape(6.dp))
                                         .background(MaterialTheme.colorScheme.surfaceVariant)
-                                        .clickable { mediaActionMessage = msg },
+                                        .clickable {
+                                            mediaActionMessage = msg
+                                            mediaActionUrl = entry.url
+                                        },
                                     contentAlignment = Alignment.Center
                                 ) {
                                     when (msg.mediaType) {
-                                        "image" -> Image(
-                                            painter = rememberAsyncImagePainter(msg.mediaUrl),
+                                        "image", "multi_image", "sticker", "gif" -> Image(
+                                            painter = rememberAsyncImagePainter(entry.url),
                                             contentDescription = null,
                                             modifier = Modifier.fillMaxSize(),
                                             contentScale = ContentScale.Crop
@@ -12164,7 +12204,10 @@ private fun ChatMediaDialog(
                 zoomScale = newScale
                 zoomOffset = if (newScale > 1f) zoomOffset + offsetChange * 2.5f else Offset.Zero
             }
-            val fsImgChatId = messages.firstOrNull { it.mediaUrl == fsImageUrl }?.chatId ?: ""
+            val fsImgChatId = messages.firstOrNull {
+                it.mediaUrl == fsImageUrl ||
+                    (it.mediaType == "multi_image" && it.mediaUrl?.let { j -> fsImageUrl in parseMultiImageUrls(j) } == true)
+            }?.chatId ?: ""
             LaunchedEffect(fsImageUrl) { viewModel.exportImageToPictures(fsImageUrl, fsImgChatId) }
             Box(
                 modifier = Modifier.fillMaxSize().background(Color.Black),
@@ -12347,7 +12390,9 @@ private fun ChatMediaDialog(
             onViewFullscreen = { msg ->
                 mediaActionMessage = null
                 when (msg.mediaType) {
-                    "image", "multi_image", "sticker", "gif" -> fullscreenImageUrl = msg.mediaUrl
+                    "image", "sticker", "gif" -> fullscreenImageUrl = msg.mediaUrl
+                    "multi_image" -> fullscreenImageUrl = mediaActionUrl
+                        ?: msg.mediaUrl?.let { parseMultiImageUrls(it).firstOrNull() }
                     "video" -> fullscreenVideoUrl = msg.mediaUrl
                 }
             }
@@ -12651,6 +12696,7 @@ internal fun ContactProfileDialog(
     var fullscreenImageUrl by remember { mutableStateOf<String?>(null) }
     var fullscreenVideoUrl by remember { mutableStateOf<String?>(null) }
     var mediaActionMessage by remember { mutableStateOf<MessageEntity?>(null) }
+    var mediaActionUrl by remember { mutableStateOf<String?>(null) }
     var showEnlargedAvatar by remember { mutableStateOf(false) }
 
     LaunchedEffect(pagerState.currentPage) {
@@ -12898,6 +12944,7 @@ internal fun ContactProfileDialog(
                         val items = groupedMedia[tabName] ?: emptyList()
 
                         if (tabName == "Fotos & Videos" || tabName == "Sticker/GIFs") {
+                            val galleryEntries = remember(items) { buildGalleryEntries(items) }
                             androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
                                 columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(3),
                                 modifier = Modifier.fillMaxSize(),
@@ -12905,18 +12952,22 @@ internal fun ContactProfileDialog(
                                 horizontalArrangement = Arrangement.spacedBy(3.dp),
                                 verticalArrangement = Arrangement.spacedBy(3.dp)
                             ) {
-                                lazyGridItems(items = items, key = { it.localId }) { msg ->
+                                lazyGridItems(items = galleryEntries, key = { it.entryKey }) { entry ->
+                                    val msg = entry.message
                                     Box(
                                         modifier = Modifier
                                             .aspectRatio(1f)
                                             .clip(RoundedCornerShape(6.dp))
                                             .background(MaterialTheme.colorScheme.surfaceVariant)
-                                            .clickable { mediaActionMessage = msg },
+                                            .clickable {
+                                                mediaActionMessage = msg
+                                                mediaActionUrl = entry.url
+                                            },
                                         contentAlignment = Alignment.Center
                                     ) {
                                         when (msg.mediaType) {
                                             "image", "multi_image", "sticker", "gif" -> Image(
-                                                painter = rememberAsyncImagePainter(msg.mediaUrl),
+                                                painter = rememberAsyncImagePainter(entry.url),
                                                 contentDescription = null,
                                                 modifier = Modifier.fillMaxSize(),
                                                 contentScale = ContentScale.Crop
@@ -12964,7 +13015,9 @@ internal fun ContactProfileDialog(
             onViewFullscreen = { msg ->
                 mediaActionMessage = null
                 when (msg.mediaType) {
-                    "image", "multi_image", "sticker", "gif" -> fullscreenImageUrl = msg.mediaUrl
+                    "image", "sticker", "gif" -> fullscreenImageUrl = msg.mediaUrl
+                    "multi_image" -> fullscreenImageUrl = mediaActionUrl
+                        ?: msg.mediaUrl?.let { parseMultiImageUrls(it).firstOrNull() }
                     "video" -> fullscreenVideoUrl = msg.mediaUrl
                 }
             }
@@ -16678,6 +16731,7 @@ private fun GroupInfoScreen(
     var selectedMediaTab by remember { mutableIntStateOf(0) }
     val pagerState = androidx.compose.foundation.pager.rememberPagerState { mediaTabs.size }
     var mediaActionMessage by remember { mutableStateOf<MessageEntity?>(null) }
+    var mediaActionUrl by remember { mutableStateOf<String?>(null) }
     var fullscreenImageUrl by remember { mutableStateOf<String?>(null) }
     var fullscreenVideoUrl by remember { mutableStateOf<String?>(null) }
 
@@ -16861,6 +16915,7 @@ private fun GroupInfoScreen(
                                 val tabName = mediaTabs.getOrNull(page) ?: return@HorizontalPager
                                 val items = groupedMedia[tabName] ?: emptyList()
                                 if (tabName == "Fotos & Videos" || tabName == "Sticker/GIFs") {
+                                    val galleryEntries = remember(items) { buildGalleryEntries(items) }
                                     androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
                                         columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(3),
                                         modifier = Modifier.fillMaxSize(),
@@ -16868,18 +16923,22 @@ private fun GroupInfoScreen(
                                         horizontalArrangement = Arrangement.spacedBy(3.dp),
                                         verticalArrangement = Arrangement.spacedBy(3.dp)
                                     ) {
-                                        lazyGridItems(items = items, key = { it.localId }) { msg ->
+                                        lazyGridItems(items = galleryEntries, key = { it.entryKey }) { entry ->
+                                            val msg = entry.message
                                             Box(
                                                 modifier = Modifier
                                                     .aspectRatio(1f)
                                                     .clip(RoundedCornerShape(6.dp))
                                                     .background(MaterialTheme.colorScheme.surfaceVariant)
-                                                    .clickable { mediaActionMessage = msg },
+                                                    .clickable {
+                                                        mediaActionMessage = msg
+                                                        mediaActionUrl = entry.url
+                                                    },
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 when (msg.mediaType) {
                                                     "image", "multi_image", "sticker", "gif" -> Image(
-                                                        painter = rememberAsyncImagePainter(msg.mediaUrl),
+                                                        painter = rememberAsyncImagePainter(entry.url),
                                                         contentDescription = null,
                                                         modifier = Modifier.fillMaxSize(),
                                                         contentScale = ContentScale.Crop
@@ -16949,7 +17008,9 @@ private fun GroupInfoScreen(
             onViewFullscreen = { msg ->
                 mediaActionMessage = null
                 when (msg.mediaType) {
-                    "image", "multi_image", "sticker", "gif" -> fullscreenImageUrl = msg.mediaUrl
+                    "image", "sticker", "gif" -> fullscreenImageUrl = msg.mediaUrl
+                    "multi_image" -> fullscreenImageUrl = mediaActionUrl
+                        ?: msg.mediaUrl?.let { parseMultiImageUrls(it).firstOrNull() }
                     "video" -> fullscreenVideoUrl = msg.mediaUrl
                 }
             }
@@ -17016,6 +17077,7 @@ private fun GroupMemberProfileDialog(
     var selectedTab by remember { mutableIntStateOf(0) }
     val pagerState = androidx.compose.foundation.pager.rememberPagerState { tabs.size }
     var mediaActionMessage by remember { mutableStateOf<MessageEntity?>(null) }
+    var mediaActionUrl by remember { mutableStateOf<String?>(null) }
     var fullscreenImageUrl by remember { mutableStateOf<String?>(null) }
     var showEnlargedGroupAvatar by remember { mutableStateOf(false) }
 
@@ -17146,6 +17208,7 @@ private fun GroupMemberProfileDialog(
                         val tabName = tabs.getOrNull(page) ?: return@HorizontalPager
                         val items = groupedMedia[tabName] ?: emptyList()
                         if (tabName == "Fotos & Videos" || tabName == "Sticker/GIFs") {
+                            val galleryEntries = remember(items) { buildGalleryEntries(items) }
                             androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
                                 columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(3),
                                 modifier = Modifier.fillMaxSize(),
@@ -17153,18 +17216,22 @@ private fun GroupMemberProfileDialog(
                                 horizontalArrangement = Arrangement.spacedBy(3.dp),
                                 verticalArrangement = Arrangement.spacedBy(3.dp)
                             ) {
-                                lazyGridItems(items = items, key = { it.localId }) { msg ->
+                                lazyGridItems(items = galleryEntries, key = { it.entryKey }) { entry ->
+                                    val msg = entry.message
                                     Box(
                                         modifier = Modifier
                                             .aspectRatio(1f)
                                             .clip(RoundedCornerShape(6.dp))
                                             .background(MaterialTheme.colorScheme.surfaceVariant)
-                                            .clickable { mediaActionMessage = msg },
+                                            .clickable {
+                                                mediaActionMessage = msg
+                                                mediaActionUrl = entry.url
+                                            },
                                         contentAlignment = Alignment.Center
                                     ) {
                                         when (msg.mediaType) {
                                             "image", "multi_image", "sticker", "gif" -> Image(
-                                                painter = rememberAsyncImagePainter(msg.mediaUrl),
+                                                painter = rememberAsyncImagePainter(entry.url),
                                                 contentDescription = null,
                                                 modifier = Modifier.fillMaxSize(),
                                                 contentScale = ContentScale.Crop
@@ -17205,7 +17272,11 @@ private fun GroupMemberProfileDialog(
             onDismiss = { mediaActionMessage = null },
             onViewFullscreen = { msg ->
                 mediaActionMessage = null
-                if (msg.mediaType in listOf("image", "multi_image", "sticker", "gif")) fullscreenImageUrl = msg.mediaUrl
+                when (msg.mediaType) {
+                    "image", "sticker", "gif" -> fullscreenImageUrl = msg.mediaUrl
+                    "multi_image" -> fullscreenImageUrl = mediaActionUrl
+                        ?: msg.mediaUrl?.let { parseMultiImageUrls(it).firstOrNull() }
+                }
             }
         )
     }

@@ -24,6 +24,17 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.149",
+            title = "Lethe Assistant leichter finden & Galerie-Fix",
+            items = listOf(
+                "Der offizielle Lethe-Bot (Lethe Assistant) ist jetzt für alle Nutzer direkt beim Hinzufügen eines Kontakts unter \u201eBots\u201c sichtbar \u2013 ohne Suche",
+                "Behoben: Nachrichten mit mehreren Bildern wurden in der Medien-Galerie eines Chats manchmal nicht korrekt angezeigt \u2013 jedes Bild erscheint dort jetzt einzeln",
+                "Geteilte Song-Links aus dem Lethe Media Player nutzen jetzt eine kürzere Adresse (songs.letheapp.de) \u2013 bereits geteilte alte Links funktionieren weiterhin",
+            ),
+            shortSummary = "Lethe Assistant leichter zu finden, Galerie-Fix f\u00fcr Mehrfachbilder und k\u00fcrzere Song-Links"
+        ),
+
+        ChangelogEntry(
             version = "10.4.148",
             title = "Blockieren jetzt klar sichtbar",
             items = listOf(
@@ -51,16 +62,6 @@ object AppChangelog {
                 "Bilder, Videos und Sprachnachrichten im Chat werden jetzt nacheinander statt gleichzeitig geladen \u2013 das sorgt f\u00fcr fl\u00fcssigeres Scrollen in Chats mit vielen Medien",
             ),
             shortSummary = "Fix f\u00fcr Gruppen-Verschl\u00fcsselung und fl\u00fcssigeres Laden von Medien im Chat"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.145",
-            title = "Benachrichtigungen & Chat-Verlauf laden",
-            items = listOf(
-                "Behoben: Nachrichten, die beim erneuten Verbinden oder im Hintergrund nachgeladen wurden, l\u00f6sten manchmal versehentlich eine Benachrichtigung aus, obwohl sie bereits bekannt waren \u2013 das passiert jetzt nicht mehr",
-                "Beim Hochscrollen im Chatverlauf werden \u00e4ltere Nachrichten jetzt in klaren 50er-Bl\u00f6cken nachgeladen (mit Ladekreis), statt fortlaufend im Hintergrund nachzuladen",
-            ),
-            shortSummary = "Weniger unn\u00f6tige Benachrichtigungen, dazu \u00fcbersichtlicheres Nachladen \u00e4lterer Chat-Nachrichten"
         ),
 
     )
