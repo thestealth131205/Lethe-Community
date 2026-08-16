@@ -62,17 +62,32 @@ android {
 
     // ABI-Splits NUR für den foss-Flavor (F-Droid-Kriterium "Multiple APKs for native
     // code"): erzeugt statt einer Universal-APK je eine kleinere APK pro CPU-Architektur
-    // (kleinerer Download für F-Droid-Nutzer) PLUS weiterhin eine Universal-APK als
-    // Fallback. Bewusst über den Task-Namen gated (wie das google-services-Plugin unten)
-    // statt global, damit :app:assemblePlaystoreRelease (CI/push-and-deploy.sh erwartet
-    // dort exakt EINE Datei "app-playstore-release.apk") unverändert bleibt.
+    // (kleinerer Download für F-Droid-Nutzer). Bewusst über den Task-Namen gated (wie das
+    // google-services-Plugin unten) statt global, damit :app:assemblePlaystoreRelease
+    // (CI/push-and-deploy.sh erwartet dort exakt EINE Datei "app-playstore-release.apk")
+    // unverändert bleibt.
+    //
+    // -PtargetAbi=<abi>/-PincludeUniversalApk=<bool> sind optionale Gradle-Properties
+    // (analog zum "gradleprops"-Muster anderer F-Droid-Apps, z.B. app.flicky.yml), damit
+    // F-Droids Build-Server pro Aufruf GENAU EINE APK erzeugen kann (fdroidserver bricht
+    // sonst mit "More than one resulting apks found" ab, da eine Build-Recipe nur eine
+    // Ausgabedatei erwartet). Ohne diese Properties (z.B. im eigenen Community-CI, das alle
+    // ABIs + Universal-APK in einem Rutsch veröffentlicht) bleibt das bisherige Verhalten
+    // unverändert: alle drei ABIs + Universal-APK in einem Build.
     if (gradle.startParameter.taskRequests.toString().contains("Foss", ignoreCase = true)) {
+        val targetAbi = (project.findProperty("targetAbi") as String?)?.takeIf { it.isNotBlank() }
+        val includeUniversalApk =
+            (project.findProperty("includeUniversalApk") as String?)?.toBooleanStrictOrNull() ?: true
         splits {
             abi {
                 isEnable = true
                 reset()
-                include("armeabi-v7a", "arm64-v8a", "x86_64")
-                isUniversalApk = true
+                if (targetAbi != null) {
+                    include(targetAbi)
+                } else {
+                    include("armeabi-v7a", "arm64-v8a", "x86_64")
+                }
+                isUniversalApk = includeUniversalApk
             }
         }
     }
