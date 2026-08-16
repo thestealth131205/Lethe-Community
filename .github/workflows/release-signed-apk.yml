@@ -28,10 +28,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      # JDK 21 (nicht 17!), weil F-Droids Build-Server für "gradle"-Rezepte
+      # aktuell OpenJDK 21 installiert (siehe GitLab-CI-Log, apt-get install
+      # openjdk-21-jdk-headless). App-Zielkompatibilität bleibt JavaVersion.
+      # VERSION_17 in build.gradle.kts (sourceCompatibility/targetCompatibility,
+      # unabhängig von der JDK-Version die den Build ausführt) - hier geht es
+      # nur um den JDK, der javac/D8/R8 ausführt, was für Reproducible Builds
+      # bit-genau übereinstimmen muss.
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
 
       - name: Cache Gradle
