@@ -1,0 +1,93 @@
+name: Release Signed FOSS APK
+
+# Baut den foss-Flavor (:app:assembleFossRelease) mit einem ECHTEN, dauerhaften
+# Signing-Key (eigenständiger Community-Key, NICHT der Play-Store-Key des
+# Hauptprojekts) und veröffentlicht die Universal-APK sowie alle ABI-Split-APKs
+# als Assets eines GitHub-Release für den gepushten Tag.
+#
+# Zweck: F-Droids "Reproducible Builds"-Verifikation (siehe fdroiddata-Metadata
+# Binaries:-Feld) lädt genau die hier veröffentlichte Universal-APK herunter und
+# vergleicht sie byte-genau (nach Signatur-Transplantation via apksigcopier)
+# gegen ihren eigenen, unabhängig aus demselben Quellcode gebauten Build.
+#
+# Trigger: Push eines Tags "vX.Y.Z" (passend zu versionName in app/build.gradle.kts).
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release-foss:
+    name: Build + sign foss flavor, publish GitHub Release
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-foss-release-v1-${{ hashFiles('**/*.gradle.kts', '**/gradle-wrapper.properties', '**/libs.versions.toml') }}
+          restore-keys: gradle-foss-release-v1-
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Decode community signing keystore
+        run: |
+          echo "${{ secrets.COMMUNITY_KEYSTORE_BASE64 }}" | base64 -d > /tmp/lethe-community.jks
+
+      - name: Build foss Release APKs (universal + ABI-Splits)
+        run: |
+          ./gradlew :app:assembleFossRelease --no-daemon --no-build-cache \
+            -PKEYSTORE_PATH=/tmp/lethe-community.jks \
+            -PKEYSTORE_PASSWORD="${{ secrets.COMMUNITY_KEYSTORE_PASSWORD }}" \
+            -PKEY_ALIAS="${{ secrets.COMMUNITY_KEY_ALIAS }}" \
+            -PKEY_PASSWORD="${{ secrets.COMMUNITY_KEY_PASSWORD }}"
+
+      - name: Remove decoded keystore
+        if: always()
+        run: rm -f /tmp/lethe-community.jks
+
+      - name: Collect + rename APKs
+        id: apks
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          OUT_DIR="app/build/outputs/apk/foss/release"
+          DEST_DIR="release-assets"
+          mkdir -p "$DEST_DIR"
+
+          shopt -s nullglob
+          for apk in "$OUT_DIR"/*.apk; do
+            base="$(basename "$apk")"
+            if [[ "$base" == *universal* ]]; then
+              cp "$apk" "$DEST_DIR/lethe-foss-${VERSION}.apk"
+            else
+              # AGP-Dateiname enthaelt die ABI, z.B. app-foss-arm64-v8a-release.apk
+              abi="$(echo "$base" | sed -E 's/^app-foss-(.+)-release\.apk$/\1/')"
+              cp "$apk" "$DEST_DIR/lethe-foss-${VERSION}-${abi}.apk"
+            fi
+          done
+
+          echo "Veroeffentlichte Dateien:"
+          ls -la "$DEST_DIR"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*.apk
+          generate_release_notes: true

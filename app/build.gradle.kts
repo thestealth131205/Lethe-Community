@@ -60,6 +60,23 @@ android {
         }
     }
 
+    // ABI-Splits NUR für den foss-Flavor (F-Droid-Kriterium "Multiple APKs for native
+    // code"): erzeugt statt einer Universal-APK je eine kleinere APK pro CPU-Architektur
+    // (kleinerer Download für F-Droid-Nutzer) PLUS weiterhin eine Universal-APK als
+    // Fallback. Bewusst über den Task-Namen gated (wie das google-services-Plugin unten)
+    // statt global, damit :app:assemblePlaystoreRelease (CI/push-and-deploy.sh erwartet
+    // dort exakt EINE Datei "app-playstore-release.apk") unverändert bleibt.
+    if (gradle.startParameter.taskRequests.toString().contains("Foss", ignoreCase = true)) {
+        splits {
+            abi {
+                isEnable = true
+                reset()
+                include("armeabi-v7a", "arm64-v8a", "x86_64")
+                isUniversalApk = true
+            }
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -267,4 +284,27 @@ dependencies {
 // F-Droid baut assembleFossRelease (enthält "Foss") → sauber getrennt.
 if (gradle.startParameter.taskRequests.toString().contains("Playstore", ignoreCase = true)) {
     apply(plugin = "com.google.gms.google-services")
+}
+
+// Eindeutiger versionCode je ABI-Split-APK (nur foss-Flavor, siehe splits{} oben).
+// Ohne das hätten alle Split-APKs denselben versionCode wie die Universal-APK, was
+// F-Droid/Package-Manager nicht mehr sauber unterscheiden könnte. Standard-Android-Muster:
+// (ABI-Offset * 1_000_000) + eigentlicher versionCode – bei aktuell 6-stelligen
+// versionCodes (~100xxx) bleibt das Ergebnis klar unter dem Int-Maximum.
+androidComponents {
+    val abiCodes = mapOf("armeabi-v7a" to 1, "arm64-v8a" to 2, "x86_64" to 3)
+    onVariants { variant ->
+        if (variant.flavorName == "foss") {
+            variant.outputs.forEach { output ->
+                val abi = output.filters
+                    .find { it.filterType == com.android.build.api.variant.FilterConfiguration.FilterType.ABI }
+                    ?.identifier
+                val abiOffset = abiCodes[abi]
+                if (abiOffset != null) {
+                    val baseVersionCode = output.versionCode.orNull ?: 0
+                    output.versionCode.set(abiOffset * 1_000_000 + baseVersionCode)
+                }
+            }
+        }
+    }
 }
