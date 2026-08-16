@@ -1380,6 +1380,25 @@
     <string name="app_settings_p2p_subtitle">P2P mesh via Bluetooth &amp; Wi-Fi – without server</string>
     <string name="app_settings_nav_customize_title">Customize areas</string>
     <string name="app_settings_nav_customize_subtitle">Show and hide visible navigation tabs</string>
+    <string name="app_settings_multi_account_title">Multi Account</string>
+    <string name="app_settings_multi_account_subtitle">Switch accounts and monitor new messages</string>
+    <string name="multi_account_title">Multi Account</string>
+    <string name="multi_account_section_switch">Switch account</string>
+    <string name="multi_account_no_saved_accounts">No other saved accounts on this device.</string>
+    <string name="multi_account_remove_action">Remove account</string>
+    <string name="multi_account_remove_title">Remove account?</string>
+    <string name="multi_account_remove_message">Do you want to remove %1$s from this device? You will need your password to log in again.</string>
+    <string name="multi_account_remove_confirm">Remove</string>
+    <string name="multi_account_remove_cancel">Cancel</string>
+    <string name="multi_account_section_monitoring">Monitor all accounts</string>
+    <string name="multi_account_monitor_title">Monitor all accounts</string>
+    <string name="multi_account_monitor_subtitle_on">On – you\'ll be notified about new messages on inactive accounts</string>
+    <string name="multi_account_monitor_subtitle_off">Off – only the active account is monitored</string>
+    <string name="multi_account_notification_body">You have a new message on the account: %1$s. Tap here to switch to this account.</string>
+    <string name="multi_account_section_mixed_list">Mixed contact list</string>
+    <string name="multi_account_mixed_list_title">Mixed contact list</string>
+    <string name="multi_account_mixed_list_subtitle_on">On – contacts from your other accounts are shown mixed in, marked with the account name</string>
+    <string name="multi_account_mixed_list_subtitle_off">Off – only the active account\'s contacts are shown</string>
 
     <!-- ── STATUS SCREEN ── -->
     <string name="status_take_photo_cd">Take photo</string>

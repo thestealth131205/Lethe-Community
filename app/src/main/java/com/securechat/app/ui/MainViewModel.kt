@@ -344,6 +344,27 @@ class MainViewModel @Inject constructor(
     private val _userPrefs = MutableStateFlow(UserPreferences())
     val userPrefs: StateFlow<UserPreferences> = _userPrefs.asStateFlow()
 
+    /** Geräteweiter "Alle Accounts überwachen"-Schalter (Multi-Account-Einstellungen). */
+    private val _monitorAllAccountsEnabled = MutableStateFlow(false)
+    val monitorAllAccountsEnabled: StateFlow<Boolean> = _monitorAllAccountsEnabled.asStateFlow()
+
+    /** Geräteweiter "Gemischte Kontaktliste"-Schalter (Multi-Account-Einstellungen). */
+    private val _mixedContactListEnabled = MutableStateFlow(false)
+    val mixedContactListEnabled: StateFlow<Boolean> = _mixedContactListEnabled.asStateFlow()
+
+    /** Kontakt aus einem anderen, nicht aktiven, gespeicherten Account (für die gemischte Kontaktliste). */
+    data class ForeignContactDisplay(
+        val userId: String,
+        val displayName: String,
+        val profileImageUrl: String?,
+        val isVerified: Boolean,
+        val accountProfileKey: String,
+        val accountDisplayName: String
+    )
+
+    private val _otherAccountContacts = MutableStateFlow<List<ForeignContactDisplay>>(emptyList())
+    val otherAccountContacts: StateFlow<List<ForeignContactDisplay>> = _otherAccountContacts.asStateFlow()
+
     /** Zeitgeplante Nachrichten des eingeloggten Nutzers (noch nicht versendet). */
     private val _scheduledMessages = MutableStateFlow<List<ScheduledMessageItem>>(emptyList())
     val scheduledMessages: StateFlow<List<ScheduledMessageItem>> = _scheduledMessages.asStateFlow()
@@ -7335,6 +7356,21 @@ class MainViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 Timber.tag("MainViewModel").e("Fehler beim Laden der Einstellungen: ${e.message}", e)
+            }
+        }
+
+        // Geräteweiter "Alle Accounts überwachen"-Schalter (Multi-Account-Einstellungen)
+        viewModelScope.launch {
+            prefsRepository.monitorAllAccountsFlow.collectLatest { enabled ->
+                _monitorAllAccountsEnabled.value = enabled
+            }
+        }
+
+        // Geräteweiter "Gemischte Kontaktliste"-Schalter (Multi-Account-Einstellungen)
+        viewModelScope.launch {
+            prefsRepository.mixedContactListFlow.collectLatest { enabled ->
+                _mixedContactListEnabled.value = enabled
+                if (enabled) loadOtherAccountContacts()
             }
         }
 
@@ -20285,6 +20321,76 @@ class MainViewModel @Inject constructor(
                 }
                 withContext(Dispatchers.IO) { messageDao.resetAllBackedUp() }
             }
+        }
+    }
+
+    /** Geräteweiter Schalter: neue Nachrichten auf nicht aktiven, gespeicherten Accounts überwachen. */
+    fun setMonitorAllAccountsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            prefsRepository.setMonitorAllAccountsEnabled(enabled)
+        }
+    }
+
+    /** Geräteweiter Schalter: Kontakte anderer gespeicherter Accounts in die eigene Kontaktliste einmischen. */
+    fun setMixedContactListEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            prefsRepository.setMixedContactListEnabled(enabled)
+            if (enabled) loadOtherAccountContacts()
+        }
+    }
+
+    /**
+     * Liest die akzeptierten Kontakte aller ANDEREN gespeicherten Accounts direkt (read-only,
+     * per Roh-SQLite statt Room) aus deren Profil-Datenbankdateien – ohne die Room-Singleton-DB
+     * des aktiven Profils anzufassen und ohne Migrationen laufen zu lassen. Nur für die Anzeige
+     * in der gemischten Kontaktliste, KEINE Nachrichten/Schlüssel werden gelesen.
+     */
+    fun loadOtherAccountContacts() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val activeProfileKey = ProfileManager.getActiveProfile(context)
+            val otherAccounts = ProfileManager.getSavedAccounts(context)
+                .filter { it.profileKey != activeProfileKey }
+            val result = mutableListOf<ForeignContactDisplay>()
+            for (account in otherAccounts) {
+                val dbFile = context.getDatabasePath("secure_chat_${account.profileKey}")
+                if (!dbFile.exists()) continue
+                var db: android.database.sqlite.SQLiteDatabase? = null
+                try {
+                    db = android.database.sqlite.SQLiteDatabase.openDatabase(
+                        dbFile.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY
+                    )
+                    db.rawQuery(
+                        "SELECT userId, username, customAlias, profileImageUrl, isVerified FROM contacts " +
+                            "WHERE status = 'accepted' AND isAnonymous = 0",
+                        null
+                    ).use { cursor ->
+                        val idxUserId = cursor.getColumnIndexOrThrow("userId")
+                        val idxUsername = cursor.getColumnIndexOrThrow("username")
+                        val idxAlias = cursor.getColumnIndexOrThrow("customAlias")
+                        val idxImage = cursor.getColumnIndexOrThrow("profileImageUrl")
+                        val idxVerified = cursor.getColumnIndexOrThrow("isVerified")
+                        while (cursor.moveToNext()) {
+                            val alias = cursor.getString(idxAlias)
+                            val username = cursor.getString(idxUsername)
+                            result.add(
+                                ForeignContactDisplay(
+                                    userId = cursor.getString(idxUserId),
+                                    displayName = alias ?: username ?: "?",
+                                    profileImageUrl = cursor.getString(idxImage),
+                                    isVerified = cursor.getInt(idxVerified) != 0,
+                                    accountProfileKey = account.profileKey,
+                                    accountDisplayName = account.displayName
+                                )
+                            )
+                        }
+                    }
+                } catch (e: Exception) {
+                    Timber.tag("MainViewModel").w("Gemischte Kontaktliste: ${account.profileKey} nicht lesbar: ${e.message}")
+                } finally {
+                    db?.close()
+                }
+            }
+            _otherAccountContacts.value = result
         }
     }
 

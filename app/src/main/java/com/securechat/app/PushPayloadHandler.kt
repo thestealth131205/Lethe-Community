@@ -7,11 +7,14 @@ import com.securechat.app.data.local.GroupDao
 import com.securechat.app.data.local.GroupSenderKeyDao
 import com.securechat.app.data.local.GroupSenderKeyEntity
 import com.securechat.app.data.local.MessageDao
+import com.securechat.app.data.local.ProfileManager
+import com.securechat.app.data.local.UserPreferencesRepository
 import com.securechat.app.data.network.ApiService
 import com.securechat.app.data.network.TokenManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -39,7 +42,29 @@ class PushPayloadHandler @Inject constructor(
     private val groupDao: GroupDao,
     private val groupSenderKeyDao: GroupSenderKeyDao,
     private val messageDao: MessageDao,
+    private val prefsRepository: UserPreferencesRepository,
 ) {
+
+    /**
+     * Prüft für Nachrichten-Pushes ("new_message"/"group_message"), ob die Push-Payload für
+     * einen anderen als den gerade aktiven, aber auf dem Gerät gespeicherten Account bestimmt ist
+     * (Multi-Account-Überwachung). Falls ja und die Überwachung aktiviert ist, wird eine generische
+     * Notification ohne Kontaktname/Nachrichteninhalt gezeigt und `true` zurückgegeben (Aufrufer
+     * bricht dann die normale Verarbeitung ab, da diese den falschen Account-Kontext beträfe).
+     */
+    private suspend fun handleForeignAccountIfNeeded(data: Map<String, String>): Boolean {
+        val targetUserId = data["target_user_id"] ?: return false
+        val myUserId = tokenManager.getUserId()
+        if (myUserId == null || targetUserId == myUserId) return false
+        val monitorEnabled = try {
+            prefsRepository.monitorAllAccountsFlow.first()
+        } catch (_: Exception) { false }
+        if (!monitorEnabled) return true
+        val account = ProfileManager.getSavedAccounts(context).find { it.userId == targetUserId }
+            ?: return true
+        notificationHelper.showAccountSwitchNotification(account.displayName, account.profileKey)
+        return true
+    }
 
     /**
      * Verarbeitet eine Push-Payload. `data` muss den Schlüssel `type` enthalten,
@@ -60,6 +85,14 @@ class PushPayloadHandler @Inject constructor(
                 val messageId    = data["message_id"]
                 val myUserId    = tokenManager.getUserId()
                 val isOwnMessage = myUserId != null && senderId == myUserId
+                val targetUserId = data["target_user_id"]
+                // Push für einen anderen als den aktiven, gespeicherten Account (Multi-Account) →
+                // NICHT im Kontext des aktiven Accounts verarbeiten (falsche DB/Crypto-Zuordnung),
+                // stattdessen höchstens generische Account-Wechsel-Notification zeigen.
+                if (targetUserId != null && myUserId != null && targetUserId != myUserId) {
+                    CoroutineScope(Dispatchers.IO).launch { handleForeignAccountIfNeeded(data) }
+                    return
+                }
                 // ViewModel benachrichtigen damit es die Nachricht per REST nachlädt
                 // (WS hat sie evtl. nicht geliefert – z.B. bei Multi-Instance-Setup)
                 FcmMessageBus.notifyNewMessage(senderId)
@@ -135,6 +168,15 @@ class PushPayloadHandler @Inject constructor(
                 val messageId   = data["message_id"]
                 val contentBlob = data["content_blob"] ?: ""
                 val notifId     = (groupId.hashCode() and 0x7FFFFFFF) + 5000
+                val targetUserId = data["target_user_id"]
+                val myUserId = tokenManager.getUserId()
+                // Push für einen anderen als den aktiven, gespeicherten Account (Multi-Account) →
+                // NICHT im Kontext des aktiven Accounts verarbeiten (falsche DB/Crypto-Zuordnung),
+                // stattdessen höchstens generische Account-Wechsel-Notification zeigen.
+                if (targetUserId != null && myUserId != null && targetUserId != myUserId) {
+                    CoroutineScope(Dispatchers.IO).launch { handleForeignAccountIfNeeded(data) }
+                    return
+                }
                 // ViewModel benachrichtigen damit Gruppennachrichten nachgeladen werden
                 FcmMessageBus.notifyNewMessage(groupId)
                 CoroutineScope(Dispatchers.IO).launch {

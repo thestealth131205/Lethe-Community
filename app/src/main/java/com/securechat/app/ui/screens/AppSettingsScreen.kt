@@ -40,6 +40,7 @@ fun AppSettingsScreen(
     onNavigateToFamily: (() -> Unit)? = null,
     onNavigateToTor: (() -> Unit)? = null,
     onNavigateToDecentralized: (() -> Unit)? = null,
+    onNavigateToMultiAccount: (() -> Unit)? = null,
     onNavigateToAppEdit: (() -> Unit)? = null,
     onNavigateToAudio: (() -> Unit)? = null,
     onNavigateToMyMusic: (() -> Unit)? = null,
@@ -256,6 +257,21 @@ fun AppSettingsScreen(
                         title = stringResource(R.string.app_settings_nav_customize_title),
                         subtitle = stringResource(R.string.app_settings_nav_customize_subtitle),
                         onClick = onNavigateToAppEdit
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                        )
+                    }
+                }
+                if (onNavigateToMultiAccount != null) {
+                    HorizontalDivider()
+                    SettingsItem(
+                        icon = Icons.Default.SwitchAccount,
+                        title = stringResource(R.string.app_settings_multi_account_title),
+                        subtitle = stringResource(R.string.app_settings_multi_account_subtitle),
+                        onClick = onNavigateToMultiAccount
                     ) {
                         Icon(
                             Icons.AutoMirrored.Filled.KeyboardArrowRight,

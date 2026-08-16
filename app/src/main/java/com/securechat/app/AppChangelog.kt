@@ -24,6 +24,17 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.150",
+            title = "Neu: Multi-Account-Einstellungen",
+            items = listOf(
+                "Neuer Einstellungspunkt \u201eMulti Account\u201c: Konto wechseln jetzt direkt aus den App-Einstellungen, ohne erst zum Konto-Bildschirm zu wechseln",
+                "Neue Option \u201eAlle Accounts \u00fcberwachen\u201c: Bei aktivierter Einstellung wirst du bei neuen Nachrichten auf nicht eingeloggten Konten benachrichtigt (ohne Kontaktname und Text) und kannst per Tap direkt in den jeweiligen Account wechseln",
+                "Neue Option \u201eGemischte Kontaktliste\u201c: Zeigt auf Wunsch Kontakte all deiner gespeicherten Accounts gemeinsam in der Kontaktliste an, mit farblich hervorgehobenem Konto-Namen hinter dem Kontaktnamen",
+            ),
+            shortSummary = "Neuer Multi-Account-Bereich: Konto wechseln, Account-\u00dcberwachung und gemischte Kontaktliste"
+        ),
+
+        ChangelogEntry(
             version = "10.4.149",
             title = "Lethe Assistant leichter finden & Galerie-Fix",
             items = listOf(
@@ -52,16 +63,6 @@ object AppChangelog {
                 "Der Lethe Media Player wird jetzt bei jedem App-Update zuverl\u00e4ssig mit aktualisiert, damit Versionsanzeige und Update-Erkennung im Player immer auf dem neuesten Stand sind",
             ),
             shortSummary = "Lethe Media Player wird jetzt zuverl\u00e4ssig mit der App aktualisiert"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.146",
-            title = "Gruppen-Verschlüsselung & fl\u00fcssigeres Laden im Chat",
-            items = listOf(
-                "Behoben: In seltenen F\u00e4llen konnten Chatpartner in Gruppen \u201eSchl\u00fcssel nicht verf\u00fcgbar\u201c statt der Nachricht sehen, wenn sich der eigene Gruppen-Schl\u00fcssel zwischenzeitlich \u00e4ndern musste \u2013 die Schl\u00fcsselversionierung wurde korrigiert, sodass alle Mitglieder den neuen Schl\u00fcssel zuverl\u00e4ssig erhalten",
-                "Bilder, Videos und Sprachnachrichten im Chat werden jetzt nacheinander statt gleichzeitig geladen \u2013 das sorgt f\u00fcr fl\u00fcssigeres Scrollen in Chats mit vielen Medien",
-            ),
-            shortSummary = "Fix f\u00fcr Gruppen-Verschl\u00fcsselung und fl\u00fcssigeres Laden von Medien im Chat"
         ),
 
     )

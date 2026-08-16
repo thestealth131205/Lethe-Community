@@ -612,6 +612,37 @@ class NotificationHelper @Inject constructor(
         manager.notify(9001, builder.build())
     }
 
+    /**
+     * Zeigt eine generische Benachrichtigung für eine neue Nachricht auf einem NICHT aktiven,
+     * gespeicherten Account (Multi-Account-Überwachung). Enthält bewusst weder Kontaktname
+     * noch Nachrichtentext, um keine Inhalte des inaktiven Accounts preiszugeben. Tippen
+     * wechselt direkt in den betroffenen Account (App-Neustart über switchAccount()).
+     */
+    fun showAccountSwitchNotification(accountDisplayName: String, profileKey: String) {
+        val text = context.getString(R.string.multi_account_notification_body, accountDisplayName)
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("navigate_to", "switch_account")
+            putExtra("switch_account_profile_key", profileKey)
+        }
+        val notificationId = (profileKey.hashCode() and 0x7FFFFFFF) + 7000
+        val pendingIntent = PendingIntent.getActivity(
+            context, notificationId, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID_MESSAGES)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("Lethe")
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(notificationId, notification)
+    }
+
     /** Zeigt eine Benachrichtigung für eine eingehende „Listen Together"-Einladung. */
     fun showListenTogetherNotification(fromName: String, trackTitle: String) {
         val intent = Intent(context, MainActivity::class.java).apply {

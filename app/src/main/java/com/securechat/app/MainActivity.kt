@@ -231,6 +231,9 @@ class MainActivity : FragmentActivity() {
         when (intentNavigateTo) {
             "accept_call"  -> viewModel.acceptCallFromStore()
             "decline_call" -> viewModel.declineCallFromStore()
+            "switch_account" -> {
+                intent.getStringExtra("switch_account_profile_key")?.let { viewModel.switchAccount(it) }
+            }
             else -> {
                 // Kind-Familien-Einladungstoken aus Notification speichern
                 val childInviteToken = intent.getStringExtra("child_invite_token")
@@ -1915,6 +1918,25 @@ class MainActivity : FragmentActivity() {
                             )
                         }
 
+                        // Multi-Account
+                        composable("settings/multi_account") {
+                            val activeUser by viewModel.currentUser.collectAsState()
+                            val savedAccounts by viewModel.savedAccounts.collectAsState()
+                            val monitorAllAccountsEnabled by viewModel.monitorAllAccountsEnabled.collectAsState()
+                            val mixedContactListEnabled by viewModel.mixedContactListEnabled.collectAsState()
+                            LaunchedEffect(Unit) { viewModel.loadSavedAccounts() }
+                            MultiAccountScreen(
+                                onNavigateBack = { navController.popBackStack() },
+                                otherSavedAccounts = savedAccounts.filter { it.userId != activeUser?.userId },
+                                onSwitchAccount = { viewModel.switchAccount(it) },
+                                onRemoveAccount = { viewModel.removeSavedAccount(it) },
+                                monitorAllAccountsEnabled = monitorAllAccountsEnabled,
+                                onMonitorAllAccountsChange = { viewModel.setMonitorAllAccountsEnabled(it) },
+                                mixedContactListEnabled = mixedContactListEnabled,
+                                onMixedContactListChange = { viewModel.setMixedContactListEnabled(it) }
+                            )
+                        }
+
                         composable("creator_apply") {
                             CreatorBewerbungScreen(
                                 viewModel = viewModel,
@@ -2086,6 +2108,7 @@ class MainActivity : FragmentActivity() {
                                 onNavigateToDesign = { navController.navigate("settings/design") },
                                 onNavigateToPrivacy = { navController.navigate("settings/privacy") },
                                 onNavigateToNotifications = { navController.navigate("settings/notifications") },
+                                onNavigateToMultiAccount = { navController.navigate("settings/multi_account") },
                                 onExportBackup = { password, destination ->
                                     pendingBackupPassword = password
                                     when (destination) {
@@ -2932,6 +2955,10 @@ class MainActivity : FragmentActivity() {
         when (newIntentNavigateTo) {
             "accept_call"  -> { viewModel.acceptCallFromStore(); return }
             "decline_call" -> { viewModel.declineCallFromStore(); return }
+            "switch_account" -> {
+                intent.getStringExtra("switch_account_profile_key")?.let { viewModel.switchAccount(it) }
+                return
+            }
         }
 
         // Kind-Familien-Einladungstoken aus Notification speichern

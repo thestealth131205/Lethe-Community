@@ -97,6 +97,20 @@ private fun generateQrBitmapCL(content: String, size: Int = 512): Bitmap? {
     } catch (_: Exception) { null }
 }
 
+/** Neon-Gelb für den Account-Zusatz eingemischter Kontakte anderer, nicht aktiver Accounts. */
+private val NeonYellow = Color(0xFFFFFF33)
+
+/** Eintrag der (ggf. gemischten) Kontakt-Chatliste: eigener Kontakt oder Kontakt eines anderen Accounts. */
+private sealed class ContactRowEntry {
+    data class Local(val contact: ContactEntity) : ContactRowEntry()
+    data class Foreign(val entry: MainViewModel.ForeignContactDisplay) : ContactRowEntry()
+
+    val sortKey: String get() = when (this) {
+        is Local -> contact.customAlias ?: contact.username ?: contact.fakeNumber
+        is Foreign -> entry.displayName
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContactlistScreen(
@@ -123,6 +137,8 @@ fun ContactlistScreen(
 ) {
     val contacts by viewModel.contactsSortedByRecent.collectAsState(initial = emptyList())
     val groups by viewModel.groups.collectAsState(initial = emptyList())
+    val mixedContactListEnabled by viewModel.mixedContactListEnabled.collectAsState()
+    val otherAccountContacts by viewModel.otherAccountContacts.collectAsState()
     // Verhindert kurzes Aufblitzen von "keine Kontakte" während Room noch lädt
     var contactsInitialized by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -263,6 +279,10 @@ fun ContactlistScreen(
         it.customAlias?.contains(searchQuery, ignoreCase = true) == true ||
         it.username?.contains(searchQuery, ignoreCase = true) == true ||
         it.fakeNumber.contains(searchQuery, ignoreCase = true)
+    }
+
+    val filteredForeignContacts = if (!mixedContactListEnabled) emptyList() else otherAccountContacts.filter {
+        searchQuery.isBlank() || it.displayName.contains(searchQuery, ignoreCase = true)
     }
 
     val selfNotesLastMsg by viewModel.getLastMessageForChat("self_notes").collectAsState(initial = null)
@@ -1213,6 +1233,16 @@ fun ContactlistScreen(
                 val unpinnedGroups = groups.filter { it.groupId !in pinnedGroupIds }
                 val pinnedContacts = filteredContacts.filter { it.userId in pinnedContactIds }
                 val unpinnedContacts = filteredContacts.filter { it.userId !in pinnedContactIds }
+                // Gemischte Kontaktliste: eigene ungepinnte Kontakte + Kontakte anderer Accounts,
+                // zusammen alphabetisch sortiert (keine gemeinsame Aktivitäts-Zeitbasis über Accounts hinweg).
+                val unpinnedRowEntries: List<ContactRowEntry> =
+                    if (filteredForeignContacts.isEmpty()) {
+                        unpinnedContacts.map { ContactRowEntry.Local(it) }
+                    } else {
+                        (unpinnedContacts.map { ContactRowEntry.Local(it) } +
+                            filteredForeignContacts.map { ContactRowEntry.Foreign(it) })
+                            .sortedBy { it.sortKey.lowercase() }
+                    }
 
                 HorizontalPager(
                     state = pagerState,
@@ -1266,26 +1296,58 @@ fun ContactlistScreen(
                                 )
                             }
                         }
-                        items(unpinnedContacts) { contact ->
-                            val lastMsg by viewModel.getLastMessageForChat(contact.userId).collectAsState(initial = null)
-                            ContactItem(
-                                contact = contact,
-                                lastMessage = lastMsg,
-                                viewModel = viewModel,
-                                primaryColor = primaryColor,
-                                onClick = {
-                                    selectedDeleteId = null
-                                    onNavigateToChat(contact.userId)
-                                },
-                                isSelectedForDelete = selectedDeleteId == contact.userId,
-                                onLongPress = { longPressContact = contact },
-                                onDeleteClick = { deleteTargetContact = contact },
-                                onNavigateToStatusView = onNavigateToStatusView,
-                                onNavigateToStatusTab = { contactId ->
-                                    viewModel.requestNavigateToContactStatus(contactId)
-                                },
-                                onProfileClick = { profileCardContact = contact }
-                            )
+                        items(
+                            unpinnedRowEntries,
+                            key = { entry ->
+                                when (entry) {
+                                    is ContactRowEntry.Local -> "local_${entry.contact.userId}"
+                                    is ContactRowEntry.Foreign -> "foreign_${entry.entry.accountProfileKey}_${entry.entry.userId}"
+                                }
+                            }
+                        ) { entry ->
+                            when (entry) {
+                                is ContactRowEntry.Local -> {
+                                    val contact = entry.contact
+                                    val lastMsg by viewModel.getLastMessageForChat(contact.userId).collectAsState(initial = null)
+                                    ContactItem(
+                                        contact = contact,
+                                        lastMessage = lastMsg,
+                                        viewModel = viewModel,
+                                        primaryColor = primaryColor,
+                                        onClick = {
+                                            selectedDeleteId = null
+                                            onNavigateToChat(contact.userId)
+                                        },
+                                        isSelectedForDelete = selectedDeleteId == contact.userId,
+                                        onLongPress = { longPressContact = contact },
+                                        onDeleteClick = { deleteTargetContact = contact },
+                                        onNavigateToStatusView = onNavigateToStatusView,
+                                        onNavigateToStatusTab = { contactId ->
+                                            viewModel.requestNavigateToContactStatus(contactId)
+                                        },
+                                        onProfileClick = { profileCardContact = contact }
+                                    )
+                                }
+                                is ContactRowEntry.Foreign -> {
+                                    val foreign = entry.entry
+                                    val foreignContact = ContactEntity(
+                                        userId = foreign.userId,
+                                        fakeNumber = "",
+                                        username = foreign.displayName,
+                                        publicKey = "",
+                                        profileImageUrl = foreign.profileImageUrl,
+                                        isVerified = foreign.isVerified
+                                    )
+                                    ContactItem(
+                                        contact = foreignContact,
+                                        lastMessage = null,
+                                        viewModel = viewModel,
+                                        primaryColor = primaryColor,
+                                        onClick = { viewModel.switchAccount(foreign.accountProfileKey) },
+                                        foreignAccountLabel = foreign.accountDisplayName
+                                    )
+                                }
+                            }
                         }
                         if (unpinnedGroups.isNotEmpty()) {
                             item {
@@ -2233,7 +2295,10 @@ fun ContactItem(
     onDeleteClick: () -> Unit = {},
     onNavigateToStatusView: (statusId: String) -> Unit = {},
     onNavigateToStatusTab: ((contactId: String) -> Unit)? = null,
-    onProfileClick: (() -> Unit)? = null
+    onProfileClick: (() -> Unit)? = null,
+    /** Falls gesetzt: Kontakt eines anderen, nicht aktiven Accounts (gemischte Kontaktliste) –
+     * zeigt den Account-Namen als Zusatz in Neon-Gelb hinter dem Kontaktnamen. */
+    foreignAccountLabel: String? = null
 ) {
     val allActiveStatuses by viewModel.activeStatuses.collectAsState(initial = emptyList())
     val viewedStatusIds by viewModel.viewedStatusIds.collectAsState()
@@ -2349,6 +2414,17 @@ fun ContactItem(
                         modifier = Modifier.size(14.dp)
                     )
                 }
+                if (foreignAccountLabel != null) {
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = "($foreignAccountLabel)",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = NeonYellow,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
             when {
                 isTyping -> {
@@ -2396,7 +2472,7 @@ fun ContactItem(
                         )
                     }
                 }
-                contact.customAlias != null || contact.username != null -> {
+                contact.fakeNumber.isNotBlank() && (contact.customAlias != null || contact.username != null) -> {
                     Text(contact.fakeNumber, fontSize = 12.sp, color = Color.Gray)
                 }
             }

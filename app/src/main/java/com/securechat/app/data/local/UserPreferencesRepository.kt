@@ -174,6 +174,8 @@ class UserPreferencesRepository @Inject constructor(
     private val AUDIO_OUTPUT_CHANNEL = stringPreferencesKey("audio_output_channel")
     private val BLUETOOTH_HEADSET_ENABLED = booleanPreferencesKey("bluetooth_headset_enabled")
     private val CHAT_BACKUP = booleanPreferencesKey("chat_backup_enabled")
+    private val MONITOR_ALL_ACCOUNTS = booleanPreferencesKey("monitor_all_accounts_enabled")
+    private val MIXED_CONTACT_LIST = booleanPreferencesKey("mixed_contact_list_enabled")
 
 
     /**
@@ -264,6 +266,32 @@ class UserPreferencesRepository @Inject constructor(
                 prefs[REMEMBER_ME] ?: false
             )
         }
+
+    /**
+     * Flow des geräteweiten "Alle Accounts überwachen"-Schalters (Multi-Account-Einstellungen).
+     * Bewusst im globalen (profilunabhängigen) Store, da er den Umgang mit Pushes für ALLE
+     * auf dem Gerät gespeicherten Accounts steuert – nicht nur den gerade aktiven.
+     */
+    val monitorAllAccountsFlow: Flow<Boolean> = context.globalDataStore.data
+        .catch { emit(emptyPreferences()) }
+        .map { it[MONITOR_ALL_ACCOUNTS] ?: false }
+
+    suspend fun setMonitorAllAccountsEnabled(enabled: Boolean) {
+        context.globalDataStore.edit { it[MONITOR_ALL_ACCOUNTS] = enabled }
+    }
+
+    /**
+     * Flow des geräteweiten "Gemischte Kontaktliste"-Schalters (Multi-Account-Einstellungen).
+     * Ebenfalls im globalen Store, da Kontakte anderer, nicht aktiver Accounts eingemischt werden –
+     * unabhängig vom gerade aktiven Profil.
+     */
+    val mixedContactListFlow: Flow<Boolean> = context.globalDataStore.data
+        .catch { emit(emptyPreferences()) }
+        .map { it[MIXED_CONTACT_LIST] ?: false }
+
+    suspend fun setMixedContactListEnabled(enabled: Boolean) {
+        context.globalDataStore.edit { it[MIXED_CONTACT_LIST] = enabled }
+    }
 
     // --- SETTER FUNKTIONEN ---
 
