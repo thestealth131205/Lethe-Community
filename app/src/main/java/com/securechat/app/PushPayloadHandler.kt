@@ -97,15 +97,23 @@ class PushPayloadHandler @Inject constructor(
                 // (WS hat sie evtl. nicht geliefert – z.B. bei Multi-Instance-Setup)
                 FcmMessageBus.notifyNewMessage(senderId)
                 CoroutineScope(Dispatchers.IO).launch {
-                    // Nachricht entschlüsseln wenn möglich (E2EE: content_blob im v2:-Format)
-                    val messagePreview = if (mediaType == "text" && contentBlob.startsWith("v2:")) {
+                    // Nachricht entschlüsseln wenn möglich (E2EE: content_blob im v2:- ODER v3:-Format).
+                    // WICHTIG: v3 (UMK-Conversation-Key) ist das aktuelle Standardformat für 1:1-Chats.
+                    // Wurde hier nur v2: geprüft, fiel ein v3:-Blob in den Roh-Zweig unten und der
+                    // Ciphertext ("v3:AAAA…") landete ungeschützt als Notification-Text.
+                    val messagePreview = if (mediaType == "text" &&
+                        (contentBlob.startsWith("v2:") || contentBlob.startsWith("v3:"))) {
                         try {
                             val contact = contactDao.getContactById(senderId)
                             if (contact != null && contact.publicKey.length > 100) {
                                 CryptoManager.deriveSharedSecret(senderId, contact.publicKey)
                             }
-                            val decrypted = CryptoManager.decrypt(senderId, contentBlob)
-                            if (decrypted.startsWith("[🔐")) "Neue Nachricht" else decrypted
+                            val decrypted = CryptoManager.decryptUniversal(senderId, contentBlob)
+                            // Kein Schlüssel im frisch gestarteten Push-Prozess → generischer Text,
+                            // aber NIEMALS den rohen Ciphertext anzeigen.
+                            if (decrypted.startsWith("[🔐") ||
+                                decrypted.startsWith("v2:") || decrypted.startsWith("v3:")) "Neue Nachricht"
+                            else decrypted
                         } catch (_: Exception) {
                             "Neue Nachricht"
                         }

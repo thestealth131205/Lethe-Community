@@ -95,8 +95,11 @@ class LiveLocationService : Service() {
             else -> { stopSelf(); return }
         }
         try {
-            // 2 s Mindestintervall, 2 m Mindestdistanz – wie zuvor mit FusedLocation.
-            lm.requestLocationUpdates(provider, 2000L, 2f, listener, Looper.getMainLooper())
+            // 5 s Mindestintervall, 0 m Mindestdistanz: periodischer Heartbeat auch im
+            // Stillstand. Sonst feuert onLocationChanged bei stehendem Gerät NIE (Distanzfilter),
+            // der Empfänger bekommt keine Updates und seine Anzeige fällt nach 60 s auf die
+            // veraltete Position aus der ursprünglichen Chat-Nachricht zurück.
+            lm.requestLocationUpdates(provider, 5000L, 0f, listener, Looper.getMainLooper())
         } catch (e: SecurityException) {
             stopSelf()
         }

@@ -114,7 +114,16 @@ class WebSocketReconnectWorker @AssistedInject constructor(
                             "audio" -> "🎙️ Sprachnachricht"
                             "image" -> "📷 Foto"
                             "video" -> "🎬 Video"
-                            else    -> last.contentBlob?.take(100) ?: ""
+                            else    -> {
+                                // contentBlob ist hier der roh gespeicherte Ciphertext (keine
+                                // Entschlüsselung im Worker möglich) → niemals roh anzeigen.
+                                val blob = last.contentBlob
+                                if (blob.isNullOrBlank()
+                                    || blob.startsWith("v2:")
+                                    || blob.startsWith("v3:")
+                                    || blob.startsWith("\uD83D\uDD10")
+                                ) "Neue Nachricht" else blob.take(100)
+                            }
                         }
                         notificationHelper.showMessageNotification(
                             senderId = contact.partnerId,

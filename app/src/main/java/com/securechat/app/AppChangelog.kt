@@ -24,6 +24,17 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.151",
+            title = "Benachrichtigungen & Live-Standort verbessert",
+            items = listOf(
+                "Behoben: Bereits gelesene Nachrichten wurden nach einem Neuverbinden manchmal erneut als neue Nachricht angezeigt",
+                "Behoben: Benachrichtigungen zeigten in seltenen Fällen unverständlichen, noch verschlüsselten Text an \u2013 jetzt erscheint stattdessen \u201eNeue Nachricht\u201c, bis der Inhalt entschlüsselt werden kann",
+                "Behoben: Der geteilte Live-Standort aktualisiert sich jetzt zuverlässig fortlaufend statt bei einem alten Stand stehen zu bleiben",
+            ),
+            shortSummary = "Zuverlässigere Benachrichtigungen und fortlaufend aktualisierter Live-Standort"
+        ),
+
+        ChangelogEntry(
             version = "10.4.150",
             title = "Neu: Multi-Account-Einstellungen",
             items = listOf(
@@ -54,15 +65,6 @@ object AppChangelog {
                 "In der Kontaktliste zeigt das Menü bei bereits blockierten Kontakten jetzt \u201eBlockierung aufheben\u201c statt \u201eBlockieren\u201c an",
             ),
             shortSummary = "Blockieren ist jetzt für beide Seiten klar im Chat und in der Kontaktliste erkennbar"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.147",
-            title = "Lethe Media Player synchronisiert",
-            items = listOf(
-                "Der Lethe Media Player wird jetzt bei jedem App-Update zuverl\u00e4ssig mit aktualisiert, damit Versionsanzeige und Update-Erkennung im Player immer auf dem neuesten Stand sind",
-            ),
-            shortSummary = "Lethe Media Player wird jetzt zuverl\u00e4ssig mit der App aktualisiert"
         ),
 
     )

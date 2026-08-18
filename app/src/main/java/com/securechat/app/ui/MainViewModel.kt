@@ -9709,6 +9709,15 @@ class MainViewModel @Inject constructor(
                     val existing = messageDao.getMessageById(messageId)
                     if (existing != null) {
                         Timber.tag("LETHE_WS").d("Nachricht bereits verarbeitet ($messageId) – überspringe")
+                        // Empfang trotzdem bestätigen: Der Server holt beim (Re-)Connect alle
+                        // Nachrichten mit is_delivered=False nach. Ohne dieses "delivered" bliebe
+                        // das Flag ewig False → dieselbe (alte) Nachricht würde bei jedem Reconnect
+                        // erneut gepusht und ggf. als neue Benachrichtigung angezeigt.
+                        if (!isMyOwnMessage) {
+                            webSocketManager.sendMessage(
+                                "delivered", senderId, mapOf("message_id" to messageId)
+                            )
+                        }
                         return
                     }
                 }
@@ -9723,6 +9732,12 @@ class MainViewModel @Inject constructor(
                         // messageId synchronisieren falls noch nicht gesetzt
                         if (messageId != null && existingByClientId.messageId == null) {
                             messageDao.ackMessage(clientMsgId, messageId)
+                        }
+                        // Empfang bestätigen (siehe DEDUP-1) damit der Server nicht endlos nachholt
+                        if (!isMyOwnMessage && messageId != null) {
+                            webSocketManager.sendMessage(
+                                "delivered", senderId, mapOf("message_id" to messageId)
+                            )
                         }
                         return
                     }
@@ -9812,7 +9827,9 @@ class MainViewModel @Inject constructor(
                     if (url.startsWith("http")) url else "https://letheapp.de$url"
                 }
                 val preview = if (mediaType == "text") {
-                    if (contentBlob.startsWith("v2:") || contentBlob.startsWith("\uD83D\uDD10")) "Neue Nachricht" else contentBlob.take(120)
+                    // Niemals rohen Ciphertext anzeigen: v2:/v3:-Blobs (oder ein noch verschlüsselter
+                    // Fallback nach fehlgeschlagener Entschlüsselung) → generischer Text statt Blob.
+                    if (contentBlob.startsWith("v2:") || contentBlob.startsWith("v3:") || contentBlob.startsWith("\uD83D\uDD10")) "Neue Nachricht" else contentBlob.take(120)
                 } else when (mediaType) {
                     "image"    -> "📷 Bild"
                     "video"    -> "🎥 Video"
