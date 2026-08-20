@@ -24,6 +24,17 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.152",
+            title = "Weiterleiten, Reaktionen & Zuverl\u00e4ssigkeit",
+            items = listOf(
+                "Beim Weiterleiten werden Kontakte und Gruppen jetzt nach H\u00e4ufigkeit sortiert, Gruppenbilder angezeigt und angepinnte Chats erscheinen ganz oben",
+                "Die Emoji-Reaktionsleiste wird jetzt unter der Nachricht angezeigt, wenn oben kein Platz ist \u2013 so ist sie immer sofort sichtbar",
+                "Die App bleibt zuverl\u00e4ssiger im Hintergrund verbunden und startet nach einem Ger\u00e4te-Neustart automatisch wieder \u2013 die Meldung \u201eDu k\u00f6nntest neue Nachrichten haben\u201c erscheint nicht mehr unn\u00f6tig",
+            ),
+            shortSummary = "Besseres Weiterleiten, gut sichtbare Reaktionsleiste und zuverl\u00e4ssigere Hintergrundverbindung"
+        ),
+
+        ChangelogEntry(
             version = "10.4.151",
             title = "Benachrichtigungen & Live-Standort verbessert",
             items = listOf(
@@ -54,17 +65,6 @@ object AppChangelog {
                 "Geteilte Song-Links aus dem Lethe Media Player nutzen jetzt eine kürzere Adresse (songs.letheapp.de) \u2013 bereits geteilte alte Links funktionieren weiterhin",
             ),
             shortSummary = "Lethe Assistant leichter zu finden, Galerie-Fix f\u00fcr Mehrfachbilder und k\u00fcrzere Song-Links"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.148",
-            title = "Blockieren jetzt klar sichtbar",
-            items = listOf(
-                "Wenn du jemanden blockierst, wird das Eingabefeld im Chat jetzt deutlich gekennzeichnet, damit klar ist, dass keine Nachrichten mehr gesendet werden können",
-                "Auch die blockierte Person sieht jetzt direkt im Eingabefeld, dass sie dir nicht mehr schreiben kann",
-                "In der Kontaktliste zeigt das Menü bei bereits blockierten Kontakten jetzt \u201eBlockierung aufheben\u201c statt \u201eBlockieren\u201c an",
-            ),
-            shortSummary = "Blockieren ist jetzt für beide Seiten klar im Chat und in der Kontaktliste erkennbar"
         ),
 
     )

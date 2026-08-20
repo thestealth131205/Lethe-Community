@@ -1,6 +1,5 @@
 package com.securechat.app
 
-import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -27,9 +26,11 @@ import javax.inject.Inject
  * Zentraler ForegroundService für WebSocket-Keepalive.
  *
  * - Ping-Loop: alle 30s wenn verbunden, alle 10s wenn getrennt (löst Reconnect aus)
- * - Fallback-Benachrichtigung "Du könntest neue Nachrichten haben" NUR wenn das System
- *   den Dienst beendet (onTaskRemoved) – NICHT aufgrund von Verbindungsabbrüchen
+ * - Läuft dank android:stopWithTask="false" weiter, wenn die App aus den Recents gewischt wird,
+ *   sodass der WebSocket verbunden bleibt (kein "du könntest Nachrichten haben"-False-Positive)
  * - Startet WorkManager-Jobs für belt-and-suspenders-Hintergrundprüfung
+ * - BootReceiver reiht nach Geräte-Neustart/App-Update einen Reconnect-Job ein, der diesen
+ *   Service wieder startet
  */
 @AndroidEntryPoint
 class NotificationHandler : Service() {
@@ -44,7 +45,6 @@ class NotificationHandler : Service() {
         const val PING_INTERVAL_CONNECTED    = 30_000L  // 30s wenn verbunden
         const val PING_INTERVAL_DISCONNECTED = 10_000L  // 10s wenn getrennt
         const val NOTIFICATION_ID_FOREGROUND = 42
-        const val NOTIFICATION_ID_FALLBACK   = 43
 
         fun start(context: Context) {
             context.startForegroundService(Intent(context, NotificationHandler::class.java))
@@ -99,11 +99,13 @@ class NotificationHandler : Service() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        // App vom System beendet → Fallback-Benachrichtigung + WorkManager-Neustart
-        // startForegroundService() hier wäre auf Android 12+ eine ForegroundServiceStartNotAllowedException
-        Timber.tag("LETHE_BG").w("NotificationHandler: App vom System beendet – Fallback-Notification")
-        showFallbackNotification()
-        // Neustart über WorkManager statt startForegroundService() aus Hintergrund
+        // Task aus den Recents gewischt. Dank android:stopWithTask="false" (Manifest) läuft dieser
+        // Service weiter → WebSocket bleibt verbunden, es gibt KEINE False-Positive-Benachrichtigung.
+        // Zur Sicherheit den Ping-Loop erneut anstoßen und einen WorkManager-Reconnect einreihen,
+        // falls der Prozess zwischenzeitlich doch eingefroren wurde.
+        Timber.tag("LETHE_BG").i("NotificationHandler: Task entfernt – Service läuft weiter (stopWithTask=false)")
+        handler.removeCallbacks(pingRunnable)
+        handler.post(pingRunnable)
         val restartRequest = androidx.work.OneTimeWorkRequestBuilder<WebSocketReconnectWorker>()
             .setInitialDelay(5, TimeUnit.SECONDS)
             .build()
@@ -133,30 +135,6 @@ class NotificationHandler : Service() {
             .setSilent(true)
             .setOngoing(true)
             .build()
-
-    private fun showFallbackNotification() {
-        val tapIntent = PendingIntent.getActivity(
-            this,
-            NOTIFICATION_ID_FALLBACK,
-            Intent(this, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val notification = NotificationCompat.Builder(this, NotificationHelper.CHANNEL_ID_MESSAGES)
-            .setContentTitle("Lethe")
-            .setContentText("Du könntest neue Nachrichten haben. Öffne Lethe.")
-            .setSmallIcon(R.drawable.ic_notification)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setContentIntent(tapIntent)
-            .setAutoCancel(true)
-            .build()
-
-        val nm = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
-        nm.notify(NOTIFICATION_ID_FALLBACK, notification)
-        Timber.tag("LETHE_BG").i("NotificationHandler: Fallback-Benachrichtigung angezeigt")
-    }
 
     private fun scheduleWorkManagerJobs() {
         val wm = WorkManager.getInstance(this)

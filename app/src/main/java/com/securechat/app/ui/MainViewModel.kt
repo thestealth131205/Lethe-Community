@@ -337,6 +337,9 @@ class MainViewModel @Inject constructor(
     /** Flow aller Gruppen aus der Room-Datenbank. */
     val groups: Flow<List<GroupEntity>> = groupDao.getAllGroups()
 
+    /** Chat-IDs (Kontakte + Gruppen) sortiert nach Nachrichtenhäufigkeit (am häufigsten zuerst). Für Weiterleiten-Screen. */
+    val chatIdsSortedByFrequency: Flow<List<String>> = messageDao.getChatIdsSortedByFrequency()
+
     /** Flow aller Anruf-System-Nachrichten für den Anruf-Verlauf-Tab. */
     val callMessages: Flow<List<com.securechat.app.data.local.MessageEntity>> = messageDao.getCallMessages()
 
@@ -11577,8 +11580,24 @@ class MainViewModel @Inject constructor(
                             Timber.tag("LETHE_KEY_SYNC").w("Gruppen-Keys für Sync nicht ladbar: ${e.message}")
                             null
                         }
+                        // Alle bekannten Partner-UMKs mitschicken, damit der WebChat die
+                        // Conversation Keys (v3) für ALLE Kontakte direkt ableiten kann – ohne
+                        // dass der jeweilige Partner online sein und einen Live-UMK-Exchange
+                        // beantworten muss. Sonst bleibt die 1:1-Historie (eigene + empfangene
+                        // v3-Nachrichten) von offline-Kontakten im WebChat unentschlüsselbar.
+                        // Struktur: {"<partnerId>":"<umkBase64>", …}
+                        val partnerUmksJson = try {
+                            val partnerUmks = CryptoManager.exportPartnerUmks()
+                            if (partnerUmks.isEmpty()) null
+                            else com.google.gson.JsonObject().apply {
+                                for ((pid, b64) in partnerUmks) addProperty(pid, b64)
+                            }.toString()
+                        } catch (e: Exception) {
+                            Timber.tag("LETHE_KEY_SYNC").w("Partner-UMKs für Sync nicht ladbar: ${e.message}")
+                            null
+                        }
                         // Payload mit ephemerem ECDH(android_priv, web_session_pub) verschlüsseln
-                        val encryptedPayload = CryptoManager.encryptKeySyncPayload(webSessionPub, ownAndroidPub, umkBase64, groupKeysJson)
+                        val encryptedPayload = CryptoManager.encryptKeySyncPayload(webSessionPub, ownAndroidPub, umkBase64, groupKeysJson, partnerUmksJson)
                         if (encryptedPayload == null) {
                             Timber.tag("LETHE_KEY_SYNC").e("encryptKeySyncPayload fehlgeschlagen")
                             return@launch

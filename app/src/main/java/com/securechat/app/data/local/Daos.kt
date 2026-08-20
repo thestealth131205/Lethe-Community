@@ -65,6 +65,10 @@ interface MessageDao {
     @Query("SELECT chatId FROM messages GROUP BY chatId ORDER BY MAX(timestamp) DESC")
     fun getChatIdsSortedByRecent(): Flow<List<String>>
 
+    /** Chat-IDs sortiert nach Anzahl ausgetauschter Nachrichten (am häufigsten zuerst). Für Weiterleiten-Screen. */
+    @Query("SELECT chatId FROM messages GROUP BY chatId ORDER BY COUNT(*) DESC")
+    fun getChatIdsSortedByFrequency(): Flow<List<String>>
+
     @Query("UPDATE messages SET isRead = 1 WHERE senderId = :senderId AND receiverId = :receiverId")
     suspend fun markAllRead(senderId: String, receiverId: String)
 

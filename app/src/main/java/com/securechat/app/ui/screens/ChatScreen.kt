@@ -2871,9 +2871,15 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
     // Weiterleiten-Sheet
     if (showForwardSheet) {
         val selectedMsgs = messages.filter { it.localId in selectedIds }
+        val frequencyOrder by viewModel.chatIdsSortedByFrequency.collectAsState(initial = emptyList())
+        val pinnedContactIds by viewModel.pinnedContactIds.collectAsState()
+        val pinnedGroupIds by viewModel.pinnedGroupIds.collectAsState()
         ForwardSheet(
             contacts = contacts,
             groups = groups,
+            frequencyOrder = frequencyOrder,
+            pinnedContactIds = pinnedContactIds,
+            pinnedGroupIds = pinnedGroupIds,
             onForwardTo = { targetId ->
                 viewModel.forwardMessages(selectedMsgs, targetId)
                 selectedIds = emptySet()
@@ -7400,14 +7406,83 @@ private fun AddressMessageCard(address: String) {
     }
 }
 
+/** Einheitliches Weiterleiten-Ziel (Kontakt oder Gruppe) für Sortierung/Anzeige im ForwardSheet. */
+private data class ForwardTarget(
+    val id: String,
+    val name: String,
+    val imageUrl: String?,
+    val isGroup: Boolean
+)
+
+@Composable
+private fun ForwardSectionHeader(text: String) {
+    Text(
+        text,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 13.sp,
+        color = MaterialTheme.colorScheme.primary
+    )
+}
+
+@Composable
+private fun ForwardTargetRow(target: ForwardTarget, onClick: () -> Unit) {
+    ListItem(
+        headlineContent = { Text(target.name) },
+        leadingContent = {
+            Box(
+                Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.secondaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                if (target.imageUrl != null) {
+                    AsyncImage(
+                        model = target.imageUrl,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(
+                        if (target.isGroup) Icons.Default.Group else Icons.Default.Person,
+                        null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        },
+        modifier = Modifier.clickable(onClick = onClick)
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ForwardSheet(
     contacts: List<com.securechat.app.data.local.ContactEntity>,
     groups: List<com.securechat.app.data.local.GroupEntity>,
+    frequencyOrder: List<String> = emptyList(),
+    pinnedContactIds: Set<String> = emptySet(),
+    pinnedGroupIds: Set<String> = emptySet(),
     onForwardTo: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val orderIndex = remember(frequencyOrder) {
+        frequencyOrder.withIndex().associate { (i, id) -> id to i }
+    }
+    val sortedTargets = remember(contacts, groups, orderIndex) {
+        val all = contacts.map { ForwardTarget(it.userId, it.username ?: it.fakeNumber, it.profileImageUrl, false) } +
+            groups.map { ForwardTarget(it.groupId, it.name, it.groupImageUrl, true) }
+        all.sortedBy { orderIndex[it.id] ?: Int.MAX_VALUE }
+    }
+    val pinnedTargets = sortedTargets.filter {
+        if (it.isGroup) it.id in pinnedGroupIds else it.id in pinnedContactIds
+    }
+    val unpinnedTargets = sortedTargets - pinnedTargets.toSet()
+    val unpinnedContacts = unpinnedTargets.filter { !it.isGroup }
+    val unpinnedGroups = unpinnedTargets.filter { it.isGroup }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -7426,59 +7501,22 @@ fun ForwardSheet(
             )
             HorizontalDivider()
             LazyColumn(modifier = Modifier.weight(1f)) {
-                if (contacts.isNotEmpty()) {
-                    item {
-                        Text(
-                            "Kontakte",
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    items(contacts) { c ->
-                        ListItem(
-                            headlineContent = { Text(c.username ?: c.fakeNumber) },
-                            leadingContent = {
-                                Box(
-                                    Modifier
-                                        .size(36.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(MaterialTheme.colorScheme.secondaryContainer),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    if (c.profileImageUrl != null) {
-                                        AsyncImage(
-                                            model = c.profileImageUrl,
-                                            contentDescription = null,
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentScale = ContentScale.Crop
-                                        )
-                                    } else {
-                                        Icon(Icons.Default.Person, null, modifier = Modifier.size(20.dp))
-                                    }
-                                }
-                            },
-                            modifier = Modifier.clickable { onForwardTo(c.userId); onDismiss() }
-                        )
+                if (pinnedTargets.isNotEmpty()) {
+                    item { ForwardSectionHeader("Angepinnt") }
+                    items(pinnedTargets, key = { "pinned_${it.id}" }) { t ->
+                        ForwardTargetRow(t) { onForwardTo(t.id); onDismiss() }
                     }
                 }
-                if (groups.isNotEmpty()) {
-                    item {
-                        Text(
-                            "Gruppen",
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                if (unpinnedContacts.isNotEmpty()) {
+                    item { ForwardSectionHeader("Kontakte") }
+                    items(unpinnedContacts, key = { "contact_${it.id}" }) { t ->
+                        ForwardTargetRow(t) { onForwardTo(t.id); onDismiss() }
                     }
-                    items(groups) { g ->
-                        ListItem(
-                            headlineContent = { Text(g.name) },
-                            leadingContent = { Icon(Icons.Default.Group, contentDescription = null) },
-                            modifier = Modifier.clickable { onForwardTo(g.groupId); onDismiss() }
-                        )
+                }
+                if (unpinnedGroups.isNotEmpty()) {
+                    item { ForwardSectionHeader("Gruppen") }
+                    items(unpinnedGroups, key = { "group_${it.id}" }) { t ->
+                        ForwardTargetRow(t) { onForwardTo(t.id); onDismiss() }
                     }
                 }
             }
@@ -7755,7 +7793,13 @@ internal fun MessageBubble(
     }
 
     val emojiDensity = LocalDensity.current
-    val emojiBarThresholdPx = remember(emojiDensity) { with(emojiDensity) { 120.dp.toPx() } }
+    // Ab welcher Blasen-Oberkante (Fenster-Koordinaten) ist oberhalb kein Platz mehr für die
+    // Schnell-Leiste? Berücksichtigt die opake Top-App-Bar + Statusleiste (sonst verschwindet die
+    // Leiste dahinter), die App-Bar-Höhe (56dp) und die Höhe der Leiste selbst (~64dp).
+    val emojiBarTopInsetPx = WindowInsets.systemBars.getTop(emojiDensity)
+    val emojiBarThresholdPx = remember(emojiDensity, emojiBarTopInsetPx) {
+        emojiBarTopInsetPx + with(emojiDensity) { (56.dp + 64.dp).toPx() }
+    }
     var bubbleTopYPx by remember { mutableStateOf(Float.MAX_VALUE) }
     // Emoji-Schnellleiste als Lambda, um sie oben oder unten einzubetten ohne Code-Duplizierung
     val emojiQuickBar: @Composable () -> Unit = {
@@ -12588,9 +12632,15 @@ private fun MediaActionSheet(
 
     if (showForwardSheet) {
         val groups by viewModel.groups.collectAsState(initial = emptyList())
+        val frequencyOrder by viewModel.chatIdsSortedByFrequency.collectAsState(initial = emptyList())
+        val pinnedContactIds by viewModel.pinnedContactIds.collectAsState()
+        val pinnedGroupIds by viewModel.pinnedGroupIds.collectAsState()
         ForwardSheet(
             contacts = contacts,
             groups = groups,
+            frequencyOrder = frequencyOrder,
+            pinnedContactIds = pinnedContactIds,
+            pinnedGroupIds = pinnedGroupIds,
             onForwardTo = { targetId ->
                 message.mediaUrl?.let { url ->
                     viewModel.forwardMediaMessage(targetId, url, message.mediaType)

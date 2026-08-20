@@ -575,7 +575,7 @@ object CryptoManager {
      *                         serverseitigen umk_v1-Backup selbst zu entschlüsseln.
      * @return Encrypted Bundle im v2-Format: enthält ownAndroidPub64 (+umk), oder null bei Fehler
      */
-    fun encryptKeySyncPayload(webSessionPub64: String, ownAndroidPub64: String, umkBase64: String? = null, groupsJson: String? = null): String? {
+    fun encryptKeySyncPayload(webSessionPub64: String, ownAndroidPub64: String, umkBase64: String? = null, groupsJson: String? = null, partnerUmksJson: String? = null): String? {
         return try {
             // Temporäres ECDH-Secret mit dem ephemeren Web-Session-Key ableiten
             val partnerKeyBytes = Base64.decode(webSessionPub64, Base64.NO_WRAP)
@@ -620,6 +620,17 @@ object CryptoManager {
                 try {
                     root.add("groups", com.google.gson.JsonParser().parse(groupsJson))
                 } catch (_: Exception) { /* ungültiges JSON → groups weglassen */ }
+            }
+            // Alle bekannten Partner-UMKs mitschicken, damit der WebChat die
+            // Conversation Keys (v3) für ALLE Kontakte direkt ableiten kann – ohne
+            // dass jeder Partner online sein und einen Live-UMK-Exchange beantworten
+            // muss. Sonst bleibt die 1:1-Historie (eigene + empfangene v3-Nachrichten)
+            // von offline-Kontakten im WebChat unentschlüsselbar. Struktur:
+            // {"<partnerId>":"<umkBase64>", …}
+            if (!partnerUmksJson.isNullOrBlank()) {
+                try {
+                    root.add("partner_umks", com.google.gson.JsonParser().parse(partnerUmksJson))
+                } catch (_: Exception) { /* ungültiges JSON → partner_umks weglassen */ }
             }
             encryptWithSecret(tempSecret, root.toString())
         } catch (e: Exception) {

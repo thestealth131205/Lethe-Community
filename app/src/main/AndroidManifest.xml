@@ -161,6 +161,20 @@
             android:name=".MarkAsReadReceiver"
             android:exported="false" />
 
+        <!-- Startet Hintergrund-Arbeit (WebSocket/Reconnect) nach Geräte-Neustart & App-Update neu -->
+        <receiver
+            android:name=".BootReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:directBootAware="true">
+            <intent-filter android:priority="1000">
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
         <!-- WebSocket Keepalive ForegroundService (Legacy – nicht mehr gestartet) -->
         <service
             android:name=".WebSocketKeepaliveService"
@@ -169,9 +183,12 @@
 
         <!-- NotificationHandler: Keepalive + Liveness-Check + Fallback-Notification -->
         <!-- dataSync statt remoteMessaging: remoteMessaging erfordert FCM-Vorbedingung auf Android 14+ -->
+        <!-- stopWithTask=false: Service läuft weiter, wenn die App aus den Recents gewischt wird
+             (häufigster "Kill") → WebSocket bleibt verbunden, keine False-Positive-Benachrichtigung -->
         <service
             android:name=".NotificationHandler"
             android:foregroundServiceType="dataSync"
+            android:stopWithTask="false"
             android:exported="false" />
 
         <!-- CallForegroundService: Hält Mikrofon/Kamera/Bildschirmfreigabe im Hintergrund aufrecht (Android 14+) -->
