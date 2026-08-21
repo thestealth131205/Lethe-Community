@@ -481,12 +481,28 @@ class MainActivity : FragmentActivity() {
                         navController.navigate("settings/backend?initialTab=3")
                         return@LaunchedEffect
                     }
+                    if (navigateTo == "support") {
+                        navController.navigate("contacts") {
+                            popUpTo("login") { inclusive = true }
+                            launchSingleTop = true
+                        }
+                        navController.navigate("support")
+                        return@LaunchedEffect
+                    }
                     if (navigateTo == "backend_applications") {
                         navController.navigate("contacts") {
                             popUpTo("login") { inclusive = true }
                             launchSingleTop = true
                         }
                         navController.navigate("settings/backend?initialTab=4")
+                        return@LaunchedEffect
+                    }
+                    if (navigateTo == "creator_apply") {
+                        navController.navigate("contacts") {
+                            popUpTo("login") { inclusive = true }
+                            launchSingleTop = true
+                        }
+                        navController.navigate("creator_apply?startTab=1")
                         return@LaunchedEffect
                     }
                     if (navigateTo == "nearby_questions" || navigateTo == "nearby_profile_setup") {
@@ -1937,9 +1953,13 @@ class MainActivity : FragmentActivity() {
                             )
                         }
 
-                        composable("creator_apply") {
+                        composable(
+                            "creator_apply?startTab={startTab}",
+                            arguments = listOf(navArgument("startTab") { type = NavType.IntType; defaultValue = 0 })
+                        ) { backStackEntry ->
                             CreatorBewerbungScreen(
                                 viewModel = viewModel,
+                                startTab = backStackEntry.arguments?.getInt("startTab") ?: 0,
                                 onNavigateBack = { navController.popBackStack() }
                             )
                         }
@@ -2487,6 +2507,10 @@ class MainActivity : FragmentActivity() {
                                 adminCreatorApplicationActionMessage = adminCreatorApplicationActionMessage,
                                 onLoadAdminCreatorApplications = { status -> viewModel.loadAdminCreatorApplications(status) },
                                 onAdminApproveCreatorApplication = { id -> viewModel.adminApproveCreatorApplication(id) },
+                                onAdminRejectCreatorApplication = { id, note -> viewModel.adminRejectCreatorApplication(id, note) },
+                                onAdminMessageCreatorApplication = { id, message, onSuccess, onError ->
+                                    viewModel.adminMessageCreatorApplication(id, message, onSuccess, onError)
+                                },
                                 onClearAdminCreatorApplicationActionMessage = { viewModel.clearAdminCreatorApplicationActionMessage() },
                                 adminUserReports = adminUserReports,
                                 adminUserReportsLoading = adminUserReportsLoading,

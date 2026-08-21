@@ -1635,7 +1635,19 @@ data class UserSupportTicket(
     val status: String,
     @SerializedName("admin_reply") val adminReply: String?,
     @SerializedName("replied_at") val repliedAt: String?,
+    @SerializedName("created_at") val createdAt: String?,
+    val messages: List<SupportTicketThreadMessage> = emptyList()
+)
+
+data class SupportTicketThreadMessage(
+    val id: String,
+    @SerializedName("sender_type") val senderType: String,
+    val text: String,
     @SerializedName("created_at") val createdAt: String?
+)
+
+data class SupportTicketReplyRequest(
+    val message: String
 )
 
 // --- CREATOR ARTICLES ---
@@ -1790,7 +1802,19 @@ data class CreatorApplicationResponse(
     @SerializedName("created_at") val createdAt: String? = null,
     @SerializedName("user_name") val userName: String? = null,
     @SerializedName("user_fake_number") val userFakeNumber: String? = null,
-    @SerializedName("user_profile_image") val userProfileImage: String? = null
+    @SerializedName("user_profile_image") val userProfileImage: String? = null,
+    @SerializedName("messages") val messages: List<CreatorApplicationThreadMessage> = emptyList()
+)
+
+data class CreatorApplicationThreadMessage(
+    @SerializedName("id") val id: String,
+    @SerializedName("sender_type") val senderType: String,
+    @SerializedName("text") val text: String,
+    @SerializedName("created_at") val createdAt: String? = null
+)
+
+data class CreatorApplicationReplyRequest(
+    @SerializedName("message") val message: String
 )
 
 data class AdminCreatorApplicationAction(

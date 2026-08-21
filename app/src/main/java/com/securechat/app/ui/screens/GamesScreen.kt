@@ -27,8 +27,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
@@ -1039,6 +1042,9 @@ fun GamesScreen(
     var activitySelectedColor   by remember { mutableLongStateOf(0xFF000000L) }
     var activityStrokeWidth     by remember { mutableFloatStateOf(10f) }
     var activityLastPartialSent by remember { mutableLongStateOf(0L) }
+    // Sketch-'n'-Check: GraphicsLayer zum Erfassen der Zeichnung + gesammelte Bild-URLs
+    val activitySketchLayer = rememberGraphicsLayer()
+    val activitySavedSketchUrls = remember { mutableStateListOf<String>() }
 
     val resetActivityRound = { isDrawerNow: Boolean ->
         activityIsDrawer        = isDrawerNow
@@ -1402,6 +1408,15 @@ fun GamesScreen(
         while (activityTimer > 0) {
             delay(1000)
             activityTimer--
+            // 1 Sekunde vor Ablauf: aktuelle Zeichnung des Zeichners sichern
+            if (activityTimer == 1 && activityIsDrawer && activityWordChosen &&
+                activityCurrentWord.isNotBlank() && activityMyStrokes.isNotEmpty()) {
+                val word = activityCurrentWord
+                val bmp = runCatching { activitySketchLayer.toImageBitmap().asAndroidBitmap() }.getOrNull()
+                if (bmp != null) {
+                    viewModel.saveSketchAndGetUrl(bmp, word)?.let { activitySavedSketchUrls.add(it) }
+                }
+            }
         }
         viewModel.saveGameSession(1, activityCoins, 120, "win", "activity", partnerId, partnerName)
         phase = GamePhase.ACTIVITY_RESULTS
@@ -1557,6 +1572,16 @@ fun GamesScreen(
                 put("partnerCoins", partnerState?.coinsCollected ?: 0)
             }.toString()
             viewModel.insertGameResultMessage(sessionPartnerId, content)
+        }
+        // Sketch-'n'-Check: gesammelte Zeichnungen in den gemeinsamen Chat senden
+        if (activitySavedSketchUrls.isNotEmpty()) {
+            val sketchTarget = partnerId.ifBlank { sessionPartnerId }
+            if (sketchTarget.isNotBlank()) {
+                activitySavedSketchUrls.forEach { url ->
+                    viewModel.sendSketchImageMessage(sketchTarget, url, isGroup = false)
+                }
+            }
+            activitySavedSketchUrls.clear()
         }
         onNavigateBack()
     }
@@ -1833,6 +1858,7 @@ fun GamesScreen(
                     }
                 )
                 GamePhase.ACTIVITY_PLAYING -> ActivityGameScreen(
+                    sketchLayer          = activitySketchLayer,
                     isDrawer             = activityIsDrawer,
                     currentWord          = activityCurrentWord,
                     wordChoices          = activityWordChoices,
@@ -4049,6 +4075,7 @@ private fun ContactPickerDialog(
 
 @Composable
 fun ActivityGameScreen(
+    sketchLayer: GraphicsLayer,
     isDrawer: Boolean,
     currentWord: String,
     wordChoices: List<String>,
@@ -4141,6 +4168,10 @@ fun ActivityGameScreen(
                 Canvas(
                     modifier = Modifier
                         .fillMaxSize()
+                        .drawWithContent {
+                            sketchLayer.record { this@drawWithContent.drawContent() }
+                            drawLayer(sketchLayer)
+                        }
                         .background(Color.White)
                         .border(1.dp, MaterialTheme.colorScheme.outline)
                         .pointerInput(canvasW, canvasH, selectedColor, strokeWidth) {

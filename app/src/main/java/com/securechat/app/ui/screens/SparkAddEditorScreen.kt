@@ -60,6 +60,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Lightbulb
@@ -110,6 +111,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.nativeCanvas
@@ -122,6 +124,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.ui.text.font.FontFamily
@@ -175,6 +178,21 @@ private val SPARK_CATEGORIES = listOf(
     "Gaming", "Lifestyle", "Fitness", "Kochen", "Movie", "Comedy", "Songs", "18+"
 )
 
+/**
+ * Seitenverhältnis-Rahmen für die Spark-Vorschau/-Ausgabe.
+ * [ratio] = Breite/Höhe. `null` (ORIGINAL) bedeutet: Rahmen entspricht exakt dem
+ * nativen Seitenverhältnis des Mediums → keine Beschneidung, volle Originalproportionen.
+ */
+private enum class SparkFrameRatio(val label: String, val ratio: Float?) {
+    ORIGINAL("Original", null),
+    R3_4("3:4", 3f / 4f),
+    R4_3("4:3", 4f / 3f),
+    R16_9("16:9", 16f / 9f),
+    R9_16("9:16", 9f / 16f),
+    R9_21("9:21", 9f / 21f),
+    R21_9("21:9", 21f / 9f)
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun SparkAddEditorScreen(
@@ -217,6 +235,62 @@ fun SparkAddEditorScreen(
         imgScale = (imgScale * zoomChange).coerceIn(1f, 5f)
         if (imgScale > 1f) imgOffset += offsetChange else imgOffset = Offset.Zero
     }
+
+    // ─── Video-Zoom/Pan (analog zum Bild-Zoom) ────────────────────────────────
+    var vidScale by remember { mutableFloatStateOf(1f) }
+    var vidOffset by remember { mutableStateOf(Offset.Zero) }
+    val vidTransformState = rememberTransformableState { zoomChange, offsetChange, _ ->
+        vidScale = (vidScale * zoomChange).coerceIn(1f, 5f)
+        if (vidScale > 1f) vidOffset += offsetChange else vidOffset = Offset.Zero
+    }
+
+    // ─── Seitenverhältnis-Rahmen (Format-Auswahl) ─────────────────────────────
+    var selectedFrameRatio by remember { mutableStateOf(SparkFrameRatio.ORIGINAL) }
+    var showFormatStrip by remember { mutableStateOf(false) }
+    var mediaNativeWidth by remember { mutableIntStateOf(0) }
+    var mediaNativeHeight by remember { mutableIntStateOf(0) }
+
+    // Natives Seitenverhältnis des Bildes ermitteln (pro ausgewähltem Bild, auch bei Multi-Image)
+    LaunchedEffect(isImage, selectedImageIndex, imageOrder) {
+        if (isImage) {
+            val uri = imageOrder.getOrNull(selectedImageIndex) ?: mediaUri
+            val bounds = withContext(Dispatchers.IO) {
+                val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
+                if (opts.outWidth > 0 && opts.outHeight > 0) opts.outWidth to opts.outHeight else null
+            }
+            if (bounds != null) {
+                mediaNativeWidth = bounds.first
+                mediaNativeHeight = bounds.second
+            }
+        }
+    }
+    // Zoom/Pan zurücksetzen, sobald sich das Format ändert (neuer Rahmen = neue Bezugsgröße)
+    LaunchedEffect(selectedFrameRatio) {
+        imgScale = 1f; imgOffset = Offset.Zero
+        vidScale = 1f; vidOffset = Offset.Zero
+    }
+
+    // Rahmengröße: passt das gewählte Format (oder das native Medien-Verhältnis bei "Original")
+    // maximal in die verfügbare Fläche ein (Letterboxing statt Stauchen). Top-Level berechnet,
+    // damit sowohl doProcess() (Crop-Berechnung fürs Export) als auch die Vorschau-UI darauf zugreifen können.
+    val mediaAspect = if (mediaNativeWidth > 0 && mediaNativeHeight > 0)
+        mediaNativeWidth.toFloat() / mediaNativeHeight.toFloat() else 9f / 16f
+    val frameRatio = selectedFrameRatio.ratio ?: mediaAspect
+    var frameWidthPx = 0f
+    var frameHeightPx = 0f
+    if (containerWidth > 0 && containerHeight > 0) {
+        if (containerWidth.toFloat() / containerHeight.toFloat() > frameRatio) {
+            frameHeightPx = containerHeight.toFloat()
+            frameWidthPx = frameHeightPx * frameRatio
+        } else {
+            frameWidthPx = containerWidth.toFloat()
+            frameHeightPx = frameWidthPx / frameRatio
+        }
+    }
+    val density = LocalDensity.current
+    val frameWidthDp = with(density) { frameWidthPx.toDp() }
+    val frameHeightDp = with(density) { frameHeightPx.toDp() }
 
     // ─── Orientation Lock (Portrait) ─────────────────────────────────────────
     DisposableEffect(Unit) {
@@ -366,6 +440,21 @@ fun SparkAddEditorScreen(
         }
     }
 
+    // Native Video-Auflösung abfragen (für Format-Rahmen + Crop-Berechnung)
+    LaunchedEffect(isImage) {
+        if (!isImage && videoPlayer != null) {
+            while (mediaNativeWidth == 0) {
+                val vs = videoPlayer.videoSize
+                if (vs.width > 0 && vs.height > 0) {
+                    mediaNativeWidth = vs.width
+                    mediaNativeHeight = vs.height
+                    break
+                }
+                delay(100)
+            }
+        }
+    }
+
     // Player-Position laufend abfragen (für Timeline-Indikator)
     LaunchedEffect(isImage, isTrimDragging) {
         if (!isImage && !isTrimDragging && videoPlayer != null) {
@@ -437,6 +526,20 @@ fun SparkAddEditorScreen(
                 else -> 0f
             }
 
+            // Video-Crop-Rechteck (normiert) für das gewählte Format + Pan/Zoom ermitteln.
+            // Bilder werden bereits über den "Zuschneiden bestätigen"-Button dauerhaft beschnitten,
+            // daher hier nur für Video nötig (Crop wird erst beim Encoden angewendet).
+            val cropRectNorm: FloatArray? = if (!isImage &&
+                mediaNativeWidth > 0 && mediaNativeHeight > 0 &&
+                (kotlin.math.abs(frameRatio - mediaAspect) > 0.01f || vidScale != 1f || vidOffset != Offset.Zero)
+            ) {
+                computeCropFractions(
+                    frameWidthPx, frameHeightPx,
+                    mediaNativeWidth.toFloat(), mediaNativeHeight.toFloat(),
+                    vidScale, vidOffset.x, vidOffset.y
+                )
+            } else null
+
             val result = SparkProcessingTask.process(
                 context = context,
                 ffmpegProvider = viewModel.ffmpegProvider,
@@ -452,6 +555,7 @@ fun SparkAddEditorScreen(
                 trimStartMs = if (!isImage) trimStartMs else 0L,
                 trimEndMs = if (!isImage && trimEndMs > 0L && trimEndMs < videoDurationMs) trimEndMs else 0L,
                 musicOffsetSec = musicOffsetSec,
+                cropRectNorm = cropRectNorm,
                 onProgress = { p -> processingProgress = p }
             )
 
@@ -478,32 +582,47 @@ fun SparkAddEditorScreen(
                 .background(Color.Black)
                 .onSizeChanged { containerWidth = it.width; containerHeight = it.height }
         ) {
-            // 1. Medien-Vorschau (Bild oder Video) ─────────────────────────────
-            if (isImage) {
-                AsyncImage(
-                    model = imageOrder.getOrNull(selectedImageIndex) ?: mediaUri,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            scaleX = imgScale; scaleY = imgScale
-                            translationX = imgOffset.x; translationY = imgOffset.y
-                        }
-                        .transformable(state = imgTransformState, canPan = { imgScale > 1f })
-                )
-            } else {
-                AndroidView(
-                    factory = { ctx ->
-                        PlayerView(ctx).apply {
-                            useController = false
-                            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                            player = videoPlayer
-                        }
-                    },
-                    update = { view -> view.player = videoPlayer },
-                    modifier = Modifier.fillMaxSize()
-                )
+            // 1. Medien-Vorschau (Bild oder Video), auf gewähltes Seitenverhältnis begrenzt ──
+            // (Rahmengröße frameWidthDp/frameHeightDp wird oben top-level berechnet)
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .width(frameWidthDp)
+                    .height(frameHeightDp)
+                    .clip(RectangleShape)
+            ) {
+                if (isImage) {
+                    AsyncImage(
+                        model = imageOrder.getOrNull(selectedImageIndex) ?: mediaUri,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                scaleX = imgScale; scaleY = imgScale
+                                translationX = imgOffset.x; translationY = imgOffset.y
+                            }
+                            .transformable(state = imgTransformState, canPan = { imgScale > 1f })
+                    )
+                } else {
+                    AndroidView(
+                        factory = { ctx ->
+                            PlayerView(ctx).apply {
+                                useController = false
+                                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                                player = videoPlayer
+                            }
+                        },
+                        update = { view -> view.player = videoPlayer },
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                scaleX = vidScale; scaleY = vidScale
+                                translationX = vidOffset.x; translationY = vidOffset.y
+                            }
+                            .transformable(state = vidTransformState, canPan = { vidScale > 1f })
+                    )
+                }
             }
 
             // 2. Filter-Overlay ──────────────────────────────────────────────────
@@ -697,7 +816,16 @@ fun SparkAddEditorScreen(
                     else stringResource(R.string.spark_editor_filter_label),
                     isActive = selectedFilter != SparkFilterId.NONE,
                     activeColor = Color(0xFF7B1FA2),
-                    onClick = { showFilterStrip = !showFilterStrip }
+                    onClick = { showFilterStrip = !showFilterStrip; showFormatStrip = false }
+                )
+                SparkEditorSidebarButton(
+                    icon = Icons.Default.AspectRatio,
+                    label = if (selectedFrameRatio != SparkFrameRatio.ORIGINAL)
+                        selectedFrameRatio.label
+                    else stringResource(R.string.spark_editor_format_label),
+                    isActive = selectedFrameRatio != SparkFrameRatio.ORIGINAL,
+                    activeColor = Color(0xFF00BCD4),
+                    onClick = { showFormatStrip = !showFormatStrip; showFilterStrip = false }
                 )
                 if (isImage) {
                     SparkEditorSidebarButton(
@@ -718,17 +846,23 @@ fun SparkAddEditorScreen(
             }
 
             // 7b. Zoom/Zuschneiden bestätigen ────────────────────────────────────
-            if (isImage && (imgScale != 1f || imgOffset != Offset.Zero)) {
+            // Sichtbar bei manuellem Zoom/Pan ODER wenn ein Format gewählt ist, dessen Rahmen
+            // vom nativen Bild-Seitenverhältnis abweicht (sonst würde der Zuschnitt sonst nicht
+            // dauerhaft übernommen und beim Export käme wieder das unbeschnittene Original raus).
+            val frameDiffersFromNative = selectedFrameRatio != SparkFrameRatio.ORIGINAL &&
+                kotlin.math.abs(frameRatio - mediaAspect) > 0.01f
+            if (isImage && (imgScale != 1f || imgOffset != Offset.Zero || frameDiffersFromNative)) {
                 Button(
                     onClick = {
                         scope.launch {
                             isCroppingBusy = true
                             val uri = imageOrder.getOrNull(selectedImageIndex) ?: mediaUri
                             val croppedUri = cropImageWithTransform(
-                                context, uri, containerWidth, containerHeight, imgScale, imgOffset.x, imgOffset.y
+                                context, uri, frameWidthPx.toInt(), frameHeightPx.toInt(), imgScale, imgOffset.x, imgOffset.y
                             )
                             if (croppedUri != null) {
                                 imageOrder = imageOrder.toMutableList().also { it[selectedImageIndex] = croppedUri }
+                                mediaNativeWidth = 0; mediaNativeHeight = 0 // neu ermitteln (Bild wurde beschnitten)
                             }
                             imgScale = 1f
                             imgOffset = Offset.Zero
@@ -797,6 +931,19 @@ fun SparkAddEditorScreen(
                     SparkFilterStrip(
                         selectedFilter = selectedFilter,
                         onFilterSelected = { selectedFilter = it },
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                    )
+                }
+
+                // Format-Leiste (ausklappbar)
+                AnimatedVisibility(
+                    visible = showFormatStrip,
+                    enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+                ) {
+                    SparkFormatStrip(
+                        selectedRatio = selectedFrameRatio,
+                        onRatioSelected = { selectedFrameRatio = it },
                         modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
                     )
                 }
@@ -1805,6 +1952,67 @@ private fun VolumeSliderRow(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Format-Leiste (Seitenverhältnis-Auswahl)
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun SparkFormatStrip(
+    selectedRatio: SparkFrameRatio,
+    onRatioSelected: (SparkFrameRatio) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyRow(
+        modifier = modifier,
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        items(SparkFrameRatio.entries) { option ->
+            val isSelected = option == selectedRatio
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.clickable { onRatioSelected(option) }
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(60.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFF333333))
+                        .border(
+                            width = if (isSelected) 3.dp else 1.dp,
+                            color = if (isSelected) Color(0xFF00BCD4) else Color.White.copy(alpha = 0.3f),
+                            shape = RoundedCornerShape(10.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    // Miniatur-Rahmen im jeweiligen Seitenverhältnis
+                    val ratio = option.ratio ?: 1f
+                    val boxW = if (ratio >= 1f) 30.dp else 30.dp * ratio
+                    val boxH = if (ratio >= 1f) 30.dp / ratio else 30.dp
+                    Box(
+                        modifier = Modifier
+                            .width(boxW)
+                            .height(boxH)
+                            .border(
+                                width = 2.dp,
+                                color = if (isSelected) Color(0xFF00BCD4) else Color.White.copy(alpha = 0.7f),
+                                shape = RoundedCornerShape(3.dp)
+                            )
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = option.label,
+                    color = if (isSelected) Color(0xFF00BCD4) else Color.White,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                )
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Filter-Leiste
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -2608,6 +2816,37 @@ private suspend fun cropImageWithTransform(
         timber.log.Timber.tag("LETHE_SPARK").e("cropImageWithTransform Fehler: ${e.message}")
         null
     }
+}
+
+/**
+ * Berechnet den sichtbaren Bildausschnitt als normierte Bruchteile [left, top, right, bottom]
+ * (0f..1f, bezogen auf die Mediengröße) – analog zu [cropImageWithTransform], aber ohne
+ * ein Bitmap zu laden/schneiden. Wird für den Video-Crop (FFmpeg `crop=`-Filter) benötigt,
+ * da Videos nicht wie Bilder direkt zugeschnitten werden können, sondern die Crop-Koordinaten
+ * an den Encoder übergeben werden müssen.
+ */
+private fun computeCropFractions(
+    containerW: Float,
+    containerH: Float,
+    mediaW: Float,
+    mediaH: Float,
+    userScale: Float,
+    userOffsetX: Float,
+    userOffsetY: Float
+): FloatArray? {
+    if (containerW <= 0f || containerH <= 0f || mediaW <= 0f || mediaH <= 0f) return null
+
+    val baseScale = maxOf(containerW / mediaW, containerH / mediaH)
+    val halfCW = containerW / 2f
+    val halfCH = containerH / 2f
+    val totalScale = userScale * baseScale
+
+    val pxLeft   = (mediaW / 2f + (-halfCW - userOffsetX) / totalScale).coerceIn(0f, mediaW)
+    val pxRight  = (mediaW / 2f + ( halfCW - userOffsetX) / totalScale).coerceIn(0f, mediaW)
+    val pyTop    = (mediaH / 2f + (-halfCH - userOffsetY) / totalScale).coerceIn(0f, mediaH)
+    val pyBottom = (mediaH / 2f + ( halfCH - userOffsetY) / totalScale).coerceIn(0f, mediaH)
+
+    return floatArrayOf(pxLeft / mediaW, pyTop / mediaH, pxRight / mediaW, pyBottom / mediaH)
 }
 
 /**

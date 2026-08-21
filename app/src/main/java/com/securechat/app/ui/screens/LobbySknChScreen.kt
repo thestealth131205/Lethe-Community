@@ -32,9 +32,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
@@ -195,6 +198,22 @@ fun LobbySknChScreen(
     var selectedColor by remember { mutableStateOf(Color.Black) }
     var strokeWidth by remember { mutableStateOf(10f) }
     var isEraser by remember { mutableStateOf(false) }
+
+    // Sketch-'n'-Check: GraphicsLayer zum Erfassen der Zeichnung + gesammelte Bild-URLs
+    val sketchLayer = rememberGraphicsLayer()
+    val savedSketchUrls = remember { mutableStateListOf<String>() }
+
+    // Sendet alle gesammelten Zeichnungen an die übrigen Mitspieler (1:1-Bildnachricht)
+    fun sendSketchImagesOnLeave() {
+        if (savedSketchUrls.isEmpty()) return
+        val urls = savedSketchUrls.toList()
+        players.filter { it.userId != myUserId }.forEach { player ->
+            urls.forEach { url ->
+                viewModel.sendSketchImageMessage(player.userId, url, isGroup = false)
+            }
+        }
+        savedSketchUrls.clear()
+    }
 
     // Hilfsfunktion: an alle anderen Spieler broadcasten
     fun broadcastToOthers(type: String, payload: Map<String, Any>) {
@@ -507,6 +526,15 @@ fun LobbySknChScreen(
                 while (timeLeft > 0 && (phase == SknChPhase.DRAWING || phase == SknChPhase.GUESSING)) {
                     delay(1000)
                     timeLeft--
+                    // 1 Sekunde vor Ablauf: Zeichnung des Zeichners sichern (nur Zeichner hat das Wort)
+                    if (timeLeft == 1 && isDrawer && phase == SknChPhase.DRAWING &&
+                        currentWord.isNotBlank() && strokes.isNotEmpty()) {
+                        val word = currentWord
+                        val bmp = runCatching { sketchLayer.toImageBitmap().asAndroidBitmap() }.getOrNull()
+                        if (bmp != null) {
+                            viewModel.saveSketchAndGetUrl(bmp, word)?.let { savedSketchUrls.add(it) }
+                        }
+                    }
                 }
                 if (timeLeft <= 0) {
                     roundResultWord = currentWord
@@ -545,6 +573,7 @@ fun LobbySknChScreen(
     )
     BackHandler(enabled = phase in activeGamePhases) {
         val leavingUser = myUsername
+        sendSketchImagesOnLeave()
         players.filter { it.userId != myUserId }.forEach { p ->
             viewModel.sendGameWsMessage(
                 "sknch_player_left", p.userId,
@@ -586,6 +615,7 @@ fun LobbySknChScreen(
                                 }
                             }
                             SknChPhase.PRE_START, SknChPhase.SPECTATING, SknChPhase.GAME_OVER -> {
+                                sendSketchImagesOnLeave()
                                 scope.launch {
                                     publishedGameId?.let { viewModel.cancelOrLeaveSknChGame(it) }
                                     strokes.clear()
@@ -599,6 +629,7 @@ fun LobbySknChScreen(
                             else -> {
                                 // Aktives Spiel verlassen: alle Mitspieler benachrichtigen
                                 val leavingUser = myUsername
+                                sendSketchImagesOnLeave()
                                 players.filter { it.userId != myUserId }.forEach { p ->
                                     viewModel.sendGameWsMessage(
                                         "sknch_player_left", p.userId,
@@ -763,6 +794,7 @@ fun LobbySknChScreen(
 
             SknChPhase.DRAWING -> DrawingPhase(
                 modifier = Modifier.padding(padding),
+                sketchLayer = sketchLayer,
                 word = currentWord,
                 timeLeft = timeLeft,
                 totalTime = selectedCountdown,
@@ -1459,6 +1491,7 @@ private fun CountdownPhase(
 @Composable
 private fun DrawingPhase(
     modifier: Modifier = Modifier,
+    sketchLayer: GraphicsLayer,
     word: String,
     timeLeft: Int,
     totalTime: Int,
@@ -1505,9 +1538,13 @@ private fun DrawingPhase(
                 .fillMaxWidth()
                 .weight(1f)
                 .padding(8.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .drawWithContent {
+                    sketchLayer.record { this@drawWithContent.drawContent() }
+                    drawLayer(sketchLayer)
+                }
                 .background(Color.White, RoundedCornerShape(12.dp))
                 .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
-                .clip(RoundedCornerShape(12.dp))
         ) {
             SknChCanvas(
                 strokes = strokes,

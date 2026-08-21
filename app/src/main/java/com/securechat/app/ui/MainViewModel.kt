@@ -7257,6 +7257,10 @@ class MainViewModel @Inject constructor(
     val savedAccounts: StateFlow<List<ProfileManager.SavedAccount>> = _savedAccounts.asStateFlow()
 
     init {
+        // NotificationHandler-Service (lifecycle-unabhängig) darf keine WS-Benachrichtigungen
+        // duplizieren solange dieses ViewModel selbst WS-Nachrichten verarbeitet.
+        FcmMessageBus.isViewModelActive = true
+
         // Account-Switcher: gespeicherte Accounts sofort für den Login-Screen laden
         loadSavedAccounts()
 
@@ -9832,7 +9836,9 @@ class MainViewModel @Inject constructor(
                 val preview = if (mediaType == "text") {
                     // Niemals rohen Ciphertext anzeigen: v2:/v3:-Blobs (oder ein noch verschlüsselter
                     // Fallback nach fehlgeschlagener Entschlüsselung) → generischer Text statt Blob.
-                    if (contentBlob.startsWith("v2:") || contentBlob.startsWith("v3:") || contentBlob.startsWith("\uD83D\uDD10")) "Neue Nachricht" else contentBlob.take(120)
+                    // Gleicher Schwellenwert wie das "Aufklappen" im ChatScreen (400 Zeichen),
+                    // damit die Notification die komplette Nachricht bis zu dieser Länge enthält.
+                    if (contentBlob.startsWith("v2:") || contentBlob.startsWith("v3:") || contentBlob.startsWith("\uD83D\uDD10")) "Neue Nachricht" else contentBlob.take(400)
                 } else when (mediaType) {
                     "image"    -> "📷 Bild"
                     "video"    -> "🎥 Video"
@@ -10599,7 +10605,7 @@ class MainViewModel @Inject constructor(
                         else -> {
                             val c = decryptedContent
                             if (c.startsWith("[🔐")) "$senderDisplayName: Neue Nachricht"
-                            else "$senderDisplayName: ${c.take(80)}"
+                            else "$senderDisplayName: ${c.take(400)}"
                         }
                     }
                     // FCM konnte den Text nicht entschlüsseln → WS soll die Notification updaten
@@ -16313,6 +16319,43 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    /** Nutzer antwortet auf eine Rückfrage des Supports zu einem eigenen Ticket. */
+    fun replyToSupportTicket(ticketId: String, message: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val resp = apiService.replyToSupportTicket(
+                    ticketId,
+                    com.securechat.app.data.network.SupportTicketReplyRequest(message)
+                )
+                if (resp.isSuccessful) {
+                    loadMyTickets()
+                    onSuccess()
+                } else {
+                    onError("Server-Fehler (${resp.code()})")
+                }
+            } catch (e: Exception) {
+                onError(e.message ?: "Unbekannter Fehler")
+            }
+        }
+    }
+
+    /** Löscht ein eigenes Support-Ticket. Funktioniert nur, wenn es als erledigt markiert ist. */
+    fun deleteSupportTicket(ticketId: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val resp = apiService.deleteSupportTicket(ticketId)
+                if (resp.isSuccessful) {
+                    loadMyTickets()
+                    onSuccess()
+                } else {
+                    onError("Server-Fehler (${resp.code()})")
+                }
+            } catch (e: Exception) {
+                onError(e.message ?: "Unbekannter Fehler")
+            }
+        }
+    }
+
     fun leaveGroup(group: com.securechat.app.data.local.GroupEntity) {
         val userId = currentUser.value?.userId ?: return
         viewModelScope.launch(Dispatchers.IO) {
@@ -19308,6 +19351,93 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Brennt das gezeichnete Wort oben links in das Bitmap, lädt das Bild unter
+     * Images/Sketchncheck/ auf den Server hoch und gibt die absolute URL zurück
+     * (oder null bei Fehler). Wird von Sketch 'n' Check genutzt, um die Zeichnung
+     * 1 Sekunde vor Ablauf des Timers zu sichern.
+     */
+    suspend fun saveSketchAndGetUrl(bitmap: Bitmap, word: String): String? =
+        withContext(Dispatchers.IO) {
+            try {
+                val mutable = if (bitmap.isMutable) bitmap
+                              else bitmap.copy(Bitmap.Config.ARGB_8888, true)
+                val canvas = android.graphics.Canvas(mutable)
+                val pad = mutable.width * 0.02f
+                val textPaint = android.graphics.Paint().apply {
+                    color = android.graphics.Color.WHITE
+                    textSize = mutable.height * 0.06f
+                    isAntiAlias = true
+                    typeface = android.graphics.Typeface.DEFAULT_BOLD
+                }
+                val bounds = android.graphics.Rect()
+                textPaint.getTextBounds(word, 0, word.length, bounds)
+                val bgPaint = android.graphics.Paint().apply { color = 0xCC000000.toInt() }
+                canvas.drawRect(
+                    pad, pad,
+                    pad * 3 + bounds.width(), pad * 3 + bounds.height(),
+                    bgPaint
+                )
+                canvas.drawText(word, pad * 2, pad * 2 + bounds.height(), textPaint)
+
+                val file = File(context.cacheDir, "sketch_${System.currentTimeMillis()}.png")
+                FileOutputStream(file).use { mutable.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                val part = MultipartBody.Part.createFormData(
+                    "file", file.name,
+                    file.asRequestBody("image/png".toMediaTypeOrNull())
+                )
+                val resp = apiService.uploadSketchImage(part)
+                file.delete()
+                if (resp.isSuccessful) resp.body()?.get("url")?.let { toAbsoluteUrl(it) } else null
+            } catch (e: Exception) {
+                Timber.tag("LETHE_GAME").e("saveSketchAndGetUrl fehlgeschlagen: ${e.message}")
+                null
+            }
+        }
+
+    /**
+     * Sendet ein bereits hochgeladenes Sketch-'n'-Check-Bild als Bild-Nachricht in
+     * einen Chat (fügt lokale Kopie ein + verschickt via WebSocket). Bilder laufen
+     * als Klartext-media_url – kein E2EE-Schlüssel zum Empfänger nötig.
+     */
+    fun sendSketchImageMessage(chatId: String, imageUrl: String, isGroup: Boolean = false) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val me = _currentUser.value ?: return@launch
+            val clientId = UUID.randomUUID().toString()
+            messageDao.insertMessage(
+                MessageEntity(
+                    chatId = chatId,
+                    senderId = me.userId,
+                    receiverId = chatId,
+                    content = "[image]",
+                    mediaType = "image",
+                    mediaUrl = imageUrl,
+                    timestamp = System.currentTimeMillis(),
+                    isSent = true,
+                    clientMessageId = clientId,
+                    deliveryStatus = 1
+                )
+            )
+            if (isGroup) {
+                webSocketManager.sendMessage("group_message", chatId, mapOf(
+                    "content_blob" to "[image]",
+                    "media_type" to "image",
+                    "media_url" to imageUrl,
+                    "group_id" to chatId,
+                    "client_message_id" to clientId,
+                    "sender_timestamp" to System.currentTimeMillis()
+                ))
+            } else {
+                webSocketManager.sendMessage("message", chatId, mapOf(
+                    "content_blob" to "[image]",
+                    "media_type" to "image",
+                    "media_url" to imageUrl,
+                    "client_message_id" to clientId
+                ))
+            }
+        }
+    }
+
     /** Lädt die globale Gaming-Rangliste vom Server. */
     suspend fun getGamingHistory() =
         apiService.getGamingHistory()
@@ -20042,6 +20172,41 @@ class MainViewModel @Inject constructor(
         _creatorApplicationError.value = null
     }
 
+    private val _myCreatorApplications = MutableStateFlow<List<com.securechat.app.data.network.CreatorApplicationResponse>>(emptyList())
+    val myCreatorApplications: StateFlow<List<com.securechat.app.data.network.CreatorApplicationResponse>> = _myCreatorApplications.asStateFlow()
+
+    /** Eigene Creator-Bewerbungen inkl. Antwort-Thread laden. */
+    fun loadMyCreatorApplications() {
+        viewModelScope.launch {
+            try {
+                val resp = apiService.getMyCreatorApplications()
+                if (resp.isSuccessful) _myCreatorApplications.value = resp.body() ?: emptyList()
+            } catch (e: Exception) {
+                Timber.tag("LETHE_CREATOR").w("loadMyCreatorApplications: ${e.message}")
+            }
+        }
+    }
+
+    /** Bewerber antwortet auf eine Rückfrage zu seiner eigenen Creator-Bewerbung. */
+    fun replyToCreatorApplication(applicationId: String, message: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val resp = apiService.replyToCreatorApplication(
+                    applicationId,
+                    com.securechat.app.data.network.CreatorApplicationReplyRequest(message)
+                )
+                if (resp.isSuccessful) {
+                    loadMyCreatorApplications()
+                    onSuccess()
+                } else {
+                    onError("Server-Fehler (${resp.code()})")
+                }
+            } catch (e: Exception) {
+                onError(e.message ?: "Unbekannter Fehler")
+            }
+        }
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // ADMIN: CREATOR-BEWERBUNGEN
     // ─────────────────────────────────────────────────────────────────────────
@@ -20099,6 +20264,50 @@ class MainViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 _adminCreatorApplicationActionMessage.value = "Netzwerkfehler: ${e.message}"
+            }
+        }
+    }
+
+    fun adminRejectCreatorApplication(applicationId: String, adminNote: String? = null) {
+        viewModelScope.launch {
+            try {
+                val token = tokenManager.getToken() ?: return@launch
+                val response = apiService.adminReviewCreatorApplication(
+                    "Bearer $token",
+                    applicationId,
+                    action = "reject",
+                    adminNote = adminNote?.takeIf { it.isNotBlank() }
+                )
+                if (response.isSuccessful) {
+                    _adminCreatorApplicationActionMessage.value = "Bewerbung abgelehnt."
+                    loadAdminCreatorApplications()
+                } else {
+                    _adminCreatorApplicationActionMessage.value = "Fehler ${response.code()}"
+                }
+            } catch (e: Exception) {
+                _adminCreatorApplicationActionMessage.value = "Netzwerkfehler: ${e.message}"
+            }
+        }
+    }
+
+    /** Admin/Moderator: Rückfrage/Nachricht zu einer Bewerbung senden, ohne den Status zu ändern. */
+    fun adminMessageCreatorApplication(applicationId: String, message: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val token = tokenManager.getToken() ?: return@launch
+                val response = apiService.adminMessageCreatorApplication(
+                    "Bearer $token",
+                    applicationId,
+                    com.securechat.app.data.network.CreatorApplicationReplyRequest(message)
+                )
+                if (response.isSuccessful) {
+                    loadAdminCreatorApplications()
+                    onSuccess()
+                } else {
+                    onError("Server-Fehler (${response.code()})")
+                }
+            } catch (e: Exception) {
+                onError(e.message ?: "Unbekannter Fehler")
             }
         }
     }
@@ -20471,6 +20680,10 @@ class MainViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
+        // Ab jetzt übernimmt der lifecycle-unabhängige NotificationHandler-Service die
+        // WS-Benachrichtigungen, damit während der ViewModel-Neuerstellung (Reconnect) keine
+        // Nachrichten verloren gehen.
+        FcmMessageBus.isViewModelActive = false
         context.unregisterReceiver(screenStateReceiver)
         webSocketManager.disconnect()
         p2pMeshManager.stop()

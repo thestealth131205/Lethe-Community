@@ -27,6 +27,7 @@ import androidx.compose.foundation.gestures.transformable
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.window.Dialog
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -937,7 +938,9 @@ private fun SparksPage(
     // Wenn ExoPlayer einen Fehler meldet (z.B. HLS nicht erreichbar, falscher Pfad),
     // wird playerError auf true gesetzt → Fallback-Thumbnail statt schwarzem Screen.
     var playerError by remember(spark.mediaUrl) { mutableStateOf(false) }
-    var videoIsLandscape by remember(spark.mediaUrl) { mutableStateOf(false) }
+    // Seitenverhältnis (Breite/Höhe) des Videos. Standard = 9:16 (klassisches Reel-Format),
+    // damit vor dem ersten onVideoSizeChanged-Callback kein "Vollbild anzeigen"-Button aufblitzt.
+    var videoAspectRatio by remember(spark.mediaUrl) { mutableStateOf(9f / 16f) }
     // true solange ExoPlayer im STATE_BUFFERING ist → Ladeindikator anzeigen
     var isBuffering by remember(spark.mediaUrl) { mutableStateOf(true) }
     // Verhindert Ladekreis-Blitz bei HLS-Nachpufferung: Indikator nur bis zum ersten READY-State.
@@ -956,7 +959,7 @@ private fun SparksPage(
             }
             override fun onVideoSizeChanged(videoSize: VideoSize) {
                 if (videoSize.width > 0 && videoSize.height > 0) {
-                    videoIsLandscape = videoSize.width > videoSize.height
+                    videoAspectRatio = videoSize.width.toFloat() / videoSize.height.toFloat()
                 }
             }
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -1398,63 +1401,71 @@ private fun SparksPage(
             }
             } // end else (imageUrls nicht leer)
         } else if (!spark.mediaUrl.isNullOrBlank()) {
-            if (videoIsLandscape && !isFullscreen) {
-                // Querformat-Video: zentriert angezeigt mit Vollbild-Button am unteren Videorand
+            // Nur Formate schmaler/gleich 9:16 (also 9:16 und 9:21) sind quasi bereits
+            // vollbildfüllend → dort bleibt es beim klassischen Fill+Crop ohne Button.
+            // Alle anderen Formate (Original, 3:4, 4:3, 16:9, 21:9) werden nur bis zur
+            // maximal anzeigbaren Breite gestreckt (Proportionen bleiben erhalten) und
+            // zeigen darunter einen "Vollbild anzeigen"-Button.
+            val needsFitWidth = videoAspectRatio > (9f / 16f + 0.02f)
+            if (needsFitWidth && !isFullscreen) {
+                // Nicht-9:16/9:21-Format: auf Bildschirmbreite begrenzt, Proportionen erhalten,
+                // Vollbild-Button direkt unter dem Video.
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            scaleX = videoScale
-                            scaleY = videoScale
-                            translationX = videoOffset.x
-                            translationY = videoOffset.y
-                        }
-                        .transformable(
-                            state = videoTransformableState,
-                            canPan = { videoScale > 1f }
-                        ),
+                    modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (!playerError) {
-                        PlayerSurface(
-                            player = player,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        AsyncImage(
-                            model = spark.previewImageUrl,
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Fit
-                        )
-                    }
-                    // Tap-Handler (verdeckt nicht den Vollbild-Button)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) {
-                                if (spark.isLive) onNavigateToLiveRoom(spark.creatorId)
-                                else { isPlaying = !isPlaying; showOverlay = true; onToggleControls(true) }
-                            }
-                    )
-                    // "In Vollbild anzeigen" Button – immer sichtbar am unteren Videorand
-                    TextButton(
-                        onClick = { isFullscreen = true },
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = 316.dp)
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Icon(
-                            Icons.Default.Fullscreen,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.sparks_feed_show_fullscreen), color = Color.White, fontSize = 14.sp)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(videoAspectRatio)
+                                .graphicsLayer {
+                                    scaleX = videoScale
+                                    scaleY = videoScale
+                                    translationX = videoOffset.x
+                                    translationY = videoOffset.y
+                                }
+                                .transformable(
+                                    state = videoTransformableState,
+                                    canPan = { videoScale > 1f }
+                                )
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) {
+                                    if (spark.isLive) onNavigateToLiveRoom(spark.creatorId)
+                                    else { isPlaying = !isPlaying; showOverlay = true; onToggleControls(true) }
+                                }
+                        ) {
+                            if (!playerError) {
+                                PlayerSurface(
+                                    player = player,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                AsyncImage(
+                                    model = spark.previewImageUrl,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Fit
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        // "In Vollbild anzeigen" Button – direkt unter dem Video
+                        TextButton(onClick = { isFullscreen = true }) {
+                            Icon(
+                                Icons.Default.Fullscreen,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(stringResource(R.string.sparks_feed_show_fullscreen), color = Color.White, fontSize = 14.sp)
+                        }
                     }
                 }
             } else {

@@ -913,6 +913,15 @@
     <string name="support_status_closed">Fermé</string>
     <string name="support_no_tickets">Aucun ticket pour l\'instant</string>
     <string name="support_reply_from_support">Réponse du support</string>
+    <string name="support_conversation_label">Conversation</string>
+    <string name="support_you_label">Toi</string>
+    <string name="support_reply_placeholder">Ta réponse…</string>
+    <string name="support_reply_send_button">Répondre</string>
+    <string name="support_reply_sent">Réponse envoyée</string>
+    <string name="support_delete_button">Supprimer le ticket</string>
+    <string name="support_delete_confirm_title">Supprimer le ticket ?</string>
+    <string name="support_delete_confirm_message">Ce ticket sera définitivement supprimé. Cette action est irréversible.</string>
+    <string name="support_delete_locked_hint">La suppression n\'est possible que lorsque le ticket est marqué comme résolu.</string>
     <string name="invite_description">Pour chaque nouvel utilisateur qui s\'inscrit et se connecte via votre lien, vous recevez automatiquement 5 Styx.</string>
     <string name="invite_qr_cd">QR Code d\'invitation</string>
     <string name="invite_copy_cd">Copier</string>
@@ -1528,6 +1537,7 @@
     <string name="spark_editor_mute_label">Muet</string>
     <string name="spark_editor_unmute_label">Son</string>
     <string name="spark_editor_filter_label">Filtre</string>
+    <string name="spark_editor_format_label">Format</string>
     <string name="spark_editor_text_label">Texte</string>
     <string name="spark_editor_emoji_label">Emoji</string>
     <string name="spark_editor_original_label">Original</string>
@@ -1796,6 +1806,19 @@
     <string name="creator_bewerbung_approval_info">Si les informations sont correctes, votre compte sera activé en tant que créateur après examen.</string>
     <string name="creator_bewerbung_submit">Soumettre la candidature</string>
     <string name="creator_bewerbung_age_verification_required">Vérification de l\'âge requise. Vérifiez votre âge dans les paramètres avant de postuler comme créateur.</string>
+    <string name="creator_bewerbung_tab_apply">Postuler</string>
+    <string name="creator_bewerbung_tab_my_application">Ma candidature</string>
+    <string name="creator_bewerbung_no_applications">Aucune candidature pour le moment</string>
+    <string name="creator_bewerbung_status_pending">En attente</string>
+    <string name="creator_bewerbung_status_approved">Approuvée</string>
+    <string name="creator_bewerbung_status_rejected">Refusée</string>
+    <string name="creator_bewerbung_admin_note_label">Note de l\'équipe</string>
+    <string name="creator_bewerbung_conversation_label">Conversation</string>
+    <string name="creator_bewerbung_reply_from_team">Réponse de l\'équipe</string>
+    <string name="creator_bewerbung_you_label">Toi</string>
+    <string name="creator_bewerbung_reply_placeholder">Ta réponse…</string>
+    <string name="creator_bewerbung_reply_send_button">Répondre</string>
+    <string name="creator_bewerbung_submitted_label">Envoyée le</string>
 
     <!-- ── TABLEAU DE BORD CRÉATEUR EXTRA ── -->
     <string name="creator_dash_payout">Paiement</string>

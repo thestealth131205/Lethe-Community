@@ -5,6 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -24,6 +26,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.securechat.app.R
+import com.securechat.app.data.network.CreatorApplicationResponse
 import com.securechat.app.ui.MainViewModel
 import com.securechat.app.ui.theme.topBarTitleColor
 
@@ -39,7 +42,62 @@ private val CONTENT_TYPE_OPTIONS = listOf(
 @Composable
 fun CreatorBewerbungScreen(
     viewModel: MainViewModel,
+    startTab: Int = 0,
     onNavigateBack: () -> Unit
+) {
+    var selectedTab by remember { mutableIntStateOf(startTab) }
+
+    LaunchedEffect(startTab) {
+        if (startTab == 1) viewModel.loadMyCreatorApplications()
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.creator_bewerbung_title), color = topBarTitleColor()) },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Zurück")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            )
+        }
+    ) { padding ->
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            TabRow(selectedTabIndex = selectedTab) {
+                Tab(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                    text = { Text(stringResource(R.string.creator_bewerbung_tab_apply)) }
+                )
+                Tab(
+                    selected = selectedTab == 1,
+                    onClick = {
+                        selectedTab = 1
+                        viewModel.loadMyCreatorApplications()
+                    },
+                    text = { Text(stringResource(R.string.creator_bewerbung_tab_my_application)) }
+                )
+            }
+
+            when (selectedTab) {
+                0 -> BewerbenFormTab(viewModel = viewModel, onSubmitted = { selectedTab = 1 })
+                1 -> {
+                    val applications by viewModel.myCreatorApplications.collectAsState()
+                    MyApplicationTab(applications = applications, viewModel = viewModel)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BewerbenFormTab(
+    viewModel: MainViewModel,
+    onSubmitted: () -> Unit
 ) {
     val context = LocalContext.current
     val currentUser by viewModel.currentUser.collectAsState()
@@ -61,7 +119,7 @@ fun CreatorBewerbungScreen(
         if (success) {
             Toast.makeText(context, "Bewerbung erfolgreich eingereicht!", Toast.LENGTH_LONG).show()
             viewModel.clearCreatorApplicationState()
-            onNavigateBack()
+            onSubmitted()
         }
     }
 
@@ -73,30 +131,14 @@ fun CreatorBewerbungScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.creator_bewerbung_title), color = topBarTitleColor()) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Zurück")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .background(MaterialTheme.colorScheme.background)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .background(MaterialTheme.colorScheme.background)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
             // Altersverifikation-Hinweis
             if (!ageVerified) {
                 Card(
@@ -249,7 +291,174 @@ fun CreatorBewerbungScreen(
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun MyApplicationTab(
+    applications: List<CreatorApplicationResponse>,
+    viewModel: MainViewModel
+) {
+    if (applications.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(
+                stringResource(R.string.creator_bewerbung_no_applications),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        return
+    }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        items(applications, key = { it.id }) { app ->
+            ApplicationCard(application = app, viewModel = viewModel)
+        }
+    }
+}
+
+@Composable
+private fun ApplicationCard(
+    application: CreatorApplicationResponse,
+    viewModel: MainViewModel
+) {
+    var replyText by remember(application.id) { mutableStateOf("") }
+    var isSendingReply by remember { mutableStateOf(false) }
+
+    val statusColor = when (application.status) {
+        "approved" -> Color(0xFF4CAF50)
+        "rejected" -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.tertiary
+    }
+    val statusLabel = when (application.status) {
+        "approved" -> stringResource(R.string.creator_bewerbung_status_approved)
+        "rejected" -> stringResource(R.string.creator_bewerbung_status_rejected)
+        else -> stringResource(R.string.creator_bewerbung_status_pending)
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(application.bio, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f), maxLines = 2)
+                Surface(shape = RoundedCornerShape(50), color = statusColor.copy(alpha = 0.15f)) {
+                    Text(
+                        statusLabel,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = statusColor,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+
+            application.createdAt?.let { created ->
+                Text(
+                    "${stringResource(R.string.creator_bewerbung_submitted_label)}: ${created.take(10)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    fontSize = 11.sp
+                )
+            }
+
+            application.adminNote?.takeIf { it.isNotBlank() }?.let { note ->
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            stringResource(R.string.creator_bewerbung_admin_note_label),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(note, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+
+            if (application.messages.isNotEmpty()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    stringResource(R.string.creator_bewerbung_conversation_label),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    application.messages.forEach { msg ->
+                        val isAdmin = msg.senderType == "admin"
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isAdmin) MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.surface
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    if (isAdmin) stringResource(R.string.creator_bewerbung_reply_from_team)
+                                    else stringResource(R.string.creator_bewerbung_you_label),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isAdmin) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(msg.text, style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (application.status == "pending" || application.messages.isNotEmpty()) {
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    OutlinedTextField(
+                        value = replyText,
+                        onValueChange = { replyText = it },
+                        placeholder = { Text(stringResource(R.string.creator_bewerbung_reply_placeholder)) },
+                        modifier = Modifier.weight(1f),
+                        maxLines = 4
+                    )
+                    Button(
+                        onClick = {
+                            if (replyText.isNotBlank()) {
+                                isSendingReply = true
+                                viewModel.replyToCreatorApplication(
+                                    applicationId = application.id,
+                                    message = replyText,
+                                    onSuccess = {
+                                        isSendingReply = false
+                                        replyText = ""
+                                    },
+                                    onError = { isSendingReply = false }
+                                )
+                            }
+                        },
+                        enabled = !isSendingReply && replyText.isNotBlank()
+                    ) {
+                        if (isSendingReply) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                        } else {
+                            Text(stringResource(R.string.creator_bewerbung_reply_send_button))
+                        }
+                    }
+                }
+            }
         }
     }
 }

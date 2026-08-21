@@ -24,6 +24,18 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.153",
+            title = "Benachrichtigungen, Support & Sparks verbessert",
+            items = listOf(
+                "Chat-Benachrichtigungen werden jetzt auch beim Wegwischen sofort als zugestellt/gelesen markiert",
+                "Deutlich mehr Benachrichtigungen (Anrufe, Nearby, Spark- & Diskussions-Kommentare, Likes, Support-Antworten, Spiele-Rangliste, Kreator-Bewerbungen) kommen jetzt zuverlässig an \u2013 auch ohne Google-Dienste",
+                "Neu: Antwortfunktion für Support-Tickets und Kreator-Bewerbungen mit eigener Status-Übersicht \u201eMeine Bewerbung\u201c",
+                "Sparks: Bilder/Videos werden beim Erstellen nicht mehr verzerrt \u2013 neue Formatauswahl mit Zoom & Verschieben; im Feed werden nicht-vertikale Formate proportional korrekt dargestellt",
+            ),
+            shortSummary = "Zuverlässigere Benachrichtigungen, Support-Antworten und unverzerrte Sparks"
+        ),
+
+        ChangelogEntry(
             version = "10.4.152",
             title = "Weiterleiten, Reaktionen & Zuverl\u00e4ssigkeit",
             items = listOf(
@@ -54,17 +66,6 @@ object AppChangelog {
                 "Neue Option \u201eGemischte Kontaktliste\u201c: Zeigt auf Wunsch Kontakte all deiner gespeicherten Accounts gemeinsam in der Kontaktliste an, mit farblich hervorgehobenem Konto-Namen hinter dem Kontaktnamen",
             ),
             shortSummary = "Neuer Multi-Account-Bereich: Konto wechseln, Account-\u00dcberwachung und gemischte Kontaktliste"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.149",
-            title = "Lethe Assistant leichter finden & Galerie-Fix",
-            items = listOf(
-                "Der offizielle Lethe-Bot (Lethe Assistant) ist jetzt für alle Nutzer direkt beim Hinzufügen eines Kontakts unter \u201eBots\u201c sichtbar \u2013 ohne Suche",
-                "Behoben: Nachrichten mit mehreren Bildern wurden in der Medien-Galerie eines Chats manchmal nicht korrekt angezeigt \u2013 jedes Bild erscheint dort jetzt einzeln",
-                "Geteilte Song-Links aus dem Lethe Media Player nutzen jetzt eine kürzere Adresse (songs.letheapp.de) \u2013 bereits geteilte alte Links funktionieren weiterhin",
-            ),
-            shortSummary = "Lethe Assistant leichter zu finden, Galerie-Fix f\u00fcr Mehrfachbilder und k\u00fcrzere Song-Links"
         ),
 
     )

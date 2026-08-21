@@ -61,6 +61,8 @@ data class SparkEncodeRequest(
     val trimStartMs: Long = 0L,
     val trimEndMs: Long = 0L,
     val musicOffsetSec: Float = 0f,
+    /** Normierter Crop-Ausschnitt [left, top, right, bottom] (0f–1f, Bruchteile der Videogröße). Null = kein Crop. */
+    val cropRectNorm: FloatArray? = null,
     val outputFile: File
 )
 

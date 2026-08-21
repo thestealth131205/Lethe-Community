@@ -970,6 +970,15 @@
     <string name="support_status_closed">Geschlossen</string>
     <string name="support_no_tickets">Noch keine Tickets vorhanden</string>
     <string name="support_reply_from_support">Antwort vom Support</string>
+    <string name="support_conversation_label">Verlauf</string>
+    <string name="support_you_label">Du</string>
+    <string name="support_reply_placeholder">Deine Antwort…</string>
+    <string name="support_reply_send_button">Antworten</string>
+    <string name="support_reply_sent">Antwort gesendet</string>
+    <string name="support_delete_button">Ticket löschen</string>
+    <string name="support_delete_confirm_title">Ticket löschen?</string>
+    <string name="support_delete_confirm_message">Dieses Ticket wird endgültig gelöscht. Das kann nicht rückgängig gemacht werden.</string>
+    <string name="support_delete_locked_hint">Löschen ist erst möglich, wenn das Ticket als erledigt markiert wurde.</string>
     <string name="invite_description">Für jeden neuen Nutzer, der sich über deinen Link registriert und einloggt, erhältst du automatisch 5 Styx gutgeschrieben.</string>
     <string name="invite_qr_cd">Einladungs-QR-Code</string>
     <string name="invite_copy_cd">Kopieren</string>
@@ -1609,6 +1618,7 @@
     <string name="spark_editor_mute_label">Stumm</string>
     <string name="spark_editor_unmute_label">Ton</string>
     <string name="spark_editor_filter_label">Filter</string>
+    <string name="spark_editor_format_label">Format</string>
     <string name="spark_editor_text_label">Text</string>
     <string name="spark_editor_emoji_label">Emoji</string>
     <string name="spark_editor_original_label">Original</string>
@@ -1877,6 +1887,19 @@
     <string name="creator_bewerbung_approval_info">Bei richtigen Angaben und nach der Prüfung wird dein Account als Creator freigeschaltet.</string>
     <string name="creator_bewerbung_submit">Anfrage starten</string>
     <string name="creator_bewerbung_age_verification_required">Altersverifikation erforderlich. Verifiziere dein Alter in den Einstellungen, bevor du dich als Creator bewirbst.</string>
+    <string name="creator_bewerbung_tab_apply">Bewerben</string>
+    <string name="creator_bewerbung_tab_my_application">Meine Bewerbung</string>
+    <string name="creator_bewerbung_no_applications">Noch keine Bewerbung vorhanden</string>
+    <string name="creator_bewerbung_status_pending">Ausstehend</string>
+    <string name="creator_bewerbung_status_approved">Genehmigt</string>
+    <string name="creator_bewerbung_status_rejected">Abgelehnt</string>
+    <string name="creator_bewerbung_admin_note_label">Notiz vom Team</string>
+    <string name="creator_bewerbung_conversation_label">Verlauf</string>
+    <string name="creator_bewerbung_reply_from_team">Antwort vom Team</string>
+    <string name="creator_bewerbung_you_label">Du</string>
+    <string name="creator_bewerbung_reply_placeholder">Deine Antwort…</string>
+    <string name="creator_bewerbung_reply_send_button">Antworten</string>
+    <string name="creator_bewerbung_submitted_label">Eingereicht am</string>
 
     <!-- ── CREATOR DASHBOARD EXTRA ── -->
     <string name="creator_dash_payout">Auszahlung</string>

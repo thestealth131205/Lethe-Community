@@ -909,6 +909,15 @@
     <string name="support_status_closed">Chiuso</string>
     <string name="support_no_tickets">Nessun ticket ancora</string>
     <string name="support_reply_from_support">Risposta dal supporto</string>
+    <string name="support_conversation_label">Conversazione</string>
+    <string name="support_you_label">Tu</string>
+    <string name="support_reply_placeholder">La tua risposta…</string>
+    <string name="support_reply_send_button">Rispondi</string>
+    <string name="support_reply_sent">Risposta inviata</string>
+    <string name="support_delete_button">Elimina ticket</string>
+    <string name="support_delete_confirm_title">Eliminare il ticket?</string>
+    <string name="support_delete_confirm_message">Questo ticket verrà eliminato definitivamente. L\'operazione non può essere annullata.</string>
+    <string name="support_delete_locked_hint">Puoi eliminare un ticket solo dopo che è stato contrassegnato come risolto.</string>
     <string name="invite_description">Per ogni nuovo utente che si registra e accede tramite il tuo link, ricevi automaticamente 5 Styx.</string>
     <string name="invite_qr_cd">QR Code di invito</string>
     <string name="invite_copy_cd">Copia</string>
@@ -1528,6 +1537,7 @@
     <string name="spark_editor_mute_label">Silenzioso</string>
     <string name="spark_editor_unmute_label">Suono</string>
     <string name="spark_editor_filter_label">Filtro</string>
+    <string name="spark_editor_format_label">Formato</string>
     <string name="spark_editor_text_label">Testo</string>
     <string name="spark_editor_emoji_label">Emoji</string>
     <string name="spark_editor_original_label">Originale</string>
@@ -1796,6 +1806,19 @@
     <string name="creator_bewerbung_approval_info">Se le informazioni sono corrette, il tuo account sarà attivato come creator dopo la revisione.</string>
     <string name="creator_bewerbung_submit">Invia candidatura</string>
     <string name="creator_bewerbung_age_verification_required">Verifica dell\'età richiesta. Verifica la tua età nelle impostazioni prima di candidarti come creator.</string>
+    <string name="creator_bewerbung_tab_apply">Candidati</string>
+    <string name="creator_bewerbung_tab_my_application">La mia candidatura</string>
+    <string name="creator_bewerbung_no_applications">Nessuna candidatura ancora</string>
+    <string name="creator_bewerbung_status_pending">In attesa</string>
+    <string name="creator_bewerbung_status_approved">Approvata</string>
+    <string name="creator_bewerbung_status_rejected">Rifiutata</string>
+    <string name="creator_bewerbung_admin_note_label">Nota del team</string>
+    <string name="creator_bewerbung_conversation_label">Conversazione</string>
+    <string name="creator_bewerbung_reply_from_team">Risposta del team</string>
+    <string name="creator_bewerbung_you_label">Tu</string>
+    <string name="creator_bewerbung_reply_placeholder">La tua risposta…</string>
+    <string name="creator_bewerbung_reply_send_button">Rispondi</string>
+    <string name="creator_bewerbung_submitted_label">Inviata il</string>
 
     <!-- ── DASHBOARD CREATOR EXTRA ── -->
     <string name="creator_dash_payout">Pagamento</string>

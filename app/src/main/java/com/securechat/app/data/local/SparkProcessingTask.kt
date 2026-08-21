@@ -79,6 +79,7 @@ object SparkProcessingTask {
         trimStartMs: Long = 0L,
         trimEndMs: Long = 0L,
         musicOffsetSec: Float = 0f,
+        cropRectNorm: FloatArray? = null,
         onProgress: (Float) -> Unit = {}
     ): ProcessResult = withContext(Dispatchers.IO) {
 
@@ -123,6 +124,7 @@ object SparkProcessingTask {
                 trimStartMs = trimStartMs,
                 trimEndMs = trimEndMs,
                 musicOffsetSec = musicOffsetSec,
+                cropRectNorm = cropRectNorm,
                 outputFile = outputFile
             )
             onProgress(0.30f)

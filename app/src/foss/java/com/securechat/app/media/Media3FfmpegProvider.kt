@@ -15,6 +15,7 @@ import androidx.media3.common.audio.ChannelMixingAudioProcessor
 import androidx.media3.common.audio.ChannelMixingMatrix
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.effect.BitmapOverlay
+import androidx.media3.effect.Crop
 import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.TextureOverlay
 import androidx.media3.transformer.Composition
@@ -100,7 +101,8 @@ class Media3FfmpegProvider @Inject constructor(
                 transformer = Transformer.Builder(context).addListener(listener).build()
 
                 val videoEffects = listOfNotNull(
-                    colorAdjustmentsForFilter(req.filterId)?.let { VideoTranscoder.colorAdjustEffect(it) }
+                    colorAdjustmentsForFilter(req.filterId)?.let { VideoTranscoder.colorAdjustEffect(it) },
+                    cropEffectFor(req.cropRectNorm)
                 )
 
                 val musicFile = req.musicFile
@@ -189,6 +191,21 @@ class Media3FfmpegProvider @Inject constructor(
         } else {
             FfmpegResult.Error("Video-Verarbeitung fehlgeschlagen.")
         }
+    }
+
+    /**
+     * Wandelt den normierten Crop-Ausschnitt (0f–1f, Top-Left-Ursprung) aus dem Spark-Editor in ein
+     * Media3-[Crop]-Effect um. Media3 nutzt NDC-Koordinaten (-1f–1f, Y-Achse nach oben), daher die
+     * Umrechnung `ndc = 2*frac - 1` (X) bzw. `ndc = 1 - 2*frac` (Y, invertiert wegen Top-Left→Y-up).
+     */
+    private fun cropEffectFor(cropRectNorm: FloatArray?): Crop? {
+        if (cropRectNorm == null || cropRectNorm.size != 4) return null
+        val (l, t, r, b) = cropRectNorm
+        val left = 2f * l - 1f
+        val right = 2f * r - 1f
+        val top = 1f - 2f * t
+        val bottom = 1f - 2f * b
+        return Crop(left, right, bottom, top)
     }
 
     /** Bildet einen [SparkFilterId] auf äquivalente [ColorAdjustments] ab (Näherung, siehe Klassen-Doc). */

@@ -54,9 +54,20 @@ class FfmpegKitProvider @Inject constructor() : FfmpegProvider {
     private fun buildSparkCommand(req: SparkEncodeRequest): String {
         val baseFilter = SparkFilterEngine.ffmpegFilterFor(req.filterId)
 
+        // Format-Rahmen + Pan/Zoom aus dem Editor (Original-Proportionen erhalten statt zu stauchen).
+        val cropFilter = req.cropRectNorm?.takeIf { it.size == 4 }?.let { r ->
+            val (l, t, right, b) = r
+            val w = (right - l).coerceIn(0.02f, 1f)
+            val h = (b - t).coerceIn(0.02f, 1f)
+            "crop=iw*$w:ih*$h:iw*$l:ih*$t,scale=trunc(iw/2)*2:trunc(ih/2)*2"
+        }
+
         val fullFilter = if (req.isImage) {
             val scaleFilter = "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p"
-            if (baseFilter.isNotBlank()) "$scaleFilter,$baseFilter" else scaleFilter
+            val base = if (cropFilter != null) "$cropFilter,$scaleFilter" else scaleFilter
+            if (baseFilter.isNotBlank()) "$base,$baseFilter" else base
+        } else if (cropFilter != null) {
+            if (baseFilter.isNotBlank()) "$cropFilter,$baseFilter" else cropFilter
         } else baseFilter
 
         val vfPart = if (fullFilter.isNotBlank()) "-vf \"$fullFilter\"" else ""

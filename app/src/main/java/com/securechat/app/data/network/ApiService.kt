@@ -456,6 +456,15 @@ interface ApiService {
     @GET("support/my-tickets")
     suspend fun getMyTickets(): Response<List<UserSupportTicket>>
 
+    @POST("support/{ticketId}/reply")
+    suspend fun replyToSupportTicket(
+        @Path("ticketId") ticketId: String,
+        @Body request: SupportTicketReplyRequest
+    ): Response<Map<String, String>>
+
+    @DELETE("support/{ticketId}")
+    suspend fun deleteSupportTicket(@Path("ticketId") ticketId: String): Response<Map<String, String>>
+
     @Multipart
     @POST("support/otp-issue")
     suspend fun createOtpSupportTicket(
@@ -1385,6 +1394,13 @@ interface ApiService {
         @Part file: MultipartBody.Part
     ): Response<UserStickerResponse>
 
+    /** Lädt ein Sketch-'n'-Check-Zeichnungsbild hoch (Speicherung unter Images/Sketchncheck/). */
+    @Multipart
+    @POST("upload/sketch-image")
+    suspend fun uploadSketchImage(
+        @Part file: MultipartBody.Part
+    ): Response<Map<String, String>>
+
     /** Gibt alle Sticker des aktuellen Nutzers zurück. */
     @GET("stickers/my")
     suspend fun getMyStickers(): Response<List<UserStickerResponse>>
@@ -1411,6 +1427,17 @@ interface ApiService {
         @Body body: CreatorApplicationRequest
     ): Response<CreatorApplicationResponse>
 
+    /** Eigene Creator-Bewerbungen inkl. Antwort-Thread abrufen. */
+    @GET("creator/my-applications")
+    suspend fun getMyCreatorApplications(): Response<List<CreatorApplicationResponse>>
+
+    /** Auf eine Rückfrage zur eigenen Creator-Bewerbung antworten. */
+    @POST("creator/applications/{applicationId}/reply")
+    suspend fun replyToCreatorApplication(
+        @Path("applicationId") applicationId: String,
+        @Body request: CreatorApplicationReplyRequest
+    ): Response<Map<String, String>>
+
     // ─────────────────────────────────────────────────────────────────────────
     // ADMIN: CREATOR-BEWERBUNGEN
     // ─────────────────────────────────────────────────────────────────────────
@@ -1429,6 +1456,14 @@ interface ApiService {
         @Path("applicationId") applicationId: String,
         @Query("action") action: String,
         @Query("admin_note") adminNote: String? = null
+    ): Response<Map<String, String>>
+
+    /** Rückfrage/Nachricht zu einer Bewerbung senden, ohne den Status zu ändern (Admin). */
+    @POST("admin/creator-applications/{applicationId}/message")
+    suspend fun adminMessageCreatorApplication(
+        @Header("Authorization") token: String,
+        @Path("applicationId") applicationId: String,
+        @Body request: CreatorApplicationReplyRequest
     ): Response<Map<String, String>>
 
     // ─────────────────────────────────────────────────────────────────────────

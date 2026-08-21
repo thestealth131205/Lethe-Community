@@ -16,6 +16,15 @@ import java.util.Collections
  *    WS-Handler keine zweite Benachrichtigung für dieselbe Nachricht anzeigt.
  */
 object FcmMessageBus {
+    /**
+     * true solange MainViewModel lebt und selbst WS-Nachrichten verarbeitet (inkl. eigener
+     * Benachrichtigungslogik). Der lifecycle-unabhängige NotificationHandler-Service prüft dieses
+     * Flag bevor er für eine WS-Nachricht selbst eine Benachrichtigung anzeigt, um Duplikate zu
+     * vermeiden – zeigt aber selbst an, sobald das ViewModel (z. B. nach Task-Entfernung) tot ist.
+     */
+    @Volatile
+    var isViewModelActive: Boolean = false
+
     private val _newMessageSenderIds = MutableSharedFlow<String>(replay = 32, extraBufferCapacity = 32)
     val newMessageSenderIds: SharedFlow<String> = _newMessageSenderIds.asSharedFlow()
 

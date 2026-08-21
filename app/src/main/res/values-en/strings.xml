@@ -911,6 +911,15 @@
     <string name="support_status_closed">Closed</string>
     <string name="support_no_tickets">No tickets yet</string>
     <string name="support_reply_from_support">Reply from Support</string>
+    <string name="support_conversation_label">Conversation</string>
+    <string name="support_you_label">You</string>
+    <string name="support_reply_placeholder">Your reply…</string>
+    <string name="support_reply_send_button">Reply</string>
+    <string name="support_reply_sent">Reply sent</string>
+    <string name="support_delete_button">Delete ticket</string>
+    <string name="support_delete_confirm_title">Delete ticket?</string>
+    <string name="support_delete_confirm_message">This ticket will be permanently deleted. This cannot be undone.</string>
+    <string name="support_delete_locked_hint">You can only delete a ticket once it has been marked as resolved.</string>
     <string name="invite_description">For every new user who registers and logs in via your link, you automatically receive 5 Styx.</string>
     <string name="invite_qr_cd">Invitation QR Code</string>
     <string name="invite_copy_cd">Copy</string>
@@ -1526,6 +1535,7 @@
     <string name="spark_editor_mute_label">Mute</string>
     <string name="spark_editor_unmute_label">Sound</string>
     <string name="spark_editor_filter_label">Filter</string>
+    <string name="spark_editor_format_label">Format</string>
     <string name="spark_editor_text_label">Text</string>
     <string name="spark_editor_emoji_label">Emoji</string>
     <string name="spark_editor_original_label">Original</string>
@@ -1794,6 +1804,19 @@
     <string name="creator_bewerbung_approval_info">If the information is correct, your account will be activated as a creator after review.</string>
     <string name="creator_bewerbung_submit">Submit application</string>
     <string name="creator_bewerbung_age_verification_required">Age verification required. Verify your age in settings before applying as a creator.</string>
+    <string name="creator_bewerbung_tab_apply">Apply</string>
+    <string name="creator_bewerbung_tab_my_application">My Application</string>
+    <string name="creator_bewerbung_no_applications">No application yet</string>
+    <string name="creator_bewerbung_status_pending">Pending</string>
+    <string name="creator_bewerbung_status_approved">Approved</string>
+    <string name="creator_bewerbung_status_rejected">Rejected</string>
+    <string name="creator_bewerbung_admin_note_label">Note from the team</string>
+    <string name="creator_bewerbung_conversation_label">Conversation</string>
+    <string name="creator_bewerbung_reply_from_team">Reply from the team</string>
+    <string name="creator_bewerbung_you_label">You</string>
+    <string name="creator_bewerbung_reply_placeholder">Your reply…</string>
+    <string name="creator_bewerbung_reply_send_button">Reply</string>
+    <string name="creator_bewerbung_submitted_label">Submitted on</string>
 
     <!-- ── CREATOR DASHBOARD EXTRA ── -->
     <string name="creator_dash_payout">Payout</string>

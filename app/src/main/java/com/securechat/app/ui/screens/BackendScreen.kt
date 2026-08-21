@@ -117,6 +117,8 @@ fun BackendScreen(
     adminCreatorApplicationActionMessage: String? = null,
     onLoadAdminCreatorApplications: (String) -> Unit = {},
     onAdminApproveCreatorApplication: (String) -> Unit = {},
+    onAdminRejectCreatorApplication: (String, String?) -> Unit = { _, _ -> },
+    onAdminMessageCreatorApplication: (String, String, () -> Unit, (String) -> Unit) -> Unit = { _, _, _, _ -> },
     onClearAdminCreatorApplicationActionMessage: () -> Unit = {},
     // Admin: Nutzermeldungen
     adminUserReports: List<com.securechat.app.data.network.AdminUserReport> = emptyList(),
@@ -339,6 +341,8 @@ fun BackendScreen(
                     actionMessage = adminCreatorApplicationActionMessage,
                     onLoad = onLoadAdminCreatorApplications,
                     onApprove = onAdminApproveCreatorApplication,
+                    onReject = onAdminRejectCreatorApplication,
+                    onSendMessage = onAdminMessageCreatorApplication,
                     onClearActionMessage = onClearAdminCreatorApplicationActionMessage
                 )
                 5 -> MeldungenTab(
@@ -2638,6 +2642,8 @@ private fun BewerbungenTab(
     actionMessage: String?,
     onLoad: (String) -> Unit,
     onApprove: (String) -> Unit,
+    onReject: (String, String?) -> Unit,
+    onSendMessage: (String, String, () -> Unit, (String) -> Unit) -> Unit,
     onClearActionMessage: () -> Unit
 ) {
     var filterStatus by remember { mutableStateOf("pending") }
@@ -2733,7 +2739,9 @@ private fun BewerbungenTab(
                         BewerbungCard(
                             app = app,
                             contentTypeLabels = contentTypeLabels,
-                            onApprove = { onApprove(app.id) }
+                            onApprove = { onApprove(app.id) },
+                            onReject = { note -> onReject(app.id, note) },
+                            onSendMessage = { message, onSuccess, onError -> onSendMessage(app.id, message, onSuccess, onError) }
                         )
                     }
                 }
@@ -2746,9 +2754,15 @@ private fun BewerbungenTab(
 private fun BewerbungCard(
     app: com.securechat.app.data.network.CreatorApplicationResponse,
     contentTypeLabels: Map<String, String>,
-    onApprove: () -> Unit
+    onApprove: () -> Unit,
+    onReject: (String?) -> Unit,
+    onSendMessage: (String, () -> Unit, (String) -> Unit) -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    var messageText by remember(app.id) { mutableStateOf("") }
+    var isSendingMessage by remember { mutableStateOf(false) }
+    var showRejectDialog by remember { mutableStateOf(false) }
+    var rejectNote by remember { mutableStateOf("") }
     val statusColor = when (app.status) {
         "approved" -> Color(0xFF4CAF50)
         "rejected" -> MaterialTheme.colorScheme.error
@@ -2905,19 +2919,124 @@ private fun BewerbungCard(
                 }
             }
 
-            // Anfrage-akzeptieren-Button (nur bei pending)
-            if (app.status == "pending") {
+            // Antwort-Thread (Rückfragen des Admins + Antworten des Bewerbers)
+            if (app.messages.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Verlauf", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    app.messages.forEach { msg ->
+                        val isAdmin = msg.senderType == "admin"
+                        Surface(
+                            color = if (isAdmin) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    if (isAdmin) "Admin" else (app.userName ?: "Bewerber"),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isAdmin) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(msg.text, fontSize = 13.sp)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Rückfrage an den Bewerber senden
+            Row(
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = messageText,
+                    onValueChange = { messageText = it },
+                    placeholder = { Text("Rückfrage stellen…") },
+                    modifier = Modifier.weight(1f),
+                    maxLines = 4
+                )
                 Button(
-                    onClick = onApprove,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                    onClick = {
+                        if (messageText.isNotBlank()) {
+                            isSendingMessage = true
+                            onSendMessage(
+                                messageText,
+                                { isSendingMessage = false; messageText = "" },
+                                { isSendingMessage = false }
+                            )
+                        }
+                    },
+                    enabled = !isSendingMessage && messageText.isNotBlank()
                 ) {
-                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Anfrage akzeptieren", fontWeight = FontWeight.SemiBold)
+                    if (isSendingMessage) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                    } else {
+                        Text("Senden")
+                    }
+                }
+            }
+
+            // Annehmen/Ablehnen-Buttons (nur bei pending)
+            if (app.status == "pending") {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Button(
+                        onClick = onApprove,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                    ) {
+                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Annehmen", fontWeight = FontWeight.SemiBold)
+                    }
+                    Button(
+                        onClick = { showRejectDialog = true },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Ablehnen", fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
         }
+    }
+
+    if (showRejectDialog) {
+        AlertDialog(
+            onDismissRequest = { showRejectDialog = false },
+            title = { Text("Bewerbung ablehnen") },
+            text = {
+                Column {
+                    Text("Optional: Begründung für den Bewerber angeben.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = rejectNote,
+                        onValueChange = { rejectNote = it },
+                        placeholder = { Text("Begründung (optional)…") },
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 4
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onReject(rejectNote.takeIf { it.isNotBlank() })
+                    showRejectDialog = false
+                    rejectNote = ""
+                }) {
+                    Text("Ablehnen", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRejectDialog = false }) { Text("Abbrechen") }
+            }
+        )
     }
 }
 

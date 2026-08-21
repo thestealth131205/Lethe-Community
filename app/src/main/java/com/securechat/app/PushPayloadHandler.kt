@@ -118,7 +118,9 @@ class PushPayloadHandler @Inject constructor(
                             "Neue Nachricht"
                         }
                     } else if (mediaType == "text" && contentBlob.isNotBlank()) {
-                        contentBlob.take(120)
+                        // Gleicher Schwellenwert wie das "Aufklappen" im ChatScreen (400 Zeichen),
+                        // damit die Notification die komplette Nachricht bis zu dieser Länge enthält.
+                        contentBlob.take(400)
                     } else when (mediaType) {
                         "image"    -> "📷 Bild"
                         "video"    -> "🎥 Video"
@@ -254,11 +256,11 @@ class PushPayloadHandler @Inject constructor(
                                 decrypted = tryDecryptLocal()
                             }
 
-                            if (decrypted != null) "$senderName: ${decrypted.take(120)}"
+                            if (decrypted != null) "$senderName: ${decrypted.take(400)}"
                             else "$senderName: Neue Nachricht"
                         }
                         mediaType == "text" && contentBlob.isNotBlank() ->
-                            "$senderName: ${contentBlob.take(120)}"
+                            "$senderName: ${contentBlob.take(400)}"
                         else -> "$senderName: Neue Nachricht"
                     }
                     if (messageId != null) FcmMessageBus.markNotificationShown(messageId)
@@ -384,10 +386,66 @@ class PushPayloadHandler @Inject constructor(
                 notificationHelper.showNewSupportTicketNotification(category, title, ticketId)
             }
 
+            "support_reply" -> {
+                val ticketId = data["ticket_id"] ?: return
+                val title    = data["title"] ?: "Support-Ticket"
+                val reply    = data["reply"] ?: ""
+                notificationHelper.showSupportReplyNotification(title, reply, ticketId)
+            }
+
+            "support_ticket_user_reply" -> {
+                val ticketId = data["ticket_id"] ?: return
+                val title    = data["title"] ?: "Support-Ticket"
+                val userName = data["user_name"] ?: "Ein Nutzer"
+                val reply    = data["reply"] ?: ""
+                notificationHelper.showSupportTicketUserReplyNotification(userName, title, reply, ticketId)
+            }
+
+            "new_user_report" -> {
+                val reportId     = data["report_id"] ?: return
+                val reason       = data["reason"] ?: ""
+                val reporterName = data["reporter_name"] ?: "Jemand"
+                notificationHelper.showNewUserReportNotification(reporterName, reason, reportId)
+            }
+
+            "content_liked" -> {
+                val contentId = data["content_id"] ?: return
+                val likerName = data["liker_name"] ?: "Jemand"
+                val isSpark   = data["is_spark"] == "1"
+                notificationHelper.showContentLikedNotification(likerName, contentId, isSpark)
+            }
+
+            "discussion_liked" -> {
+                val discussionId    = data["discussion_id"] ?: return
+                val discussionTitle = data["discussion_title"] ?: ""
+                val likerName       = data["liker_name"] ?: "Jemand"
+                notificationHelper.showDiscussionLikedNotification(likerName, discussionTitle, discussionId)
+            }
+
             "new_creator_application" -> {
                 val applicantName = data["applicant_name"] ?: "Jemand"
                 val applicationId = data["application_id"] ?: return
                 notificationHelper.showNewCreatorApplicationNotification(applicantName, applicationId)
+            }
+
+            "creator_application_reviewed" -> {
+                val status        = data["status"] ?: return
+                val adminNote     = data["admin_note"] ?: ""
+                val applicationId = data["application_id"] ?: "reviewed"
+                notificationHelper.showCreatorApplicationReviewedNotification(status, adminNote, applicationId)
+            }
+
+            "creator_application_message" -> {
+                val applicationId = data["application_id"] ?: return
+                val reply         = data["reply"] ?: ""
+                notificationHelper.showCreatorApplicationMessageNotification(reply, applicationId)
+            }
+
+            "creator_application_user_reply" -> {
+                val applicationId = data["application_id"] ?: return
+                val userName      = data["user_name"] ?: "Ein Nutzer"
+                val reply         = data["reply"] ?: ""
+                notificationHelper.showCreatorApplicationUserReplyNotification(userName, reply, applicationId)
             }
 
             "nearby_new_question" -> {
@@ -413,6 +471,13 @@ class PushPayloadHandler @Inject constructor(
                 val sparkId     = data["spark_id"] ?: return
                 val commentId   = data["comment_id"] ?: return
                 notificationHelper.showSparkCommentReplyNotification(replierName, sparkId, commentId)
+            }
+
+            "vip_discussion_reply" -> {
+                val replierName     = data["replier_name"] ?: "Jemand"
+                val discussionTitle = data["discussion_title"] ?: ""
+                val discussionId    = data["discussion_id"] ?: return
+                notificationHelper.showVipDiscussionReplyNotification(replierName, discussionTitle, discussionId)
             }
 
             "child_family_invite" -> {

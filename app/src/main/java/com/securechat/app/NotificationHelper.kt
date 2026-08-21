@@ -275,6 +275,28 @@ class NotificationHelper @Inject constructor(
         manager.notify(("vip_$categoryId${threadTitle.hashCode()}").hashCode(), notification)
     }
 
+    /** Zeigt eine Benachrichtigung wenn jemand auf die eigene VIP-Diskussion antwortet. */
+    fun showVipDiscussionReplyNotification(replierName: String, discussionTitle: String, discussionId: String) {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("navigate_to", "vip")
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context, discussionId.hashCode() + 8700, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID_VIP_FORUM)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("Neue Antwort: $discussionTitle")
+            .setContentText("$replierName hat geantwortet")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(discussionId.hashCode() + 8700, notification)
+    }
+
     /**
      * Zeigt eine Benachrichtigung für eine eingehende Nachricht.
      * Nutzt MessagingStyle für automatisches Wearable- und Android-Auto-Mirroring.
@@ -489,6 +511,7 @@ class NotificationHelper @Inject constructor(
         val markReadIntent = Intent(context, MarkAsReadReceiver::class.java).apply {
             putExtra(EXTRA_SENDER_ID, senderId)
             putExtra(EXTRA_NOTIFICATION_ID, notificationId)
+            putExtra(EXTRA_IS_GROUP, isGroup)
         }
         val markReadPendingIntent = PendingIntent.getBroadcast(
             context, notificationId + 2, markReadIntent,
@@ -503,6 +526,18 @@ class NotificationHelper @Inject constructor(
             .setShowsUserInterface(false)
             .build()
 
+        // Dismiss-Intent (Wegwischen der Benachrichtigung): löst dieselbe Logik wie
+        // "Als gelesen markieren" aus, damit Server/App die Nachricht danach nicht erneut anzeigen.
+        val deleteIntent = Intent(context, MarkAsReadReceiver::class.java).apply {
+            putExtra(EXTRA_SENDER_ID, senderId)
+            putExtra(EXTRA_NOTIFICATION_ID, notificationId)
+            putExtra(EXTRA_IS_GROUP, isGroup)
+        }
+        val deletePendingIntent = PendingIntent.getBroadcast(
+            context, notificationId + 3, deleteIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         // Neon-Gelb wie in der App (Theme DefaultPrimary) als Hintergrund-/Akzentfarbe
         val neonYellow = android.graphics.Color.parseColor("#A8A800")
 
@@ -513,6 +548,7 @@ class NotificationHelper @Inject constructor(
             .setStyle(messagingStyle)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(openPendingIntent)
+            .setDeleteIntent(deletePendingIntent)
             .addAction(replyAction)
             .addAction(markReadAction)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
@@ -944,6 +980,123 @@ class NotificationHelper @Inject constructor(
         manager.notify(8300, notification)
     }
 
+    /** Zeigt eine Benachrichtigung wenn der Support auf ein Ticket des Nutzers geantwortet hat. */
+    fun showSupportReplyNotification(title: String, reply: String, ticketId: String) {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("navigate_to", "support")
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context, ticketId.hashCode() + 8302, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID_UPDATES)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("Antwort zu deinem Ticket: $title")
+            .setContentText(reply)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(reply))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(ticketId.hashCode() + 8302, notification)
+    }
+
+    /** Zeigt eine Benachrichtigung wenn ein Nutzer auf ein Support-Ticket geantwortet hat (nur für Admins/Moderatoren). */
+    fun showSupportTicketUserReplyNotification(userName: String, title: String, reply: String, ticketId: String) {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("navigate_to", "backend_support")
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context, ticketId.hashCode() + 8303, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID_UPDATES)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("Neue Antwort im Ticket: $title")
+            .setContentText("$userName: $reply")
+            .setStyle(NotificationCompat.BigTextStyle().bigText("$userName: $reply"))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(ticketId.hashCode() + 8303, notification)
+    }
+
+    /** Zeigt eine Benachrichtigung für eine neue Nutzer-Meldung (nur für Admins/Moderatoren). */
+    fun showNewUserReportNotification(reporterName: String, reason: String, reportId: String) {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("navigate_to", "backend_support")
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context, reportId.hashCode() + 8304, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID_UPDATES)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("Neue Meldung von $reporterName")
+            .setContentText(reason.ifBlank { "Kein Grund angegeben" })
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(reportId.hashCode() + 8304, notification)
+    }
+
+    /** Zeigt eine Benachrichtigung wenn ein Spark oder Beitrag geliked wurde. */
+    fun showContentLikedNotification(likerName: String, contentId: String, isSpark: Boolean) {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            if (isSpark) {
+                putExtra("navigate_to", "spark_view")
+            } else {
+                putExtra("navigate_to", "content_view")
+            }
+            putExtra("chat_id", contentId)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context, contentId.hashCode() + 8305, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID_CONTENT)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(if (isSpark) "Dein Spark wurde geliked" else "Dein Beitrag wurde geliked")
+            .setContentText("$likerName gefällt das")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(contentId.hashCode() + 8305, notification)
+    }
+
+    /** Zeigt eine Benachrichtigung wenn eine VIP-Diskussion geliked wurde. */
+    fun showDiscussionLikedNotification(likerName: String, discussionTitle: String, discussionId: String) {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("navigate_to", "vip")
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context, discussionId.hashCode() + 8306, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID_VIP_FORUM)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("Deine Diskussion wurde geliked")
+            .setContentText("$likerName gefällt \"$discussionTitle\"")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(discussionId.hashCode() + 8306, notification)
+    }
+
     /** Zeigt eine Benachrichtigung für eine neue Creator-Bewerbung (nur für Admins/Moderatoren). */
     fun showNewCreatorApplicationNotification(applicantName: String, applicationId: String) {
         val intent = Intent(context, MainActivity::class.java).apply {
@@ -964,6 +1117,78 @@ class NotificationHelper @Inject constructor(
             .build()
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(8301, notification)
+    }
+
+    /** Zeigt eine Benachrichtigung wenn eine Creator-Bewerbung genehmigt oder abgelehnt wurde. */
+    fun showCreatorApplicationReviewedNotification(status: String, adminNote: String, applicationId: String) {
+        val approved = status == "approved"
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("navigate_to", "creator_apply")
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context, applicationId.hashCode() + 8307, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val text = if (approved) "Herzlichen Glückwunsch, du bist jetzt Creator!" else adminNote.ifBlank { "Deine Bewerbung wurde leider abgelehnt." }
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID_UPDATES)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(if (approved) "Bewerbung genehmigt" else "Bewerbung abgelehnt")
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(applicationId.hashCode() + 8307, notification)
+    }
+
+    /** Zeigt eine Benachrichtigung wenn das Team eine Rückfrage zur Creator-Bewerbung gestellt hat. */
+    fun showCreatorApplicationMessageNotification(reply: String, applicationId: String) {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("navigate_to", "creator_apply")
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context, applicationId.hashCode() + 8308, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID_UPDATES)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("Nachricht zu deiner Creator-Bewerbung")
+            .setContentText(reply)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(reply))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(applicationId.hashCode() + 8308, notification)
+    }
+
+    /** Zeigt eine Benachrichtigung wenn ein Bewerber auf eine Rückfrage geantwortet hat (nur für Admins/Moderatoren). */
+    fun showCreatorApplicationUserReplyNotification(userName: String, reply: String, applicationId: String) {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("navigate_to", "backend_applications")
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context, applicationId.hashCode() + 8309, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val text = "$userName: $reply"
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID_UPDATES)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("Antwort auf Creator-Bewerbung")
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(applicationId.hashCode() + 8309, notification)
     }
 
     /** Zeigt eine Benachrichtigung für eine neue anonyme Frage im Nearby-Bereich. */

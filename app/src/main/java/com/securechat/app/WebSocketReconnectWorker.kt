@@ -122,7 +122,7 @@ class WebSocketReconnectWorker @AssistedInject constructor(
                                     || blob.startsWith("v2:")
                                     || blob.startsWith("v3:")
                                     || blob.startsWith("\uD83D\uDD10")
-                                ) "Neue Nachricht" else blob.take(100)
+                                ) "Neue Nachricht" else blob.take(400)
                             }
                         }
                         notificationHelper.showMessageNotification(

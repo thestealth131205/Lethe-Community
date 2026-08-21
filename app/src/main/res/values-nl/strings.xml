@@ -909,6 +909,15 @@
     <string name="support_status_closed">Gesloten</string>
     <string name="support_no_tickets">Nog geen tickets</string>
     <string name="support_reply_from_support">Reactie van support</string>
+    <string name="support_conversation_label">Gesprek</string>
+    <string name="support_you_label">Jij</string>
+    <string name="support_reply_placeholder">Jouw antwoord…</string>
+    <string name="support_reply_send_button">Antwoorden</string>
+    <string name="support_reply_sent">Antwoord verzonden</string>
+    <string name="support_delete_button">Ticket verwijderen</string>
+    <string name="support_delete_confirm_title">Ticket verwijderen?</string>
+    <string name="support_delete_confirm_message">Dit ticket wordt permanent verwijderd. Dit kan niet ongedaan worden gemaakt.</string>
+    <string name="support_delete_locked_hint">Verwijderen is pas mogelijk zodra het ticket als opgelost is gemarkeerd.</string>
     <string name="invite_description">Voor elke nieuwe gebruiker die zich via jouw link registreert en inlogt, ontvang je automatisch 5 Styx.</string>
     <string name="invite_qr_cd">Uitnodiging QR-code</string>
     <string name="invite_copy_cd">Kopiëren</string>
@@ -1528,6 +1537,7 @@
     <string name="spark_editor_mute_label">Dempen</string>
     <string name="spark_editor_unmute_label">Geluid</string>
     <string name="spark_editor_filter_label">Filter</string>
+    <string name="spark_editor_format_label">Formaat</string>
     <string name="spark_editor_text_label">Tekst</string>
     <string name="spark_editor_emoji_label">Emoji</string>
     <string name="spark_editor_original_label">Origineel</string>
@@ -1796,6 +1806,19 @@
     <string name="creator_bewerbung_approval_info">Als de informatie correct is, wordt jouw account na beoordeling geactiveerd als creator.</string>
     <string name="creator_bewerbung_submit">Aanmelding indienen</string>
     <string name="creator_bewerbung_age_verification_required">Leeftijdsverificatie vereist. Verifieer je leeftijd in de instellingen voordat je je aanmeldt als creator.</string>
+    <string name="creator_bewerbung_tab_apply">Aanmelden</string>
+    <string name="creator_bewerbung_tab_my_application">Mijn aanmelding</string>
+    <string name="creator_bewerbung_no_applications">Nog geen aanmelding</string>
+    <string name="creator_bewerbung_status_pending">In behandeling</string>
+    <string name="creator_bewerbung_status_approved">Goedgekeurd</string>
+    <string name="creator_bewerbung_status_rejected">Afgewezen</string>
+    <string name="creator_bewerbung_admin_note_label">Notitie van het team</string>
+    <string name="creator_bewerbung_conversation_label">Gesprek</string>
+    <string name="creator_bewerbung_reply_from_team">Antwoord van het team</string>
+    <string name="creator_bewerbung_you_label">Jij</string>
+    <string name="creator_bewerbung_reply_placeholder">Jouw antwoord…</string>
+    <string name="creator_bewerbung_reply_send_button">Beantwoorden</string>
+    <string name="creator_bewerbung_submitted_label">Ingediend op</string>
 
     <!-- ── CREATOR DASHBOARD EXTRA ── -->
     <string name="creator_dash_payout">Uitbetaling</string>

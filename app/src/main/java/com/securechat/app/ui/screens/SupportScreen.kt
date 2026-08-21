@@ -85,7 +85,7 @@ fun SupportScreen(
                 0 -> CreateTicketTab(viewModel = viewModel)
                 1 -> {
                     val tickets by viewModel.myTickets.collectAsState()
-                    MyTicketsTab(tickets = tickets)
+                    MyTicketsTab(tickets = tickets, viewModel = viewModel)
                 }
             }
         }
@@ -297,7 +297,7 @@ private fun CreateTicketTab(viewModel: MainViewModel) {
 }
 
 @Composable
-private fun MyTicketsTab(tickets: List<UserSupportTicket>) {
+private fun MyTicketsTab(tickets: List<UserSupportTicket>, viewModel: MainViewModel) {
     if (tickets.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(stringResource(R.string.support_no_tickets), color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -306,14 +306,18 @@ private fun MyTicketsTab(tickets: List<UserSupportTicket>) {
     }
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         items(tickets, key = { it.id }) { ticket ->
-            TicketCard(ticket = ticket)
+            TicketCard(ticket = ticket, viewModel = viewModel)
         }
     }
 }
 
 @Composable
-private fun TicketCard(ticket: UserSupportTicket) {
+private fun TicketCard(ticket: UserSupportTicket, viewModel: MainViewModel) {
     var expanded by remember { mutableStateOf(false) }
+    var replyText by remember(ticket.id) { mutableStateOf("") }
+    var isSendingReply by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    val context = LocalContext.current
     val statusColor = when (ticket.status) {
         "closed" -> MaterialTheme.colorScheme.outline
         "in_progress" -> MaterialTheme.colorScheme.tertiary
@@ -385,7 +389,6 @@ private fun TicketCard(ticket: UserSupportTicket) {
                 Text(ticket.description, style = MaterialTheme.typography.bodyMedium)
 
                 if (ticket.imageUrls.isNotEmpty()) {
-                    val context = LocalContext.current
                     Spacer(Modifier.height(4.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
@@ -419,7 +422,37 @@ private fun TicketCard(ticket: UserSupportTicket) {
                     }
                 }
 
-                if (!ticket.adminReply.isNullOrBlank()) {
+                if (ticket.messages.isNotEmpty()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        stringResource(R.string.support_conversation_label),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        ticket.messages.forEach { msg ->
+                            val isAdmin = msg.senderType == "admin"
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isAdmin) MaterialTheme.colorScheme.primaryContainer
+                                    else MaterialTheme.colorScheme.surface
+                                ),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        if (isAdmin) stringResource(R.string.support_reply_from_support)
+                                        else stringResource(R.string.support_you_label),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isAdmin) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(msg.text, style = MaterialTheme.typography.bodyMedium)
+                                }
+                            }
+                        }
+                    }
+                } else if (!ticket.adminReply.isNullOrBlank()) {
                     Spacer(Modifier.height(4.dp))
                     Card(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
@@ -445,7 +478,89 @@ private fun TicketCard(ticket: UserSupportTicket) {
                         fontSize = 11.sp
                     )
                 }
+
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    OutlinedTextField(
+                        value = replyText,
+                        onValueChange = { replyText = it },
+                        placeholder = { Text(stringResource(R.string.support_reply_placeholder)) },
+                        modifier = Modifier.weight(1f),
+                        maxLines = 4
+                    )
+                    Button(
+                        onClick = {
+                            if (replyText.isNotBlank()) {
+                                isSendingReply = true
+                                viewModel.replyToSupportTicket(
+                                    ticketId = ticket.id,
+                                    message = replyText,
+                                    onSuccess = {
+                                        isSendingReply = false
+                                        replyText = ""
+                                    },
+                                    onError = { isSendingReply = false }
+                                )
+                            }
+                        },
+                        enabled = !isSendingReply && replyText.isNotBlank()
+                    ) {
+                        if (isSendingReply) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                        } else {
+                            Text(stringResource(R.string.support_reply_send_button))
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(4.dp))
+                if (ticket.status == "closed") {
+                    OutlinedButton(
+                        onClick = { showDeleteConfirm = true },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Close, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.support_delete_button))
+                    }
+                } else {
+                    Text(
+                        stringResource(R.string.support_delete_locked_hint),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text(stringResource(R.string.support_delete_confirm_title)) },
+            text = { Text(stringResource(R.string.support_delete_confirm_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    viewModel.deleteSupportTicket(
+                        ticketId = ticket.id,
+                        onSuccess = {},
+                        onError = {}
+                    )
+                }) {
+                    Text(stringResource(R.string.support_delete_button), color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text(stringResource(R.string.general_cancel))
+                }
+            }
+        )
     }
 }
