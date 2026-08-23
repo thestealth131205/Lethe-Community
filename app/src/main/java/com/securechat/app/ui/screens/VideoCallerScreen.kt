@@ -1,6 +1,11 @@
 package com.securechat.app.ui.screens
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.Shader
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.media.AudioAttributes
@@ -9,9 +14,13 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.net.Uri
 import android.os.Build
 import android.view.WindowManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.Image
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -33,6 +42,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -62,6 +72,9 @@ import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.BlurOn
 import androidx.compose.material.icons.filled.BlurOff
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material.icons.filled.StopCircle
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.automirrored.filled.ScreenShare
@@ -77,6 +90,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
@@ -99,6 +113,7 @@ import androidx.compose.ui.res.stringResource
 import com.securechat.app.R
 import com.securechat.app.data.local.ContactEntity
 import com.securechat.app.data.network.GroupMemberInfo
+import com.securechat.app.data.webrtc.VirtualBackgroundMode
 import com.securechat.app.ui.CallParticipant
 import com.securechat.app.ui.MainViewModel
 import kotlinx.coroutines.delay
@@ -875,8 +890,12 @@ fun ActiveVideoCallScreen(
     onToggleFlashlight: () -> Unit,
     onTurnOffFlashlight: () -> Unit,
     onHangUp: () -> Unit,
-    isBackgroundBlurEnabled: Boolean = false,
-    onToggleBackgroundBlur: () -> Unit = {},
+    virtualBackgroundMode: VirtualBackgroundMode = VirtualBackgroundMode.NONE,
+    selectedBackgroundId: String? = null,
+    onBackgroundNone: () -> Unit = {},
+    onBackgroundBlur: () -> Unit = {},
+    onBackgroundImage: (Bitmap, String) -> Unit = { _, _ -> },
+    onBackgroundImageFromUri: (Uri) -> Unit = {},
     contacts: List<ContactEntity> = emptyList(),
     additionalParticipants: Map<String, CallParticipant> = emptyMap(),
     activePartnerId: String? = null,
@@ -923,6 +942,12 @@ fun ActiveVideoCallScreen(
     // Bildschirm-Bounds der eingeblendeten Steuer-Pille — Taps in diesem Bereich
     // dürfen NICHT das Haupt-/Kleinbild umschalten.
     var pillBounds by remember { mutableStateOf<Rect?>(null) }
+    // Hintergrund-Auswahl (Kein/Unschärfe/Bild) anzeigen
+    var showBackgroundPicker by remember { mutableStateOf(false) }
+    // Galerie-Auswahl für eigenes Hintergrundbild
+    val backgroundImagePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri: Uri? -> uri?.let { onBackgroundImageFromUri(it) } }
 
     Box(
         modifier = Modifier
@@ -1255,6 +1280,21 @@ fun ActiveVideoCallScreen(
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    // ── Hintergrund-Auswahl (einblendbar) ─────────────────────
+                    if (showBackgroundPicker) {
+                        BackgroundPickerRow(
+                            currentMode = virtualBackgroundMode,
+                            selectedBackgroundId = selectedBackgroundId,
+                            onNone = onBackgroundNone,
+                            onBlur = onBackgroundBlur,
+                            onPreset = onBackgroundImage,
+                            onGallery = { backgroundImagePicker.launch("image/*") }
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 20.dp),
+                            color = Color.White.copy(alpha = 0.2f)
+                        )
+                    }
                     // ── Buttons row ──────────────────────────────────────────
                     Box(modifier = Modifier.fillMaxWidth()) {
                     Row(
@@ -1440,23 +1480,24 @@ fun ActiveVideoCallScreen(
                             )
                         }
 
-                        // Hintergrundunschärfe
+                        // Virtueller Hintergrund (Auswahl: Kein/Unschärfe/Bild)
                         IconButton(
-                            onClick = onToggleBackgroundBlur,
+                            onClick = { showBackgroundPicker = !showBackgroundPicker },
                             modifier = Modifier
                                 .size(52.dp)
                                 .clip(CircleShape)
                                 .background(
-                                    if (isBackgroundBlurEnabled) Color(0xFF007AFF)
+                                    if (virtualBackgroundMode != VirtualBackgroundMode.NONE) Color(0xFF007AFF)
                                     else Color.Black.copy(alpha = 0.5f)
                                 )
                         ) {
                             Icon(
-                                imageVector = if (isBackgroundBlurEnabled) Icons.Default.BlurOn else Icons.Default.BlurOff,
-                                contentDescription = if (isBackgroundBlurEnabled)
-                                    stringResource(R.string.video_call_blur_bg_off_cd)
-                                else
-                                    stringResource(R.string.video_call_blur_bg_on_cd),
+                                imageVector = when (virtualBackgroundMode) {
+                                    VirtualBackgroundMode.BLUR -> Icons.Default.BlurOn
+                                    VirtualBackgroundMode.IMAGE -> Icons.Default.Wallpaper
+                                    else -> Icons.Default.BlurOff
+                                },
+                                contentDescription = stringResource(R.string.video_call_background_cd),
                                 tint = Color.White,
                                 modifier = Modifier.size(22.dp)
                             )
@@ -1662,7 +1703,8 @@ fun VideoCallScreen(
     val eglCtx            by viewModel.webRtcEglBaseContext.collectAsState()
     val callStatusMessage by viewModel.callStatusMessage.collectAsState()
     val isFrontCamera          by viewModel.isUsingFrontCamera.collectAsState()
-    val isBackgroundBlurEnabled by viewModel.isBackgroundBlurEnabled.collectAsState()
+    val virtualBackgroundMode by viewModel.virtualBackgroundMode.collectAsState()
+    val selectedBackgroundId by viewModel.selectedBackgroundId.collectAsState()
 
     val contacts              by viewModel.contacts.collectAsState(initial = emptyList())
     val additionalParticipants by viewModel.additionalParticipants.collectAsState()
@@ -1791,8 +1833,12 @@ fun VideoCallScreen(
             contacts               = contacts,
             additionalParticipants = additionalParticipants,
             activePartnerId        = activePartnerId,
-            isBackgroundBlurEnabled = isBackgroundBlurEnabled,
-            onToggleBackgroundBlur  = { viewModel.toggleBackgroundBlur() },
+            virtualBackgroundMode   = virtualBackgroundMode,
+            selectedBackgroundId    = selectedBackgroundId,
+            onBackgroundNone        = { viewModel.setVirtualBackgroundNone() },
+            onBackgroundBlur        = { viewModel.setVirtualBackgroundBlur() },
+            onBackgroundImage       = { bmp, id -> viewModel.setVirtualBackgroundImage(bmp, id) },
+            onBackgroundImageFromUri = { uri -> viewModel.setVirtualBackgroundImageFromUri(uri) },
             onInviteContact        = { uid -> viewModel.inviteToCall(uid) },
             onCancelInvite         = { uid -> viewModel.cancelInvite(uid) },
             callDurationText       = callDurationText,
@@ -2264,5 +2310,117 @@ fun GroupCallDropdownTopBarAction(
             },
             onDismiss = { showPicker = false }
         )
+    }
+}
+
+/** Vordefinierte Farbverlauf-Hintergründe (programmatisch erzeugt – keine Binär-Assets nötig). */
+private data class BackgroundPreset(val id: String, val color1: Color, val color2: Color)
+
+private val backgroundPresets = listOf(
+    BackgroundPreset("preset_sunset", Color(0xFFFF7E5F), Color(0xFFFEB47B)),
+    BackgroundPreset("preset_ocean",  Color(0xFF2193B0), Color(0xFF6DD5ED)),
+    BackgroundPreset("preset_purple", Color(0xFF667EEA), Color(0xFF764BA2)),
+    BackgroundPreset("preset_forest", Color(0xFF11998E), Color(0xFF38EF7D)),
+    BackgroundPreset("preset_night",  Color(0xFF232526), Color(0xFF414345)),
+)
+
+/** Erzeugt ein Farbverlauf-Bitmap für einen Preset-Hintergrund. */
+private fun makeGradientBitmap(c1: Int, c2: Int, w: Int = 720, h: Int = 1280): Bitmap {
+    val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bmp)
+    val paint = Paint().apply {
+        shader = LinearGradient(0f, 0f, w.toFloat(), h.toFloat(), c1, c2, Shader.TileMode.CLAMP)
+    }
+    canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), paint)
+    return bmp
+}
+
+/** Einblendbare Auswahlleiste für den virtuellen Hintergrund (analog Nextcloud Talk). */
+@Composable
+private fun BackgroundPickerRow(
+    currentMode: VirtualBackgroundMode,
+    selectedBackgroundId: String?,
+    onNone: () -> Unit,
+    onBlur: () -> Unit,
+    onPreset: (Bitmap, String) -> Unit,
+    onGallery: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        BackgroundOptionChip(
+            selected = currentMode == VirtualBackgroundMode.NONE,
+            label = stringResource(R.string.video_call_bg_none),
+            onClick = onNone
+        ) {
+            Icon(Icons.Default.Block, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+        }
+        BackgroundOptionChip(
+            selected = currentMode == VirtualBackgroundMode.BLUR,
+            label = stringResource(R.string.video_call_bg_blur),
+            onClick = onBlur
+        ) {
+            Icon(Icons.Default.BlurOn, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+        }
+        backgroundPresets.forEach { preset ->
+            val isSel = currentMode == VirtualBackgroundMode.IMAGE && selectedBackgroundId == preset.id
+            BackgroundOptionChip(
+                selected = isSel,
+                label = null,
+                onClick = { onPreset(makeGradientBitmap(preset.color1.toArgb(), preset.color2.toArgb()), preset.id) },
+                background = Brush.linearGradient(listOf(preset.color1, preset.color2))
+            ) {}
+        }
+        val galleryActive = currentMode == VirtualBackgroundMode.IMAGE &&
+            selectedBackgroundId != null && backgroundPresets.none { it.id == selectedBackgroundId }
+        BackgroundOptionChip(
+            selected = galleryActive,
+            label = stringResource(R.string.video_call_bg_gallery),
+            onClick = onGallery
+        ) {
+            Icon(Icons.Default.Image, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+        }
+    }
+}
+
+@Composable
+private fun BackgroundOptionChip(
+    selected: Boolean,
+    label: String?,
+    onClick: () -> Unit,
+    background: Brush? = null,
+    icon: @Composable () -> Unit
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .clip(CircleShape)
+                .then(
+                    if (background != null) Modifier.background(background)
+                    else Modifier.background(Color.Black.copy(alpha = 0.5f))
+                )
+                .border(
+                    width = if (selected) 3.dp else 1.dp,
+                    color = if (selected) Color(0xFF007AFF) else Color.White.copy(alpha = 0.25f),
+                    shape = CircleShape
+                )
+                .clickable { onClick() },
+            contentAlignment = Alignment.Center
+        ) { icon() }
+        if (label != null) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = label,
+                color = Color.White.copy(alpha = 0.85f),
+                fontSize = 10.sp,
+                maxLines = 1
+            )
+        }
     }
 }

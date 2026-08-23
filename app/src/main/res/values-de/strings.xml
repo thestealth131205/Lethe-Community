@@ -949,6 +949,10 @@
     <string name="video_call_you">Du</string>
     <string name="video_call_blur_bg_on_cd">Hintergrundunschärfe aktivieren</string>
     <string name="video_call_blur_bg_off_cd">Hintergrundunschärfe deaktivieren</string>
+    <string name="video_call_background_cd">Hintergrund auswählen</string>
+    <string name="video_call_bg_none">Kein</string>
+    <string name="video_call_bg_blur">Unschärfe</string>
+    <string name="video_call_bg_gallery">Galerie</string>
     <string name="support_ticket_sent">Ticket gesendet!</string>
     <string name="support_we_respond">Wir melden uns so schnell wie möglich.</string>
     <string name="support_category">Kategorie</string>

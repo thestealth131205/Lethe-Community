@@ -24,6 +24,18 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.154",
+            title = "Media Player, Videocalls & Sparks verbessert",
+            items = listOf(
+                "Lethe Media Player: Wiedergabe bricht beim Casten nach einem Lied nicht mehr ab; Shuffle/Wiederholung sind jetzt auch beim Casten nutzbar, Lautstärketasten regeln direkt das Cast-Gerät",
+                "Geteilte Musik-Links sind jetzt kurz und funktionieren beim Favorisieren sofort, ohne den Song erneut zu öffnen",
+                "Videocalls: Statt nur \u201eHintergrund unscharf\u201c gibt es jetzt eine echte Hintergrundauswahl (unscharf, Farbverläufe oder eigenes Galeriebild) mit weichen Kanten",
+                "Sparks: Beim Erstellen füllt ein vergrößerter, unscharfer Hintergrund den freien Bildschirmbereich aus; Tonaussetzer bei kurzer Musik und zu langer Bilddauer behoben",
+            ),
+            shortSummary = "Zuverlässigeres Casten, echte Hintergrundauswahl bei Videocalls und verbesserte Sparks"
+        ),
+
+        ChangelogEntry(
             version = "10.4.153",
             title = "Benachrichtigungen, Support & Sparks verbessert",
             items = listOf(
@@ -55,17 +67,6 @@ object AppChangelog {
                 "Behoben: Der geteilte Live-Standort aktualisiert sich jetzt zuverlässig fortlaufend statt bei einem alten Stand stehen zu bleiben",
             ),
             shortSummary = "Zuverlässigere Benachrichtigungen und fortlaufend aktualisierter Live-Standort"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.150",
-            title = "Neu: Multi-Account-Einstellungen",
-            items = listOf(
-                "Neuer Einstellungspunkt \u201eMulti Account\u201c: Konto wechseln jetzt direkt aus den App-Einstellungen, ohne erst zum Konto-Bildschirm zu wechseln",
-                "Neue Option \u201eAlle Accounts \u00fcberwachen\u201c: Bei aktivierter Einstellung wirst du bei neuen Nachrichten auf nicht eingeloggten Konten benachrichtigt (ohne Kontaktname und Text) und kannst per Tap direkt in den jeweiligen Account wechseln",
-                "Neue Option \u201eGemischte Kontaktliste\u201c: Zeigt auf Wunsch Kontakte all deiner gespeicherten Accounts gemeinsam in der Kontaktliste an, mit farblich hervorgehobenem Konto-Namen hinter dem Kontaktnamen",
-            ),
-            shortSummary = "Neuer Multi-Account-Bereich: Konto wechseln, Account-\u00dcberwachung und gemischte Kontaktliste"
         ),
 
     )

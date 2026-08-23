@@ -892,6 +892,10 @@
     <string name="video_call_you">Vous</string>
     <string name="video_call_blur_bg_on_cd">Activer le flou de fond</string>
     <string name="video_call_blur_bg_off_cd">Désactiver le flou de fond</string>
+    <string name="video_call_background_cd">Choisir l\'arrière-plan</string>
+    <string name="video_call_bg_none">Aucun</string>
+    <string name="video_call_bg_blur">Flou</string>
+    <string name="video_call_bg_gallery">Galerie</string>
     <string name="support_ticket_sent">Ticket envoyé !</string>
     <string name="support_we_respond">Nous vous répondrons dès que possible.</string>
     <string name="support_category">Catégorie</string>

@@ -105,6 +105,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -582,6 +583,23 @@ fun SparkAddEditorScreen(
                 .background(Color.Black)
                 .onSizeChanged { containerWidth = it.width; containerHeight = it.height }
         ) {
+            // 0. Geblurter Hintergrund: füllt den freien Platz (Letterbox) bei Formaten, die nicht
+            // die ganze Fläche einnehmen (alles außer 9:16/9:21), mit einer vergrößerten, unscharfen
+            // Version des aktuellen Bildes – wie im Referenz-Design. Nur für Bilder (Video-Blur wäre
+            // auf der SurfaceView unzuverlässig/teuer). Liegt hinter dem scharfen Rahmen.
+            if (isImage && frameWidthPx > 0f) {
+                AsyncImage(
+                    model = imageOrder.getOrNull(selectedImageIndex) ?: mediaUri,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .blur(30.dp)
+                )
+                // leichter Abdunkler, damit der scharfe Rahmen sich klar abhebt
+                Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f)))
+            }
+
             // 1. Medien-Vorschau (Bild oder Video), auf gewähltes Seitenverhältnis begrenzt ──
             // (Rahmengröße frameWidthDp/frameHeightDp wird oben top-level berechnet)
             Box(

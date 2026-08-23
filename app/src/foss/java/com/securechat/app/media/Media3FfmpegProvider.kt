@@ -155,7 +155,10 @@ class Media3FfmpegProvider @Inject constructor(
                         .setRemoveVideo(true)
                         .apply { if (musicProcessors.isNotEmpty()) setEffects(Effects(musicProcessors, emptyList())) }
                         .build()
-                    sequences.add(EditedMediaItemSequence(musicEdited))
+                    // isLooping=true: Musik-Sequenz wiederholt sich, bis die (nicht-loopende) Video-/Bild-
+                    // Sequenz endet. Verhindert, dass bei Musik kürzer als die gewählte Bilddauer der Ton
+                    // vorzeitig stoppt, während das Bild/Video weiterläuft (z.B. Ton nur 5s bei 12s-Spark).
+                    sequences.add(EditedMediaItemSequence(listOf(musicEdited), /* isLooping= */ true))
                 }
 
                 val composition = Composition.Builder(sequences)

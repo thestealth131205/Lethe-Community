@@ -842,9 +842,12 @@ class MainViewModel @Inject constructor(
     private val _isSpeakerphoneOn = MutableStateFlow(false)
     val isSpeakerphoneOn: StateFlow<Boolean> = _isSpeakerphoneOn.asStateFlow()
 
-    /** Ob die Hintergrundunschärfe im eigenen Videostream aktiv ist. */
-    private val _isBackgroundBlurEnabled = MutableStateFlow(false)
-    val isBackgroundBlurEnabled: StateFlow<Boolean> = _isBackgroundBlurEnabled.asStateFlow()
+    /** Aktueller virtueller Hintergrund im eigenen Videostream (Kein/Unschärfe/Bild). */
+    private val _virtualBackgroundMode = MutableStateFlow(com.securechat.app.data.webrtc.VirtualBackgroundMode.NONE)
+    val virtualBackgroundMode: StateFlow<com.securechat.app.data.webrtc.VirtualBackgroundMode> = _virtualBackgroundMode.asStateFlow()
+    /** Kennung des gewählten Bild-Hintergrunds (Preset-Key oder URI-String) – für UI-Hervorhebung. */
+    private val _selectedBackgroundId = MutableStateFlow<String?>(null)
+    val selectedBackgroundId: StateFlow<String?> = _selectedBackgroundId.asStateFlow()
 
     // ─────────────────────────────────────────────────────────────────────────
     // VIDEO CALL FUNCTIONS
@@ -1351,9 +1354,43 @@ class MainViewModel @Inject constructor(
 
     fun setCallVideoQuality(isHighDefinition: Boolean) = webRtcClient?.setVideoQuality(isHighDefinition)
 
-    fun toggleBackgroundBlur() {
-        webRtcClient?.toggleBackgroundBlur()
-        _isBackgroundBlurEnabled.value = webRtcClient?.isBackgroundBlurEnabled?.value ?: false
+    /** Kein virtueller Hintergrund (Originalkamera). */
+    fun setVirtualBackgroundNone() {
+        webRtcClient?.setVirtualBackground(com.securechat.app.data.webrtc.VirtualBackgroundMode.NONE)
+        _virtualBackgroundMode.value = com.securechat.app.data.webrtc.VirtualBackgroundMode.NONE
+        _selectedBackgroundId.value = null
+    }
+
+    /** Hintergrund unscharf stellen. */
+    fun setVirtualBackgroundBlur() {
+        webRtcClient?.setVirtualBackground(com.securechat.app.data.webrtc.VirtualBackgroundMode.BLUR)
+        _virtualBackgroundMode.value = com.securechat.app.data.webrtc.VirtualBackgroundMode.BLUR
+        _selectedBackgroundId.value = null
+    }
+
+    /** Bereits dekodiertes Bitmap als Hintergrund setzen (z. B. generierte Preset-Hintergründe). */
+    fun setVirtualBackgroundImage(bitmap: Bitmap, id: String) {
+        webRtcClient?.setVirtualBackground(com.securechat.app.data.webrtc.VirtualBackgroundMode.IMAGE, bitmap)
+        _virtualBackgroundMode.value = com.securechat.app.data.webrtc.VirtualBackgroundMode.IMAGE
+        _selectedBackgroundId.value = id
+    }
+
+    /** Hintergrundbild aus der Galerie (URI) laden und anwenden. */
+    fun setVirtualBackgroundImageFromUri(uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val bitmap = try {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    val opts = BitmapFactory.Options().apply { inSampleSize = 2 }
+                    BitmapFactory.decodeStream(input, null, opts)
+                }
+            } catch (e: Exception) {
+                Timber.tag("LETHE_BLUR").w(e, "Hintergrundbild konnte nicht geladen werden")
+                null
+            } ?: return@launch
+            webRtcClient?.setVirtualBackground(com.securechat.app.data.webrtc.VirtualBackgroundMode.IMAGE, bitmap)
+            _virtualBackgroundMode.value = com.securechat.app.data.webrtc.VirtualBackgroundMode.IMAGE
+            _selectedBackgroundId.value = uri.toString()
+        }
     }
 
     // ─── WebRTC DataChannel P2P Chat – öffentliche API ───────────────────────
@@ -2075,7 +2112,8 @@ class MainViewModel @Inject constructor(
         _callIsMuted.value             = false
         _isSpeakerphoneOn.value        = false
         _isUsingFrontCamera.value      = true
-        _isBackgroundBlurEnabled.value = false
+        _virtualBackgroundMode.value   = com.securechat.app.data.webrtc.VirtualBackgroundMode.NONE
+        _selectedBackgroundId.value    = null
         _activeCallType.value      = "VIDEO"  // Für den nächsten Anruf zurücksetzen
         _callState.value           = CallState.ENDED  // ENDED triggers VideoCallScreen navigation
         client.dispose()                              // Dispose AFTER state cleared

@@ -104,20 +104,28 @@ class FfmpegKitProvider @Inject constructor() : FfmpegProvider {
             req.isMuted || req.isImage -> {
                 buildString {
                     if (req.isImage) {
-                        append("-loop 1 -i \"${req.inputVideoPath}\" ")
-                        append("-t ${req.imageDurationSec} ")
+                        // WICHTIG: -t MUSS vor dem Bild-Input stehen, damit es die Loop-Dauer des
+                        // Bildes begrenzt. Stand es (wie zuvor) zwischen Bild- und Musik-Input, wirkte
+                        // es als Input-Option der MUSIK → bei Musik kürzer als die gewählte Dauer schnitt
+                        // -shortest den ganzen Spark auf die Musiklänge (z.B. 5s statt 12s).
+                        append("-loop 1 -t ${req.imageDurationSec} -i \"${req.inputVideoPath}\" ")
+                        // Musik loopen, damit sie die volle Bilddauer füllt (kurze Sounds nicht abgeschnitten)
+                        if (musicSsFlag.isNotBlank()) append("$musicSsFlag ")
+                        append("-stream_loop -1 -i \"${musicFile.absolutePath}\" ")
                     } else {
                         if (trimStart.isNotBlank()) append("$trimStart ")
                         if (trimDuration.isNotBlank()) append("$trimDuration ")
                         append("-i \"${req.inputVideoPath}\" ")
+                        if (musicSsFlag.isNotBlank()) append("$musicSsFlag ")
+                        append("-i \"${musicFile.absolutePath}\" ")
                     }
-                    if (musicSsFlag.isNotBlank()) append("$musicSsFlag ")
-                    append("-i \"${musicFile.absolutePath}\" ")
                     if (vfPart.isNotBlank()) append("$vfPart ")
                     append("-map 0:v:0 -map 1:a:0 ")
                     append("-c:v libx264 -preset fast -crf 23 ")
                     append("-c:a aac -b:a 192k ")
-                    append("-shortest ")
+                    // Bild: harte Ausgabedauer (Bild ist finit begrenzt, Musik läuft geloopt genau so lang).
+                    // Video: -shortest wie bisher (Trim steuert die Länge).
+                    if (req.isImage) append("-t ${req.imageDurationSec} ") else append("-shortest ")
                     append("-movflags +faststart ")
                     append("\"$outputPath\"")
                 }

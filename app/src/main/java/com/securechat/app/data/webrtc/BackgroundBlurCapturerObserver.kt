@@ -2,7 +2,12 @@ package com.securechat.app.data.webrtc
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
 import android.graphics.Rect
+import android.graphics.RectF
 import android.graphics.YuvImage
 import com.securechat.app.segmentation.SegmentationProvider
 import org.webrtc.CapturerObserver
@@ -14,20 +19,34 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
+/** Auswählbarer virtueller Hintergrund für den lokalen Video-Stream (analog Nextcloud Talk). */
+enum class VirtualBackgroundMode { NONE, BLUR, IMAGE }
+
 /**
  * Ein [CapturerObserver]-Wrapper der bei aktivierter Privatsphäre-Funktion den Hintergrund
- * im lokalen Videostream via Selfie-Segmentierung ([SegmentationProvider]) unscharf stellt.
+ * im lokalen Videostream via Selfie-Segmentierung ([SegmentationProvider]) ersetzt – entweder
+ * unscharf ([VirtualBackgroundMode.BLUR]) oder durch ein gewähltes Bild
+ * ([VirtualBackgroundMode.IMAGE]).
+ *
+ * Das Compositing folgt dem Ansatz von Nextcloud Talk (Canvas-2D-Pfad): die Segmentierungsmaske
+ * wird mit weichen Kanten (Feathering) als Alphakanal auf die Person angewendet
+ * (`PorterDuff.DST_IN` ≙ `source-in`), anschließend wird der gewählte Hintergrund darunter
+ * gezeichnet (`SRC_OVER` ≙ `destination-over`). Das ersetzt den früheren Per-Pixel-Misch-Loop
+ * und liefert weiche Übergänge statt harter Kanten.
  *
  * Verwendung: Wird zwischen VideoCapturer und VideoSource geschaltet.
- * Wenn [isBlurEnabled] = false, werden Frames 1:1 weitergeleitet (kein Overhead).
+ * Wenn [mode] = [VirtualBackgroundMode.NONE], werden Frames 1:1 weitergeleitet (kein Overhead).
  */
 class BackgroundBlurCapturerObserver(
     private val delegate: CapturerObserver,
     private val segmentationProvider: SegmentationProvider
 ) : CapturerObserver {
 
-    /** Kann jederzeit threadsicher umgeschaltet werden. */
-    val isBlurEnabled = AtomicBoolean(false)
+    /** Aktueller Hintergrund-Modus, jederzeit threadsicher umschaltbar. */
+    val mode = AtomicReference(VirtualBackgroundMode.NONE)
+
+    /** Hintergrundbild für [VirtualBackgroundMode.IMAGE] (deckt den Frame ab, seitenverhältnis-erhaltend). */
+    val backgroundImage = AtomicReference<Bitmap?>(null)
 
     // Dedizierter Single-Thread-Executor für CPU-intensive Blur-Verarbeitung
     private val blurExecutor = Executors.newSingleThreadExecutor { r ->
@@ -51,7 +70,8 @@ class BackgroundBlurCapturerObserver(
     override fun onCapturerStopped() = delegate.onCapturerStopped()
 
     override fun onFrameCaptured(frame: VideoFrame) {
-        if (!isBlurEnabled.get()) {
+        val activeMode = mode.get()
+        if (activeMode == VirtualBackgroundMode.NONE) {
             delegate.onFrameCaptured(frame)
             return
         }
@@ -106,7 +126,9 @@ class BackgroundBlurCapturerObserver(
                     val mask = lastMask.get()
                     val processedBitmap: Bitmap
                     if (mask != null) {
-                        processedBitmap = applyBackgroundBlur(bitmap, mask, lastMaskW, lastMaskH)
+                        processedBitmap = applyVirtualBackground(
+                            bitmap, mask, lastMaskW, lastMaskH, activeMode, backgroundImage.get()
+                        )
                         bitmap.recycle()
                     } else {
                         processedBitmap = bitmap
@@ -213,57 +235,88 @@ class BackgroundBlurCapturerObserver(
         } else full
     }
 
-    /** Wendet einen starken Hintergrundunschärfe-Effekt an, basierend auf der Segmentierungsmaske. */
-    private fun applyBackgroundBlur(
+    /**
+     * Ersetzt den Hintergrund anhand der Segmentierungsmaske – Compositing wie im Canvas-2D-Pfad
+     * von Nextcloud Talk:
+     *  1. Maske → weiche Alpha-Maske (Feathering durch bilineares Hochskalieren aus der niedrig
+     *     aufgelösten Segmentierungsmaske).
+     *  2. Person freistellen: Original mit Maske als Alpha (`PorterDuff.DST_IN` ≙ `source-in`).
+     *  3. Hintergrund darunter zeichnen (`SRC_OVER` ≙ `destination-over`): entweder das
+     *     unscharf gerechnete Original ([VirtualBackgroundMode.BLUR]) oder das gewählte Bild
+     *     seitenverhältnis-erhaltend deckend ([VirtualBackgroundMode.IMAGE]).
+     */
+    private fun applyVirtualBackground(
         original: Bitmap,
         mask: FloatArray,
         maskW: Int,
-        maskH: Int
+        maskH: Int,
+        activeMode: VirtualBackgroundMode,
+        bgImage: Bitmap?
     ): Bitmap {
         val w = original.width
         val h = original.height
 
-        // Günstige Weichzeichnung via Downsample→Upsample (Faktor 8)
-        val blurFactor = 8
-        val smallW = (w / blurFactor).coerceAtLeast(1)
-        val smallH = (h / blurFactor).coerceAtLeast(1)
-        val small   = Bitmap.createScaledBitmap(original, smallW, smallH, true)
-        val blurred = Bitmap.createScaledBitmap(small, w, h, true)
-        small.recycle()
-
-        val origPixels  = IntArray(w * h)
-        val blurPixels  = IntArray(w * h)
-        original.getPixels(origPixels, 0, w, 0, 0, w, h)
-        blurred.getPixels(blurPixels,  0, w, 0, 0, w, h)
-        blurred.recycle()
-
+        // ── 1. Weiche Alpha-Maske aus der Segmentierungsmaske ────────────────────
         val mW = maskW.coerceAtLeast(1)
         val mH = maskH.coerceAtLeast(1)
+        val maskPixels = IntArray(mW * mH)
+        for (idx in 0 until mW * mH) {
+            val confidence = if (idx < mask.size) mask[idx] else 0f
+            val a = (confidence.coerceIn(0f, 1f) * 255f).toInt()
+            // Alpha = Personen-Konfidenz; RGB egal (wird nur als Alpha via DST_IN genutzt)
+            maskPixels[idx] = (a shl 24)
+        }
+        val maskSmall = Bitmap.createBitmap(mW, mH, Bitmap.Config.ARGB_8888)
+        maskSmall.setPixels(maskPixels, 0, mW, 0, 0, mW, mH)
+        // bilineares Hochskalieren erzeugt weiche Kanten (Feathering)
+        val maskFull = Bitmap.createScaledBitmap(maskSmall, w, h, true)
+        maskSmall.recycle()
 
-        for (j in 0 until h) {
-            for (i in 0 until w) {
-                val mx  = (i.toFloat() / w * mW).toInt().coerceIn(0, mW - 1)
-                val my  = (j.toFloat() / h * mH).toInt().coerceIn(0, mH - 1)
-                val idx = my * mW + mx
-                // confidence ≈ 1.0 → Person (scharf), ≈ 0.0 → Hintergrund (unscharf)
-                val confidence = if (idx < mask.size) mask[idx] else 0f
-                val t = (1f - confidence).coerceIn(0f, 1f) // Anteil Unschärfe
+        // ── 2. Person freistellen (Original × Masken-Alpha) ──────────────────────
+        val person = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val personCanvas = Canvas(person)
+        personCanvas.drawBitmap(original, 0f, 0f, null)
+        val cutPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
+        }
+        personCanvas.drawBitmap(maskFull, 0f, 0f, cutPaint)
+        maskFull.recycle()
 
-                val pi   = j * w + i
-                val orig = origPixels[pi]
-                val blur = blurPixels[pi]
+        // ── 3. Hintergrund + Person zusammensetzen ───────────────────────────────
+        val result = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val outCanvas = Canvas(result)
 
-                val r = (((orig shr 16) and 0xFF) * (1f - t) + ((blur shr 16) and 0xFF) * t).toInt().coerceIn(0, 255)
-                val g = (((orig shr  8) and 0xFF) * (1f - t) + ((blur shr  8) and 0xFF) * t).toInt().coerceIn(0, 255)
-                val b = (( orig        and 0xFF)  * (1f - t) + ( blur         and 0xFF)  * t).toInt().coerceIn(0, 255)
-
-                origPixels[pi] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
-            }
+        if (activeMode == VirtualBackgroundMode.IMAGE && bgImage != null && !bgImage.isRecycled) {
+            drawCoverImage(outCanvas, bgImage, w, h)
+        } else {
+            // BLUR (auch Fallback, falls IMAGE ohne gültiges Bild): günstige Weichzeichnung
+            val blurFactor = 8
+            val smallW = (w / blurFactor).coerceAtLeast(1)
+            val smallH = (h / blurFactor).coerceAtLeast(1)
+            val small   = Bitmap.createScaledBitmap(original, smallW, smallH, true)
+            val blurred = Bitmap.createScaledBitmap(small, w, h, true)
+            small.recycle()
+            outCanvas.drawBitmap(blurred, 0f, 0f, null)
+            blurred.recycle()
         }
 
-        val result = original.copy(Bitmap.Config.ARGB_8888, true)
-        result.setPixels(origPixels, 0, w, 0, 0, w, h)
+        outCanvas.drawBitmap(person, 0f, 0f, null)
+        person.recycle()
         return result
+    }
+
+    /** Zeichnet [image] deckend (center-crop, seitenverhältnis-erhaltend) auf die Zielfläche w×h. */
+    private fun drawCoverImage(canvas: Canvas, image: Bitmap, w: Int, h: Int) {
+        val iw = image.width.toFloat()
+        val ih = image.height.toFloat()
+        if (iw <= 0f || ih <= 0f) return
+        val scale = maxOf(w / iw, h / ih)
+        val drawW = iw * scale
+        val drawH = ih * scale
+        val left = (w - drawW) / 2f
+        val top  = (h - drawH) / 2f
+        canvas.drawBitmap(image, null, RectF(left, top, left + drawW, top + drawH),
+            Paint(Paint.FILTER_BITMAP_FLAG))
     }
 
     /** Bitmap → JavaI420Buffer für WebRTC VideoFrame. */

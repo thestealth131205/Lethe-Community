@@ -260,8 +260,10 @@ class WebRtcClient(
     private val _isUsingFrontCamera = MutableStateFlow(true)
     val isUsingFrontCamera: StateFlow<Boolean> = _isUsingFrontCamera.asStateFlow()
 
-    private val _isBackgroundBlurEnabled = MutableStateFlow(false)
-    val isBackgroundBlurEnabled: StateFlow<Boolean> = _isBackgroundBlurEnabled.asStateFlow()
+    private val _virtualBackgroundMode = MutableStateFlow(VirtualBackgroundMode.NONE)
+    val virtualBackgroundMode: StateFlow<VirtualBackgroundMode> = _virtualBackgroundMode.asStateFlow()
+    /** Gewähltes Hintergrundbild (für [VirtualBackgroundMode.IMAGE]); überlebt Kamera-Wechsel. */
+    private var virtualBackgroundImage: android.graphics.Bitmap? = null
 
     // ─────────────────────────────────────────────────────────────────────────
     // Initialization
@@ -725,13 +727,21 @@ class WebRtcClient(
         forwardedStreams.add(ForwardedStream(fromId, videoTrack, localFwdTrack, videoSink, videoSource, audioTrack))
     }
 
-    /** Schaltet Hintergrundunschärfe im eigenen Videostream um. */
-    fun toggleBackgroundBlur() {
-        val blur = blurObserver ?: return
-        val newState = !_isBackgroundBlurEnabled.value
-        blur.isBlurEnabled.set(newState)
-        _isBackgroundBlurEnabled.value = newState
-        Timber.tag(TAG).d("Background blur → $newState")
+    /**
+     * Setzt den virtuellen Hintergrund im eigenen Videostream (Kein/Unschärfe/Bild).
+     * [image] wird nur für [VirtualBackgroundMode.IMAGE] verwendet und überlebt Kamera-Wechsel.
+     */
+    fun setVirtualBackground(newMode: VirtualBackgroundMode, image: android.graphics.Bitmap? = null) {
+        if (newMode == VirtualBackgroundMode.IMAGE) {
+            virtualBackgroundImage = image
+        }
+        val blur = blurObserver
+        if (blur != null) {
+            blur.backgroundImage.set(if (newMode == VirtualBackgroundMode.IMAGE) virtualBackgroundImage else null)
+            blur.mode.set(newMode)
+        }
+        _virtualBackgroundMode.value = newMode
+        Timber.tag(TAG).d("Virtual background → $newMode")
     }
 
     /**
@@ -812,9 +822,9 @@ class WebRtcClient(
         oldHelper?.dispose()
 
         // 8. ScreenCapturer mit dem neuen Helper/Source initialisieren und starten.
-        //    Bei Screen-Sharing keinen BlurObserver einschalten (BlurObserver deaktivieren).
-        blurObserver?.isBlurEnabled?.set(false)
-        _isBackgroundBlurEnabled.value = false
+        //    Bei Screen-Sharing keinen virtuellen Hintergrund anwenden (Observer deaktivieren).
+        blurObserver?.mode?.set(VirtualBackgroundMode.NONE)
+        _virtualBackgroundMode.value = VirtualBackgroundMode.NONE
         val screenCapturer = ScreenCapturerAndroid(data, object : MediaProjection.Callback() {})
         videoCapturer = screenCapturer
         screenCapturer.initialize(screenHelper, context, screenSource.capturerObserver)
@@ -863,8 +873,12 @@ class WebRtcClient(
         oldHelper?.dispose()
 
         // 8. Kamera-Capturer mit neuem Helper/Source initialisieren und starten.
-        //    BlurObserver für die neue Camera-Source neu verdrahten.
+        //    BlurObserver für die neue Camera-Source neu verdrahten – zuvor gewählten
+        //    virtuellen Hintergrund (Modus + Bild) wiederherstellen.
         val newBlur = BackgroundBlurCapturerObserver(cameraSource.capturerObserver, segmentationProvider)
+        val restoreMode = _virtualBackgroundMode.value
+        newBlur.backgroundImage.set(if (restoreMode == VirtualBackgroundMode.IMAGE) virtualBackgroundImage else null)
+        newBlur.mode.set(restoreMode)
         blurObserver?.dispose()
         blurObserver = newBlur
         val cameraCapt = buildCameraCapturer()

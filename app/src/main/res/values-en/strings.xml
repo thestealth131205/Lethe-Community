@@ -890,6 +890,10 @@
     <string name="video_call_you">You</string>
     <string name="video_call_blur_bg_on_cd">Enable background blur</string>
     <string name="video_call_blur_bg_off_cd">Disable background blur</string>
+    <string name="video_call_background_cd">Choose background</string>
+    <string name="video_call_bg_none">None</string>
+    <string name="video_call_bg_blur">Blur</string>
+    <string name="video_call_bg_gallery">Gallery</string>
     <string name="support_ticket_sent">Ticket sent!</string>
     <string name="support_we_respond">We will get back to you as soon as possible.</string>
     <string name="support_category">Category</string>

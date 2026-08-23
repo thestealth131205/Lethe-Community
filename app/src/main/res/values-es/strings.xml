@@ -888,6 +888,10 @@
     <string name="video_call_you">Tú</string>
     <string name="video_call_blur_bg_on_cd">Activar desenfoque de fondo</string>
     <string name="video_call_blur_bg_off_cd">Desactivar desenfoque de fondo</string>
+    <string name="video_call_background_cd">Elegir fondo</string>
+    <string name="video_call_bg_none">Ninguno</string>
+    <string name="video_call_bg_blur">Desenfoque</string>
+    <string name="video_call_bg_gallery">Galería</string>
     <string name="support_ticket_sent">¡Ticket enviado!</string>
     <string name="support_we_respond">Nos pondremos en contacto lo antes posible.</string>
     <string name="support_category">Categoría</string>
