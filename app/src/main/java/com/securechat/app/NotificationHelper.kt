@@ -1376,7 +1376,7 @@ class NotificationHelper @Inject constructor(
     }
 
     /** Zeigt eine Benachrichtigung wenn jemand auf eine eigene Nachricht reagiert hat. */
-    fun showReactionNotification(reactorName: String, emoji: String, reactorId: String) {
+    fun showReactionNotification(reactorName: String, emoji: String, reactorId: String, target: String = "deine Nachricht") {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("chat_id", reactorId)
@@ -1388,7 +1388,7 @@ class NotificationHelper @Inject constructor(
         val notification = NotificationCompat.Builder(context, CHANNEL_ID_MESSAGES)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(reactorName)
-            .setContentText("hat auf deine Nachricht mit $emoji reagiert.")
+            .setContentText("hat auf $target mit $emoji reagiert.")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)

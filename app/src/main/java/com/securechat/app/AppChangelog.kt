@@ -24,6 +24,19 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.155",
+            title = "Benachrichtigungen & Videocalls verbessert",
+            items = listOf(
+                "Status-Benachrichtigungen und Herz-Reaktionen auf deinen Status kommen jetzt auch ohne Google-Dienste zuverl\u00e4ssig an",
+                "Wenn jemand auf deine Nachricht reagiert, wirst du jetzt benachrichtigt (z.\u202fB. \u201eAlex hat auf deine Nachricht mit \u2764\ufe0f reagiert\u201c)",
+                "Behoben: Videocall st\u00fcrzte beim Aktivieren von Hintergrund-Unsch\u00e4rfe oder Farbverlauf ab",
+                "Behoben: Nach einem abgest\u00fcrzten Videocall wurde der Ton dauerhaft f\u00e4lschlich \u00fcber die H\u00f6rmuschel ausgegeben",
+                "Admins werden jetzt auch ohne Google-Dienste \u00fcber neue Support-Tickets benachrichtigt",
+            ),
+            shortSummary = "Zuverl\u00e4ssigere Benachrichtigungen und stabilere Videocalls"
+        ),
+
+        ChangelogEntry(
             version = "10.4.154",
             title = "Media Player, Videocalls & Sparks verbessert",
             items = listOf(
@@ -56,17 +69,6 @@ object AppChangelog {
                 "Die App bleibt zuverl\u00e4ssiger im Hintergrund verbunden und startet nach einem Ger\u00e4te-Neustart automatisch wieder \u2013 die Meldung \u201eDu k\u00f6nntest neue Nachrichten haben\u201c erscheint nicht mehr unn\u00f6tig",
             ),
             shortSummary = "Besseres Weiterleiten, gut sichtbare Reaktionsleiste und zuverl\u00e4ssigere Hintergrundverbindung"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.151",
-            title = "Benachrichtigungen & Live-Standort verbessert",
-            items = listOf(
-                "Behoben: Bereits gelesene Nachrichten wurden nach einem Neuverbinden manchmal erneut als neue Nachricht angezeigt",
-                "Behoben: Benachrichtigungen zeigten in seltenen Fällen unverständlichen, noch verschlüsselten Text an \u2013 jetzt erscheint stattdessen \u201eNeue Nachricht\u201c, bis der Inhalt entschlüsselt werden kann",
-                "Behoben: Der geteilte Live-Standort aktualisiert sich jetzt zuverlässig fortlaufend statt bei einem alten Stand stehen zu bleiben",
-            ),
-            shortSummary = "Zuverlässigere Benachrichtigungen und fortlaufend aktualisierter Live-Standort"
         ),
 
     )

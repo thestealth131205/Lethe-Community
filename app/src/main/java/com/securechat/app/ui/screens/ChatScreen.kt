@@ -8073,17 +8073,42 @@ internal fun MessageBubble(
                                         )
                                     }
                                 }
-                                "audio" -> {
+                                "audio", "audio_e2ee" -> {
                                     // Mini-Audio-Player im Zitat
                                     val replyAudioUrl = message.replyToContent ?: ""
                                     if (replyAudioUrl.isNotBlank() && viewModel != null) {
-                                        QuotedAudioPlayer(
-                                            url = replyAudioUrl,
-                                            viewModel = viewModel,
-                                            accentColor = MaterialTheme.colorScheme.primary,
-                                            metaColor = MaterialTheme.colorScheme.onSurface,
-                                            isSelectionMode = isSelectionMode
-                                        )
+                                        val quotedPlaybackUrl by produceState(
+                                            initialValue = if (replyMediaType == "audio_e2ee") "" else replyAudioUrl,
+                                            replyAudioUrl, replyMediaType
+                                        ) {
+                                            value = viewModel.resolveAudioPlaybackSource(
+                                                mediaUrl = replyAudioUrl,
+                                                mediaType = replyMediaType ?: "audio",
+                                                chatId = chatId,
+                                                isGroup = isGroup,
+                                                senderId = message.replyToSenderId ?: ""
+                                            )
+                                        }
+                                        if (replyMediaType == "audio_e2ee" && quotedPlaybackUrl.isBlank()) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(14.dp),
+                                                    strokeWidth = 2.dp,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                                Spacer(Modifier.width(6.dp))
+                                                Text("Entschlüssele…", fontSize = 11.sp,
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                                            }
+                                        } else {
+                                            QuotedAudioPlayer(
+                                                url = quotedPlaybackUrl,
+                                                viewModel = viewModel,
+                                                accentColor = MaterialTheme.colorScheme.primary,
+                                                metaColor = MaterialTheme.colorScheme.onSurface,
+                                                isSelectionMode = isSelectionMode
+                                            )
+                                        }
                                     } else {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Icon(Icons.Default.Mic, contentDescription = null,
@@ -8915,7 +8940,7 @@ internal fun MessageBubble(
                             }
                         }
                     }
-                    "audio" -> {
+                    "audio", "audio_e2ee" -> {
                         val accentPrimary = MaterialTheme.colorScheme.primary
                         if (message.mediaUrl == null) {
                             // Upload läuft – Fortschrittsanzeige
@@ -8953,23 +8978,58 @@ internal fun MessageBubble(
                                 }
                             }
                         } else {
-                            AudioMessagePlayer(
-                                url = message.mediaUrl ?: "",
-                                viewModel = viewModel!!,
-                                accentColor = accentPrimary,
-                                metaColor = metaColor,
-                                isFromMe = isFromMe,
-                                isRead = message.deliveryStatus == 3,
-                                deliveryStatus = message.deliveryStatus,
-                                sentAt = timeText,
-                                senderAvatarUrl = if (isFromMe) myAvatarUrl else partnerAvatarUrl,
-                                messageId = message.messageId,
-                                groupId = if (isGroup) chatId else null,
-                                nextAudioUrl = nextAudioUrl,
-                                isSelectionMode = isSelectionMode,
-                                canLoad = isMediaApproved(message.mediaUrl ?: ""),
-                                onLoaded = { url -> onMediaLoaded(url) }
-                            )
+                            // audio_e2ee: Ciphertext erst herunterladen+entschlüsseln, bevor der
+                            // Player eine Quelle bekommt (leerer String = noch nicht bereit).
+                            val playbackUrl by produceState(
+                                initialValue = if (message.mediaType == "audio_e2ee") "" else (message.mediaUrl ?: ""),
+                                message.mediaUrl, message.mediaType
+                            ) {
+                                value = viewModel!!.resolveAudioPlaybackSource(
+                                    mediaUrl = message.mediaUrl ?: "",
+                                    mediaType = message.mediaType ?: "audio",
+                                    chatId = chatId,
+                                    isGroup = isGroup,
+                                    senderId = message.senderId
+                                )
+                            }
+                            if (message.mediaType == "audio_e2ee" && playbackUrl.isBlank()) {
+                                Row(
+                                    modifier = Modifier
+                                        .widthIn(min = 180.dp, max = 260.dp)
+                                        .padding(horizontal = 10.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp,
+                                        color = accentPrimary
+                                    )
+                                    Text(
+                                        "Entschlüssele Sprachnachricht…",
+                                        fontSize = 12.sp,
+                                        color = metaColor.copy(alpha = 0.75f)
+                                    )
+                                }
+                            } else {
+                                AudioMessagePlayer(
+                                    url = playbackUrl,
+                                    viewModel = viewModel!!,
+                                    accentColor = accentPrimary,
+                                    metaColor = metaColor,
+                                    isFromMe = isFromMe,
+                                    isRead = message.deliveryStatus == 3,
+                                    deliveryStatus = message.deliveryStatus,
+                                    sentAt = timeText,
+                                    senderAvatarUrl = if (isFromMe) myAvatarUrl else partnerAvatarUrl,
+                                    messageId = message.messageId,
+                                    groupId = if (isGroup) chatId else null,
+                                    nextAudioUrl = nextAudioUrl,
+                                    isSelectionMode = isSelectionMode,
+                                    canLoad = isMediaApproved(message.mediaUrl ?: ""),
+                                    onLoaded = { url -> onMediaLoaded(url) }
+                                )
+                            }
                         }
                     }
                     "audio_music" -> {
@@ -9844,7 +9904,18 @@ internal fun MessageBubble(
                         }
                     }
                     else -> {
-                        val content = message.content ?: ""
+                        // Defensiver Fallback für unbekannte media_type-Werte (z. B. wenn dieser
+                        // Client älter ist als der Absender – etwa "audio_e2ee" auf einer noch
+                        // nicht aktualisierten App): Absender kodiert unbehandelte Medientypen als
+                        // "[media_type]"-Platzhalter im content-Feld (siehe sendMediaMessage/
+                        // sendGroupMediaMessage). Statt diesen rohen Platzhalter anzuzeigen, wird
+                        // ein verständlicher Hinweistext eingesetzt (Rest der Anzeige unverändert).
+                        val rawContent = message.content ?: ""
+                        val content = if (!message.mediaType.isNullOrBlank() && message.mediaType != "text" &&
+                            rawContent == "[${message.mediaType}]"
+                        ) {
+                            "🔒 Nicht unterstützter Inhalt – bitte Lethe aktualisieren"
+                        } else rawContent
 
                         // --- Lethe:// Deep-Link-Vorschau (sp?id=, sp?url=, li?id=, post?C=) ---
                         val letheRegex = remember { Regex("""lethe://(sp|li|post)\?(?:id|[Cc])=([a-zA-Z0-9_-]+)""") }

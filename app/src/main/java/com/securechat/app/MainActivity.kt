@@ -2182,7 +2182,9 @@ class MainActivity : FragmentActivity() {
                                 onEnterToSendChange = { viewModel.setEnterToSend(it) },
                                 chatBackupEnabled = preferences.chatBackupEnabled,
                                 onChatBackupChange = { viewModel.setChatBackup(it) },
-                                chatBackupProgress = chatBackupProgress
+                                chatBackupProgress = chatBackupProgress,
+                                mediaEncryptionEnabled = preferences.mediaEncryptionEnabled,
+                                onMediaEncryptionChange = { viewModel.setMediaEncryption(it) }
                             )
                         }
 

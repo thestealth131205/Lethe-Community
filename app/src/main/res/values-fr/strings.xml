@@ -1310,6 +1310,10 @@
     <string name="app_settings_enter_to_send">Entrée = Envoyer</string>
     <string name="app_settings_enter_to_send_on">Entrée envoie le message</string>
     <string name="app_settings_enter_to_send_off">Entrée crée un nouveau paragraphe</string>
+    <string name="app_settings_media_encryption_title">Chiffrer les médias</string>
+    <string name="app_settings_media_encryption_on">Activé – Les messages vocaux sont chiffrés de bout en bout</string>
+    <string name="app_settings_media_encryption_off">Désactivé – Les messages vocaux sont transmis non chiffrés</string>
+    <string name="app_settings_media_encryption_hint">Remarque : cela peut poser des problèmes entre appareils (ex. chat web).</string>
     <string name="app_settings_chat_backup_title">Sauvegarde du chat (texte clair sur le serveur)</string>
     <string name="app_settings_chat_backup_on">Activé – les messages sont sauvegardés en texte clair sur le serveur</string>
     <string name="app_settings_chat_backup_off">Désactivé – les messages restent chiffrés de bout en bout</string>

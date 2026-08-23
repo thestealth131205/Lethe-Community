@@ -11288,6 +11288,29 @@ class MainViewModel @Inject constructor(
                     // Nachricht nicht in Room-Cache → Server-Sync als Fallback
                     loadMessages(senderId)
                 }
+                // Benachrichtigung an den Nachrichten-Ersteller (auch ohne FCM), wenn jemand
+                // auf eine EIGENE 1:1-Nachricht neu reagiert hat (nicht beim Entfernen/eigenem Mirror).
+                val myUid = _currentUser.value?.userId
+                if (reactionsJson == null && !emoji.isNullOrBlank() && senderId != myUid && !_onlyFcmMode.value) {
+                    val reacted = messageDao.getMessageById(messageId)
+                    if (reacted != null && reacted.senderId == myUid) {
+                        val reactorContact = contactDao.getContactById(senderId)
+                        val reactorName = (if (reactorContact?.isAnonymous == true) {
+                            reactorContact.fakeNumber
+                        } else {
+                            reactorContact?.username?.takeIf { it.isNotBlank() }
+                                ?: reactorContact?.fakeNumber
+                        }) ?: "Jemand"
+                        val target = when (reacted.mediaType) {
+                            "image" -> "dein Bild"
+                            "video" -> "dein Video"
+                            "audio" -> "deine Sprachnachricht"
+                            "poll"  -> "deine Umfrage"
+                            else    -> "deine Nachricht"
+                        }
+                        notificationHelper.showReactionNotification(reactorName, emoji, senderId, target)
+                    }
+                }
                 Timber.tag("LETHE_WS").d("Reaktion empfangen: $emoji auf $messageId (updated=$updated)")
             }
 
@@ -11459,6 +11482,26 @@ class MainViewModel @Inject constructor(
                 val likerUsername = payload["liker_username"] as? String ?: "Jemand"
                 if (!_onlyFcmMode.value) notificationHelper.showStatusLikedNotification(likerUsername)
                 Timber.tag("LETHE_WS").d("Status geliked von: $likerUsername")
+            }
+
+            // Ein Kontakt hat einen neuen Status veröffentlicht (auch ohne FCM)
+            "new_status" -> {
+                val payload = msg.payload as? Map<*, *> ?: return
+                val senderName = payload["sender_name"] as? String ?: "Jemand"
+                if (!_onlyFcmMode.value) notificationHelper.showNewStatusNotification(senderName)
+                Timber.tag("LETHE_WS").d("Neuer Status von: $senderName")
+            }
+
+            // Neues Support-Ticket (nur an Admins/Moderatoren gesendet). Wird hier behandelt,
+            // damit die Benachrichtigung auch bei geöffneter App (aktives ViewModel) erscheint –
+            // der NotificationHandler-Service überspringt WS-Nachrichten dann bewusst.
+            "new_support_ticket" -> {
+                val payload = msg.payload as? Map<*, *> ?: return
+                val ticketId = payload["ticket_id"] as? String ?: return
+                val category = payload["category"] as? String ?: ""
+                val title = payload["title"] as? String ?: "Neues Ticket"
+                if (!_onlyFcmMode.value) notificationHelper.showNewSupportTicketNotification(category, title, ticketId)
+                Timber.tag("LETHE_WS").d("Neues Support-Ticket: [$category] $title")
             }
 
             // Ein gegenseitiges Match wurde erstellt
@@ -12113,6 +12156,24 @@ class MainViewModel @Inject constructor(
                     }
                 }
 
+                // Sprachnachricht in Gruppen: bei aktivem Toggle mit dem eigenen Sender-Key
+                // verschlüsseln (bei Bedarf generieren+verteilen). Kein Key → stiller Fallback
+                // auf unverschlüsselten Versand.
+                var effectiveMediaType = mediaType
+                if (mediaType == "audio" && _userPrefs.value.mediaEncryptionEnabled) {
+                    val keyEntity = groupSenderKeyDao.getKey(groupId, me.userId) ?: run {
+                        generateAndDistributeGroupSenderKey(groupId)
+                        groupSenderKeyDao.getKey(groupId, me.userId)
+                    }
+                    if (keyEntity != null) {
+                        val rawKey = android.util.Base64.decode(keyEntity.keyBase64, android.util.Base64.NO_WRAP)
+                        val encrypted = com.securechat.app.data.crypto.CryptoManager
+                            .encryptBytesWithSenderKey(rawKey, fileToUpload.readBytes())
+                        withContext(Dispatchers.IO) { fileToUpload.writeBytes(encrypted) }
+                        effectiveMediaType = "audio_e2ee"
+                    }
+                }
+
                 if (fileToUpload.length() > MAX_UPLOAD_BYTES) {
                     if (mediaType == "video") {
                         messageDao.deleteMessageByClientId(clientId)
@@ -12152,7 +12213,7 @@ class MainViewModel @Inject constructor(
                 }
 
                 val body = MultipartBody.Part.createFormData("file", originalFileName ?: fileToUpload.name, requestFile)
-                val uploadType = if (mediaType == "circle_video") "video" else mediaType
+                val uploadType = if (mediaType == "circle_video") "video" else effectiveMediaType
                 val typeBody = uploadType.toRequestBody("text/plain".toMediaTypeOrNull())
                 val response = apiService.uploadMedia(typeBody, body)
 
@@ -12175,7 +12236,7 @@ class MainViewModel @Inject constructor(
                             messageDao.insertMessage(
                                 MessageEntity(
                                     chatId = groupId, senderId = me.userId, receiverId = groupId,
-                                    content = label, mediaType = mediaType, mediaUrl = mediaUrl,
+                                    content = label, mediaType = effectiveMediaType, mediaUrl = mediaUrl,
                                     timestamp = System.currentTimeMillis(),
                                     isSent = false, clientMessageId = clientId, deliveryStatus = 0
                                 )
@@ -12183,7 +12244,7 @@ class MainViewModel @Inject constructor(
                         }
                         webSocketManager.sendMessage("group_message", groupId, mapOf(
                             "content_blob" to label,
-                            "media_type" to mediaType,
+                            "media_type" to effectiveMediaType,
                             "media_url" to mediaUrl,
                             "group_id" to groupId,
                             "client_message_id" to clientId,
@@ -13515,6 +13576,19 @@ class MainViewModel @Inject constructor(
                     }
                 }
 
+                // Sprachnachricht: bei aktivem Toggle Ende-zu-Ende verschlüsseln (Conversation Key).
+                // Kein Key vorhanden (z. B. noch kein Kontakt-Handshake) → stiller Fallback auf
+                // unverschlüsselten Versand, analog zum bestehenden Verhalten bei Textnachrichten.
+                var effectiveMediaType = mediaType
+                if (mediaType == "audio" && _userPrefs.value.mediaEncryptionEnabled) {
+                    val encrypted = com.securechat.app.data.crypto.CryptoManager
+                        .encryptBytesWithConversationKey(chatId, fileToUpload.readBytes())
+                    if (encrypted != null) {
+                        withContext(Dispatchers.IO) { fileToUpload.writeBytes(encrypted) }
+                        effectiveMediaType = "audio_e2ee"
+                    }
+                }
+
                 // Bild-Placeholder sofort einfügen (mediaUrl=null → schwarzer Platzhalter mit Fortschritt)
                 if (mediaType == "image") {
                     messageDao.insertMessage(
@@ -13594,7 +13668,7 @@ class MainViewModel @Inject constructor(
                 }
 
                 val body = MultipartBody.Part.createFormData("file", originalFileName ?: fileToUpload.name, requestFile)
-                val uploadType = if (mediaType == "circle_video") "video" else mediaType
+                val uploadType = if (mediaType == "circle_video") "video" else effectiveMediaType
                 val typeBody = uploadType.toRequestBody("text/plain".toMediaTypeOrNull())
                 val response = apiService.uploadMedia(typeBody, body)
 
@@ -13662,8 +13736,8 @@ class MainViewModel @Inject constructor(
                             _uploadProgress.value = -1f
                             _mediaUploadStatus.value = MediaUploadStatus.Idle
                         } else if (mediaType == "audio") {
-                            // Sprachnachricht: Placeholder mit echter URL aktualisieren
-                            messageDao.updateMessageUrl(clientId, mediaUrl)
+                            // Sprachnachricht: Placeholder mit echter URL (+ ggf. audio_e2ee) aktualisieren
+                            messageDao.updateMessageUrlAndMediaType(clientId, mediaUrl, effectiveMediaType)
                             _voiceUploadProgress.value = -1f
                             // Waveform-Cache-Key von lokalem Dateipfad auf Server-URL umschreiben
                             uri.path?.let { localPath ->
@@ -13700,7 +13774,7 @@ class MainViewModel @Inject constructor(
                         } else {
                             webSocketManager.sendMessage("message", chatId, mapOf(
                                 "content_blob" to label,
-                                "media_type" to mediaType,
+                                "media_type" to effectiveMediaType,
                                 "media_url" to mediaUrl,
                                 "client_message_id" to clientId
                             ))
@@ -20584,6 +20658,43 @@ class MainViewModel @Inject constructor(
      * Ausschalten purgt den bereits serverseitig gesicherten Klartext (Re-Encrypt unmöglich, da
      * destruktiv überschrieben – siehe "backup_store").
      */
+    /**
+     * Ende-zu-Ende-Verschlüsselung für Sprachnachrichten (Opt-in, Default aus).
+     * Betrifft nur NEU gesendete Sprachnachrichten – der Server kann verschlüsselte Audio-Blobs
+     * (media_type "audio_e2ee") nicht mehr interpretieren (kein ID3-Parsing, kein Thumbnail).
+     */
+    fun setMediaEncryption(enabled: Boolean) {
+        viewModelScope.launch { prefsRepository.setMediaEncryptionEnabled(enabled) }
+    }
+
+    /**
+     * Löst die abspielbare Quelle für eine Sprachnachricht auf.
+     * media_type != "audio_e2ee" → Original-URL unverändert (Server-Stream).
+     * media_type == "audio_e2ee" → Ciphertext wird heruntergeladen, mit dem Conversation-Key
+     * (1:1, [chatId] = Partner-ID) bzw. dem Sender-Key des Absenders (Gruppe, [chatId] = Gruppen-ID)
+     * entschlüsselt, lokal gecacht und als "file://"-URI zurückgegeben. Leerer String bei Fehler
+     * (z. B. Schlüssel noch nicht vorhanden) – der Aufrufer zeigt dann den Ladezustand.
+     */
+    suspend fun resolveAudioPlaybackSource(
+        mediaUrl: String,
+        mediaType: String,
+        chatId: String,
+        isGroup: Boolean,
+        senderId: String
+    ): String {
+        if (mediaType != "audio_e2ee" || mediaUrl.isBlank()) return mediaUrl
+        val decrypted = mediaCache.getDecryptedForChat(mediaUrl, chatId, "audio", "m4a") { encrypted ->
+            if (isGroup) {
+                val keyEntity = groupSenderKeyDao.getKey(chatId, senderId) ?: return@getDecryptedForChat null
+                val rawKey = android.util.Base64.decode(keyEntity.keyBase64, android.util.Base64.NO_WRAP)
+                com.securechat.app.data.crypto.CryptoManager.decryptBytesWithSenderKey(rawKey, encrypted)
+            } else {
+                com.securechat.app.data.crypto.CryptoManager.decryptBytesWithConversationKey(chatId, encrypted)
+            }
+        }
+        return decrypted?.let { "file://${it.absolutePath}" } ?: ""
+    }
+
     fun setChatBackup(enabled: Boolean) {
         viewModelScope.launch {
             prefsRepository.setChatBackupEnabled(enabled)

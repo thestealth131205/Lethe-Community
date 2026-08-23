@@ -267,6 +267,33 @@ class NotificationHandler : Service() {
                 notificationHelper.showNewUserReportNotification(reporterName, reason, reportId)
             }
 
+            // Ein Kontakt hat einen neuen Status veröffentlicht (FCM-loser Fall: App geschlossen)
+            "new_status" -> {
+                val senderName = payload?.get("sender_name") as? String ?: "Jemand"
+                notificationHelper.showNewStatusNotification(senderName)
+            }
+
+            // Jemand hat unseren Status geliked (FCM-loser Fall: App geschlossen, WS via Service aktiv)
+            "status_liked" -> {
+                val likerUsername = payload?.get("liker_username") as? String ?: "Jemand"
+                notificationHelper.showStatusLikedNotification(likerUsername)
+            }
+
+            // Jemand hat auf eine eigene 1:1-Nachricht reagiert (FCM-loser Fall: App geschlossen).
+            // Der Server routet die 1:1-Reaktion ausschließlich an den Nachrichten-Ersteller, daher
+            // ist jede empfangene 1:1-Reaktion für eine eigene Nachricht bestimmt. Gruppen-Reaktionen
+            // (reactions_json vorhanden) werden ignoriert. Der Selbst-Mirror auf eigene Geräte wird
+            // über den Kontakt-Lookup gefiltert: man ist nie sein eigener Kontakt → Contact == null.
+            "reaction" -> {
+                val emoji = payload?.get("emoji") as? String ?: return
+                if (emoji.isBlank()) return                     // Reaktion entfernt: nicht benachrichtigen
+                if (payload["reactions_json"] != null) return  // Gruppen-Reaktion: nicht benachrichtigen
+                val reactorId = msg.senderId ?: return
+                val contact = contactDao.getContactById(reactorId) ?: return
+                val reactorName = contact.customAlias ?: contact.username ?: contact.fakeNumber ?: reactorId
+                notificationHelper.showReactionNotification(reactorName, emoji, reactorId)
+            }
+
             "content_liked" -> {
                 val contentId = payload?.get("content_id") as? String ?: return
                 val likerName = payload?.get("liker_name") as? String ?: "Jemand"

@@ -95,6 +95,9 @@ interface MessageDao {
     @Query("UPDATE messages SET mediaUrl = :mediaUrl, deliveryStatus = 0 WHERE clientMessageId = :clientId")
     suspend fun updateMessageUrl(clientId: String, mediaUrl: String)
 
+    @Query("UPDATE messages SET mediaUrl = :mediaUrl, mediaType = :mediaType, deliveryStatus = 0 WHERE clientMessageId = :clientId")
+    suspend fun updateMessageUrlAndMediaType(clientId: String, mediaUrl: String, mediaType: String)
+
     @Query("UPDATE messages SET content = :content, mediaUrl = :mediaUrl WHERE clientMessageId = :clientId")
     suspend fun updateMessageUrlAndContent(clientId: String, mediaUrl: String, content: String)
 

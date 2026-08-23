@@ -93,6 +93,7 @@ data class UserPreferences(
     val audioOutputChannel: String = "SYSTEM",         // Genutzter Audio-Ausgang: "SYSTEM" | "EARPIECE" | "SPEAKER" | "BLUETOOTH"
     val bluetoothHeadsetEnabled: Boolean = true,       // Bluetooth-Headset-Unterstützung (HFP) in Anrufen
     val chatBackupEnabled: Boolean = false,            // Opt-in Chat-Backup: entschlüsselte Nachrichten als Klartext auf Server sichern (durchbricht E2EE bewusst)
+    val mediaEncryptionEnabled: Boolean = false,       // Sprachnachrichten zusätzlich Ende-zu-Ende verschlüsseln (Default aus: Geräteübergreifend/Web ggf. Probleme)
 )
 
 /**
@@ -174,6 +175,7 @@ class UserPreferencesRepository @Inject constructor(
     private val AUDIO_OUTPUT_CHANNEL = stringPreferencesKey("audio_output_channel")
     private val BLUETOOTH_HEADSET_ENABLED = booleanPreferencesKey("bluetooth_headset_enabled")
     private val CHAT_BACKUP = booleanPreferencesKey("chat_backup_enabled")
+    private val MEDIA_ENCRYPTION = booleanPreferencesKey("media_encryption_enabled")
     private val MONITOR_ALL_ACCOUNTS = booleanPreferencesKey("monitor_all_accounts_enabled")
     private val MIXED_CONTACT_LIST = booleanPreferencesKey("mixed_contact_list_enabled")
 
@@ -250,6 +252,7 @@ class UserPreferencesRepository @Inject constructor(
                 audioOutputChannel = preferences[AUDIO_OUTPUT_CHANNEL] ?: "SYSTEM",
                 bluetoothHeadsetEnabled = preferences[BLUETOOTH_HEADSET_ENABLED] ?: true,
                 chatBackupEnabled = preferences[CHAT_BACKUP] ?: false,
+                mediaEncryptionEnabled = preferences[MEDIA_ENCRYPTION] ?: false,
             )
         }
 
@@ -369,6 +372,7 @@ class UserPreferencesRepository @Inject constructor(
     suspend fun setAudioOutputChannel(channel: String) { profileDataStore.edit { it[AUDIO_OUTPUT_CHANNEL] = channel } }
     suspend fun setBluetoothHeadsetEnabled(enabled: Boolean) { profileDataStore.edit { it[BLUETOOTH_HEADSET_ENABLED] = enabled } }
     suspend fun setChatBackupEnabled(enabled: Boolean) { profileDataStore.edit { it[CHAT_BACKUP] = enabled } }
+    suspend fun setMediaEncryptionEnabled(enabled: Boolean) { profileDataStore.edit { it[MEDIA_ENCRYPTION] = enabled } }
     /** Aktiviert/deaktiviert P2P für einen einzelnen Kontakt (lokale Override-Liste). */
     suspend fun setP2pContactEnabled(userId: String, enabled: Boolean) {
         profileDataStore.edit { prefs ->

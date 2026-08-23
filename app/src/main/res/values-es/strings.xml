@@ -1310,6 +1310,10 @@
     <string name="app_settings_enter_to_send">Intro = Enviar</string>
     <string name="app_settings_enter_to_send_on">Intro envía el mensaje</string>
     <string name="app_settings_enter_to_send_off">Intro crea un nuevo párrafo</string>
+    <string name="app_settings_media_encryption_title">Cifrar medios</string>
+    <string name="app_settings_media_encryption_on">Activado – Los mensajes de voz se cifran de extremo a extremo</string>
+    <string name="app_settings_media_encryption_off">Desactivado – Los mensajes de voz se transmiten sin cifrar</string>
+    <string name="app_settings_media_encryption_hint">Nota: esto podría causar problemas entre dispositivos (p. ej. chat web).</string>
     <string name="app_settings_chat_backup_title">Copia de seguridad del chat (texto plano en el servidor)</string>
     <string name="app_settings_chat_backup_on">Activado: los mensajes se guardan como texto plano en el servidor</string>
     <string name="app_settings_chat_backup_off">Desactivado: los mensajes permanecen cifrados de extremo a extremo</string>

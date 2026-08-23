@@ -149,8 +149,11 @@ class BackgroundBlurCapturerObserver(
 
                     val processedFrame = VideoFrame(newI420, frame.rotation, frame.timestampNs)
                     delegate.onFrameCaptured(processedFrame)
+                    // processedFrame.release() gibt den zugrundeliegenden Buffer (newI420) bereits frei
+                    // (VideoFrame.release() delegiert an buffer.release()). Ein zusätzliches
+                    // newI420.release() wäre ein Double-Free → nativer Crash (SIGSEGV, kein Java-Log),
+                    // da die native VideoSource-Pipeline den Buffer u.U. noch asynchron nutzt.
                     processedFrame.release()
-                    newI420.release()
                 } catch (e: Throwable) {
                     Timber.tag("LETHE_BLUR").e(e, "Frame processing failed – forwarding original")
                     delegate.onFrameCaptured(frame)

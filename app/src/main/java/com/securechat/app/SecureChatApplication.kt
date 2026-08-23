@@ -2,6 +2,8 @@ package com.securechat.app
 
 import android.app.Application
 import android.content.Context
+import android.media.AudioManager
+import android.os.Build
 import android.util.Log
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
@@ -57,6 +59,32 @@ class SecureChatApplication : Application(), Configuration.Provider, ImageLoader
         super.onCreate()
 
         LetheLogger.i("APP", "Lethe gestartet (debug=${BuildConfig.DEBUG}, version=${BuildConfig.VERSION_NAME})")
+
+        // Defensive: Beim App-Start läuft NIE ein Anruf. Blieb der AudioManager nach einem
+        // abgestürzten Videoanruf im MODE_IN_COMMUNICATION hängen (die Cleanup-Routine in
+        // WebRtcClient.dispose() lief wegen des Crashs nie), denkt das System dauerhaft, es
+        // führe ein Telefonat → gesamter Ton kommt aus der Hörmuschel. Zurücksetzen auf Normal.
+        try {
+            val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            if (audioManager.mode != AudioManager.MODE_NORMAL) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    audioManager.clearCommunicationDevice()
+                } else {
+                    @Suppress("DEPRECATION")
+                    if (audioManager.isBluetoothScoOn) {
+                        audioManager.stopBluetoothSco()
+                        @Suppress("DEPRECATION")
+                        audioManager.isBluetoothScoOn = false
+                    }
+                }
+                audioManager.mode = AudioManager.MODE_NORMAL
+                @Suppress("DEPRECATION")
+                audioManager.isSpeakerphoneOn = false
+                LetheLogger.i("APP", "AudioManager-Modus nach Absturz zurückgesetzt (war nicht NORMAL)")
+            }
+        } catch (t: Throwable) {
+            LetheLogger.e("APP", "AudioManager-Reset beim Start fehlgeschlagen", t)
+        }
 
         if (BuildConfig.DEBUG) {
             // Debug: vollständiges Logging mit Klasse/Zeile

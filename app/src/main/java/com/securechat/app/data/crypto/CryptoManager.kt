@@ -518,6 +518,34 @@ object CryptoManager {
     }
 
     /**
+     * Verschlüsselt rohe Binärdaten (z.B. eine Sprachnachricht-Datei) mit dem gegebenen
+     * AES-256 Sender-Key. Rohes Format ohne Base64/Präfix: 12-Byte-IV | Ciphertext+Tag.
+     * Für Medien-Uploads statt der textbasierten [encryptGroupMessage].
+     *
+     * @param keyBytes  Rohe AES-256-Schlüsselbytes (32 Byte)
+     * @param plaintext Rohe Klartext-Bytes (z.B. Inhalt einer .m4a-Datei)
+     */
+    fun encryptBytesWithSenderKey(keyBytes: ByteArray, plaintext: ByteArray): ByteArray {
+        val iv = ByteArray(GCM_IV_SIZE).also { SecureRandom().nextBytes(it) }
+        val cipher = Cipher.getInstance(AES_TRANSFORM)
+        cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(keyBytes, "AES"), GCMParameterSpec(GCM_TAG_BITS, iv))
+        val ciphertext = cipher.doFinal(plaintext)
+        return ByteArrayOutputStream().apply { write(iv); write(ciphertext) }.toByteArray()
+    }
+
+    /**
+     * Entschlüsselt rohe Binärdaten, die mit [encryptBytesWithSenderKey] verschlüsselt wurden.
+     * Wirft Exception wenn der GCM-Auth-Tag ungültig ist (falscher Key / Manipulation).
+     */
+    fun decryptBytesWithSenderKey(keyBytes: ByteArray, ciphertext: ByteArray): ByteArray {
+        val iv = ciphertext.copyOfRange(0, GCM_IV_SIZE)
+        val data = ciphertext.copyOfRange(GCM_IV_SIZE, ciphertext.size)
+        val cipher = Cipher.getInstance(AES_TRANSFORM)
+        cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(keyBytes, "AES"), GCMParameterSpec(GCM_TAG_BITS, iv))
+        return cipher.doFinal(data)
+    }
+
+    /**
      * Verschlüsselt den rohen Sender-Key (als Base64-String) für einen Empfänger.
      * Verwendet das bestehende 1:1-ECDH-Shared-Secret mit dem Empfänger.
      * Setzt voraus, dass deriveSharedSecret(recipientId, ...) bereits aufgerufen wurde.
@@ -951,6 +979,41 @@ object CryptoManager {
             val cipher = Cipher.getInstance(AES_TRANSFORM)
             cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(ck, "AES"), GCMParameterSpec(GCM_TAG_BITS, iv))
             String(cipher.doFinal(data), Charsets.UTF_8)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Verschlüsselt rohe Binärdaten (z.B. eine Sprachnachricht-Datei) mit dem 1:1-Conversation-Key.
+     * Rohes Format ohne Base64/Präfix: 12-Byte-IV | Ciphertext+Tag.
+     * Gibt null zurück wenn kein Conversation Key für den Partner vorhanden ist.
+     */
+    fun encryptBytesWithConversationKey(partnerId: String, plaintext: ByteArray): ByteArray? {
+        val ck = conversationKeyCache[partnerId] ?: return null
+        return try {
+            val iv = ByteArray(GCM_IV_SIZE).also { SecureRandom().nextBytes(it) }
+            val cipher = Cipher.getInstance(AES_TRANSFORM)
+            cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(ck, "AES"), GCMParameterSpec(GCM_TAG_BITS, iv))
+            val ciphertext = cipher.doFinal(plaintext)
+            ByteArrayOutputStream().apply { write(iv); write(ciphertext) }.toByteArray()
+        } catch (e: Exception) {
+            Timber.tag("LETHE_UMK").e("encryptBytesWithConversationKey failed: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * Entschlüsselt rohe Binärdaten, die mit [encryptBytesWithConversationKey] verschlüsselt wurden.
+     */
+    fun decryptBytesWithConversationKey(partnerId: String, ciphertext: ByteArray): ByteArray? {
+        val ck = conversationKeyCache[partnerId] ?: return null
+        return try {
+            val iv = ciphertext.copyOfRange(0, GCM_IV_SIZE)
+            val data = ciphertext.copyOfRange(GCM_IV_SIZE, ciphertext.size)
+            val cipher = Cipher.getInstance(AES_TRANSFORM)
+            cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(ck, "AES"), GCMParameterSpec(GCM_TAG_BITS, iv))
+            cipher.doFinal(data)
         } catch (e: Exception) {
             null
         }

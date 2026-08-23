@@ -1310,6 +1310,10 @@
     <string name="app_settings_enter_to_send">Invio = Invia</string>
     <string name="app_settings_enter_to_send_on">Invio manda il messaggio</string>
     <string name="app_settings_enter_to_send_off">Invio crea un nuovo paragrafo</string>
+    <string name="app_settings_media_encryption_title">Crittografa i media</string>
+    <string name="app_settings_media_encryption_on">Attivo – I messaggi vocali sono crittografati end-to-end</string>
+    <string name="app_settings_media_encryption_off">Disattivo – I messaggi vocali vengono trasmessi non crittografati</string>
+    <string name="app_settings_media_encryption_hint">Nota: tra dispositivi diversi (es. chat web) ciò potrebbe causare problemi.</string>
     <string name="app_settings_chat_backup_title">Backup della chat (testo in chiaro sul server)</string>
     <string name="app_settings_chat_backup_on">Attivo – i messaggi vengono salvati in chiaro sul server</string>
     <string name="app_settings_chat_backup_off">Disattivato – i messaggi restano cifrati end-to-end</string>

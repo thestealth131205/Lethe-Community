@@ -1370,6 +1370,10 @@
     <string name="app_settings_enter_to_send">Enter = Senden</string>
     <string name="app_settings_enter_to_send_on">Enter sendet die Nachricht</string>
     <string name="app_settings_enter_to_send_off">Enter erstellt einen neuen Absatz</string>
+    <string name="app_settings_media_encryption_title">Medien verschlüsseln</string>
+    <string name="app_settings_media_encryption_on">An – Sprachnachrichten werden Ende-zu-Ende verschlüsselt</string>
+    <string name="app_settings_media_encryption_off">Aus – Sprachnachrichten werden unverschlüsselt übertragen</string>
+    <string name="app_settings_media_encryption_hint">Hinweis: Geräteübergreifend (z. B. Web-Chat) könnte dies zu Problemen führen.</string>
     <string name="app_settings_chat_backup_title">Chat-Backup (Server-Klartext)</string>
     <string name="app_settings_chat_backup_on">Aktiv – Nachrichten werden im Klartext auf dem Server gesichert</string>
     <string name="app_settings_chat_backup_off">Aus – Nachrichten bleiben Ende-zu-Ende-verschlüsselt</string>

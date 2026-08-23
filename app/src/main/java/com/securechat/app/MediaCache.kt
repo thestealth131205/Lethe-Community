@@ -143,6 +143,39 @@ class MediaCache @Inject constructor(
     }
 
     /**
+     * Lädt eine Ende-zu-Ende-verschlüsselte Datei herunter, entschlüsselt sie via [decrypt]
+     * und cached ausschließlich das Klartext-Ergebnis chat-spezifisch (in "<subDir>_dec").
+     * Der heruntergeladene Ciphertext-Zwischenstand ("<subDir>_enc") wird danach gelöscht.
+     * Bei bereits vorhandenem Klartext-Cache-Eintrag erfolgt kein erneuter Download/keine
+     * erneute Entschlüsselung.
+     *
+     * @param decrypt  liefert die Klartext-Bytes oder null bei Entschlüsselungsfehler
+     *                 (z. B. fehlender Schlüssel) – dann wird nichts gecacht.
+     */
+    suspend fun getDecryptedForChat(
+        url: String,
+        chatId: String,
+        subDir: String,
+        extension: String,
+        decrypt: suspend (ByteArray) -> ByteArray?
+    ): File? = withContext(Dispatchers.IO) {
+        val outDir = chatSubDir(chatId, "${subDir}_dec")
+        val outFile = File(outDir, "${url.hashCode().toLong() and 0xFFFFFFFFL}.$extension")
+        if (outFile.exists() && outFile.length() > 0) return@withContext outFile
+        val encFile = getForChat(url, chatId, "${subDir}_enc", "bin") ?: return@withContext null
+        val plain = try {
+            decrypt(encFile.readBytes())
+        } catch (e: Exception) {
+            Timber.tag("LETHE_CACHE").e(e, "Entschlüsselung fehlgeschlagen: $url")
+            null
+        }
+        encFile.delete()
+        if (plain == null) return@withContext null
+        outFile.writeBytes(plain)
+        outFile
+    }
+
+    /**
      * Löscht alle gecachten Medien-Dateien für [chatId].
      * Sollte aufgerufen werden, wenn der Nutzer den Chat verlässt.
      */

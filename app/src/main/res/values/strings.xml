@@ -1375,6 +1375,10 @@
     <string name="app_settings_enter_to_send">Enter = Send</string>
     <string name="app_settings_enter_to_send_on">Enter sends the message</string>
     <string name="app_settings_enter_to_send_off">Enter creates a new paragraph</string>
+    <string name="app_settings_media_encryption_title">Encrypt media</string>
+    <string name="app_settings_media_encryption_on">On – Voice messages are end-to-end encrypted</string>
+    <string name="app_settings_media_encryption_off">Off – Voice messages are transmitted unencrypted</string>
+    <string name="app_settings_media_encryption_hint">Note: This may cause issues across devices (e.g. web chat).</string>
     <string name="app_settings_chat_backup_title">Chat backup (server plaintext)</string>
     <string name="app_settings_chat_backup_on">On – messages are backed up as plaintext on the server</string>
     <string name="app_settings_chat_backup_off">Off – messages stay end-to-end encrypted</string>

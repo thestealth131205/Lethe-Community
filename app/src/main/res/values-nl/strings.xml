@@ -1310,6 +1310,10 @@
     <string name="app_settings_enter_to_send">Enter = Verzenden</string>
     <string name="app_settings_enter_to_send_on">Enter verzendt het bericht</string>
     <string name="app_settings_enter_to_send_off">Enter maakt een nieuwe alinea</string>
+    <string name="app_settings_media_encryption_title">Media versleutelen</string>
+    <string name="app_settings_media_encryption_on">Aan – Spraakberichten worden end-to-end versleuteld</string>
+    <string name="app_settings_media_encryption_off">Uit – Spraakberichten worden onversleuteld verzonden</string>
+    <string name="app_settings_media_encryption_hint">Let op: dit kan tussen apparaten (bijv. webchat) tot problemen leiden.</string>
     <string name="app_settings_chat_backup_title">Chatback-up (platte tekst op server)</string>
     <string name="app_settings_chat_backup_on">Aan – berichten worden als platte tekst op de server opgeslagen</string>
     <string name="app_settings_chat_backup_off">Uit – berichten blijven end-to-end versleuteld</string>

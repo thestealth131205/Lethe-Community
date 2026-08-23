@@ -48,7 +48,9 @@ fun AppSettingsScreen(
     onEnterToSendChange: (Boolean) -> Unit = {},
     chatBackupEnabled: Boolean = false,
     onChatBackupChange: (Boolean) -> Unit = {},
-    chatBackupProgress: Float = -1f
+    chatBackupProgress: Float = -1f,
+    mediaEncryptionEnabled: Boolean = false,
+    onMediaEncryptionChange: (Boolean) -> Unit = {}
 ) {
     // Chat-Backup Zustimmungsdialog (nur beim Einschalten)
     var showChatBackupConsentDialog by remember { mutableStateOf(false) }
@@ -156,6 +158,23 @@ fun AppSettingsScreen(
                         )
                     }
                 }
+                HorizontalDivider()
+                SettingsItem(
+                    icon = Icons.Default.Lock,
+                    title = stringResource(R.string.app_settings_media_encryption_title),
+                    subtitle = if (mediaEncryptionEnabled) stringResource(R.string.app_settings_media_encryption_on) else stringResource(R.string.app_settings_media_encryption_off)
+                ) {
+                    Switch(
+                        checked = mediaEncryptionEnabled,
+                        onCheckedChange = onMediaEncryptionChange
+                    )
+                }
+                Text(
+                    stringResource(R.string.app_settings_media_encryption_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth().padding(start = 56.dp, end = 16.dp, bottom = 8.dp)
+                )
                 if (onNavigateToAudio != null) {
                     HorizontalDivider()
                     SettingsItem(
