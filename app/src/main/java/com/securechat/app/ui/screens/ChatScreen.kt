@@ -278,14 +278,24 @@ private val CHAT_TIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern
 // Begrenzt die gleichzeitige stumme Vorschau von Circle-Videos: max. 2 spielen zugleich,
 // beim Beenden rücken bis zu 2 wartende nach.
 private object CircleVideoPreviewCoordinator {
+    // Nicht nur die Wiedergabe wird begrenzt, sondern die Zahl der gleichzeitig
+    // vorbereiteten Player – denn jeder vorbereitete ExoPlayer belegt einen der
+    // wenigen Hardware-Video-Decoder des Geräts (meist nur 2-3). Zu viele
+    // gleichzeitig => der überzählige Decoder scheitert => schwarzes Bild / Crash.
     private const val MAX_CONCURRENT = 2
     private val active = LinkedHashSet<String>()
     private val waiting = ArrayDeque<String>()
     private val grantCallbacks = HashMap<String, () -> Unit>()
+    private val suspendCallbacks = HashMap<String, () -> Unit>()
+    // Aufgeklappte Ton-Wiedergabe hat Vorrang und blockiert alle stummen Vorschauen,
+    // damit ihr garantiert ein Decoder zur Verfügung steht.
+    private var priorityId: String? = null
 
     @Synchronized
-    fun request(id: String, onGrant: () -> Unit) {
+    fun request(id: String, onGrant: () -> Unit, onSuspend: () -> Unit = {}) {
         grantCallbacks[id] = onGrant
+        suspendCallbacks[id] = onSuspend
+        if (priorityId != null && priorityId != id) return
         if (id in active) { onGrant(); return }
         if (active.size < MAX_CONCURRENT) {
             active.add(id)
@@ -299,10 +309,39 @@ private object CircleVideoPreviewCoordinator {
     fun release(id: String) {
         val wasActive = active.remove(id)
         waiting.remove(id)
-        if (wasActive) promoteNext()
+        // Callback samt gefangenem ExoPlayer/Compose-State freigeben, sonst
+        // wächst die Map unbegrenzt und hält jeden je gezeigten Player im Heap (OOM).
+        grantCallbacks.remove(id)
+        suspendCallbacks.remove(id)
+        if (priorityId == id) { priorityId = null; promoteNext() }
+        else if (wasActive) promoteNext()
+    }
+
+    // Aufklappen zur Ton-Wiedergabe: alle laufenden stummen Vorschauen anhalten und
+    // ihre Decoder freigeben, damit dieses Video sicher einen Decoder bekommt.
+    @Synchronized
+    fun beginPriority(id: String) {
+        priorityId = id
+        val others = active.filter { it != id }
+        for (oid in others) {
+            active.remove(oid)
+            suspendCallbacks[oid]?.invoke()
+            if (oid !in waiting) waiting.addFirst(oid)
+        }
+        active.add(id)
+    }
+
+    @Synchronized
+    fun endPriority(id: String) {
+        if (priorityId == id) {
+            priorityId = null
+            active.remove(id)
+            promoteNext()
+        }
     }
 
     private fun promoteNext() {
+        if (priorityId != null) return
         while (active.size < MAX_CONCURRENT && waiting.isNotEmpty()) {
             val next = waiting.removeFirst()
             val cb = grantCallbacks[next] ?: continue
@@ -9409,257 +9448,13 @@ internal fun MessageBubble(
                         }
                     }
                     "circle_video" -> {
-                        val uploadProgress = myVideoProgress
-                        val videoUrl = message.mediaUrl ?: ""
-                        val context = LocalContext.current
-                        var isExpanded by remember { mutableStateOf(false) }
-                        // Verhindert, dass ein durch gedrückt-Halten ausgelöstes Markieren
-                        // zusätzlich noch als Einzel-Tipp (Circle-Video öffnen) erkannt wird.
-                        var suppressNextCircleClick by remember { mutableStateOf(false) }
-                        val circleSize = 180.dp
-                        val expandedSize = 260.dp
-                        val animatedSize by animateDpAsState(
-                            targetValue = if (isExpanded) expandedSize else circleSize,
-                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-                            label = "circleExpand"
+                        CircleVideoMessageContent(
+                            message = message,
+                            myVideoProgress = myVideoProgress,
+                            isSelectionMode = isSelectionMode,
+                            onLongClick = onLongClick,
+                            viewModel = viewModel
                         )
-                        val accentColor = MaterialTheme.colorScheme.primary
-
-                        if (uploadProgress != null || videoUrl.isEmpty()) {
-                            // Upload-Fortschritt
-                            Box(
-                                modifier = Modifier
-                                    .size(circleSize)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFF1C1C1C)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                when {
-                                    uploadProgress == -2f -> {
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                            Icon(Icons.Default.Warning, contentDescription = null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(28.dp))
-                                            Spacer(Modifier.height(4.dp))
-                                            Text("Wiederholen", color = MaterialTheme.colorScheme.primary, fontSize = 13.sp,
-                                                modifier = Modifier.clickable { message.clientMessageId?.let { viewModel?.retryUpload(it) } })
-                                        }
-                                    }
-                                    uploadProgress == -1f -> CircularProgressIndicator(
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(40.dp),
-                                        strokeWidth = 3.dp
-                                    )
-                                    uploadProgress != null -> {
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                            CircularProgressIndicator(
-                                                progress = { uploadProgress / 100f },
-                                                color = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(40.dp),
-                                                strokeWidth = 3.dp
-                                            )
-                                            Spacer(Modifier.height(4.dp))
-                                            Text("${uploadProgress.toInt()}%", color = Color.White, fontSize = 11.sp)
-                                            Spacer(Modifier.height(2.dp))
-                                            Text("Abbrechen", color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp,
-                                                modifier = Modifier.clickable { message.clientMessageId?.let { viewModel?.cancelUpload(it) } })
-                                        }
-                                    }
-                                    else -> CircularProgressIndicator(color = Color.White, modifier = Modifier.size(40.dp), strokeWidth = 3.dp)
-                                }
-                            }
-                        } else {
-                            val circleChatId = message.chatId
-                            val circleId = remember(videoUrl) { message.clientMessageId ?: videoUrl }
-                            var hasBeenViewed by remember { mutableStateOf(false) }
-                            var progress by remember(videoUrl) { mutableStateOf(0f) }
-                            var isDragging by remember { mutableStateOf(false) }
-                            var previewDone by remember(videoUrl) { mutableStateOf(false) }
-
-                            // ExoPlayer wird erstellt, startet aber NICHT automatisch – der
-                            // CircleVideoPreviewCoordinator erlaubt max. 2 stumme Vorschauen gleichzeitig.
-                            val circlePlayer = remember(videoUrl) {
-                                val publicUri = viewModel?.getPublicMediaUri(videoUrl, true)
-                                val playUri = when {
-                                    publicUri != null -> publicUri
-                                    else -> {
-                                        val localPath = viewModel?.getCachedVideoPath(videoUrl, circleChatId)
-                                        if (localPath != null) android.net.Uri.fromFile(java.io.File(localPath))
-                                        else { viewModel?.ensureVideoCached(videoUrl, circleChatId); android.net.Uri.parse(videoUrl) }
-                                    }
-                                }
-                                ExoPlayer.Builder(context).build().apply {
-                                    setMediaItem(MediaItem.fromUri(playUri))
-                                    volume = 0f            // Vorschau ohne Ton
-                                    prepare()
-                                    playWhenReady = false  // erst durch Coordinator gestartet
-                                    repeatMode = androidx.media3.common.Player.REPEAT_MODE_OFF
-                                    addListener(object : androidx.media3.common.Player.Listener {
-                                        override fun onIsPlayingChanged(isPlaying: Boolean) {
-                                            if (!isPlaying) viewModel?.exportVideoToMovies(videoUrl, circleChatId)
-                                        }
-                                    })
-                                }
-                            }
-                            // Fortschritt live abfragen (außer während Ziehen)
-                            LaunchedEffect(circlePlayer) {
-                                while (true) {
-                                    val dur = circlePlayer.duration
-                                    if (dur > 0 && !isDragging) {
-                                        progress = (circlePlayer.currentPosition.toFloat() / dur).coerceIn(0f, 1f)
-                                    }
-                                    kotlinx.coroutines.delay(40)
-                                }
-                            }
-                            // Vorschau-Slot anfordern + freigeben, wenn die einmalige Vorschau endet
-                            DisposableEffect(circlePlayer, circleId) {
-                                val endListener = object : androidx.media3.common.Player.Listener {
-                                    override fun onPlaybackStateChanged(state: Int) {
-                                        if (state == androidx.media3.common.Player.STATE_ENDED) {
-                                            previewDone = true
-                                            CircleVideoPreviewCoordinator.release(circleId)
-                                        }
-                                    }
-                                }
-                                circlePlayer.addListener(endListener)
-                                if (!previewDone && !isExpanded) {
-                                    CircleVideoPreviewCoordinator.request(circleId) {
-                                        if (!isExpanded && !previewDone) {
-                                            circlePlayer.volume = 0f
-                                            circlePlayer.seekTo(0)
-                                            circlePlayer.playWhenReady = true
-                                        }
-                                    }
-                                }
-                                onDispose {
-                                    circlePlayer.removeListener(endListener)
-                                    CircleVideoPreviewCoordinator.release(circleId)
-                                    viewModel?.exportVideoToMovies(videoUrl, circleChatId)
-                                    circlePlayer.release()
-                                }
-                            }
-                            // Nur die tonende (aufgeklappte) Wiedergabe hält Fokus: andere
-                            // Wiedergaben pausieren beim Aufklappen, danach laufen sie weiter.
-                            TransientMediaFocus(circlePlayer, active = isExpanded)
-
-                            Box(
-                                modifier = Modifier
-                                    .size(animatedSize)
-                                    .combinedClickable(
-                                        onClick = {
-                                            if (suppressNextCircleClick) {
-                                                suppressNextCircleClick = false
-                                            } else if (!isSelectionMode) {
-                                                isExpanded = !isExpanded
-                                                hasBeenViewed = true
-                                                if (isExpanded) {
-                                                    circlePlayer.volume = 1f
-                                                    circlePlayer.seekTo(0)
-                                                    circlePlayer.playWhenReady = true
-                                                } else {
-                                                    circlePlayer.volume = 0f
-                                                }
-                                            }
-                                        },
-                                        onLongClick = {
-                                            suppressNextCircleClick = true
-                                            onLongClick()
-                                        }
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                // Video-Vorschau/-Wiedergabe (Platz für Ring lassen)
-                                Box(
-                                    modifier = Modifier
-                                        .size(animatedSize - 10.dp)
-                                        .clip(CircleShape)
-                                        .background(Color.Black),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    AndroidView(
-                                        factory = { ctx ->
-                                            PlayerView(ctx).apply {
-                                                player = circlePlayer
-                                                useController = false
-                                                resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                                            }
-                                        },
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                }
-
-                                // Fortschrittsring: abgespielter Teil in Akzentfarbe, Rest grau; Ziehen = Springen
-                                Canvas(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .pointerInput(circlePlayer) {
-                                            detectDragGestures(
-                                                onDragStart = { isDragging = true },
-                                                onDragEnd = {
-                                                    val dur = circlePlayer.duration
-                                                    if (dur > 0) circlePlayer.seekTo((progress * dur).toLong())
-                                                    isDragging = false
-                                                }
-                                            ) { change, _ ->
-                                                val cx = size.width / 2f
-                                                val cy = size.height / 2f
-                                                val dx = change.position.x - cx
-                                                val dy = change.position.y - cy
-                                                var deg = Math.toDegrees(
-                                                    kotlin.math.atan2(dy.toDouble(), dx.toDouble())
-                                                ).toFloat() + 90f
-                                                if (deg < 0f) deg += 360f
-                                                progress = (deg / 360f).coerceIn(0f, 1f)
-                                                val dur = circlePlayer.duration
-                                                if (dur > 0) circlePlayer.seekTo((progress * dur).toLong())
-                                            }
-                                        }
-                                ) {
-                                    val stroke = 4.dp.toPx()
-                                    val inset = stroke / 2f
-                                    // grauer Hintergrundring (noch nicht abgespielt)
-                                    drawArc(
-                                        color = Color.Gray.copy(alpha = 0.55f),
-                                        startAngle = -90f,
-                                        sweepAngle = 360f,
-                                        useCenter = false,
-                                        topLeft = Offset(inset, inset),
-                                        size = Size(size.width - stroke, size.height - stroke),
-                                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke)
-                                    )
-                                    // Fortschritt (abgespielt) in Akzentfarbe
-                                    drawArc(
-                                        color = accentColor,
-                                        startAngle = -90f,
-                                        sweepAngle = 360f * progress,
-                                        useCenter = false,
-                                        topLeft = Offset(inset, inset),
-                                        size = Size(size.width - stroke, size.height - stroke),
-                                        style = androidx.compose.ui.graphics.drawscope.Stroke(
-                                            width = stroke,
-                                            cap = androidx.compose.ui.graphics.StrokeCap.Round
-                                        )
-                                    )
-                                }
-
-                                // Gesehen-Indikator
-                                if (hasBeenViewed) {
-                                    Box(
-                                        modifier = Modifier
-                                            .align(Alignment.BottomEnd)
-                                            .padding(6.dp)
-                                            .size(20.dp)
-                                            .background(Color.Black.copy(alpha = 0.5f), CircleShape),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.CheckCircle,
-                                            contentDescription = null,
-                                            tint = accentColor,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
                     }
                     "poll" -> {
                         val pollId = try {
@@ -10487,6 +10282,367 @@ internal fun MessageBubble(
         // Schnell-Picker: unterhalb der Blase (wenn Blase zu nah am oberen Rand)
         if (showEmojiBelow) {
             emojiQuickBar()
+        }
+    }
+}
+
+/**
+ * Inhalt einer Circle-Video-Nachricht (aus [MessageBubble] ausgelagert, damit die
+ * kompilierte `invoke`-Methode der when-Fallunterscheidung nicht die 64-KB-Bytecode-
+ * Grenze einer einzelnen JVM-Methode überschreitet – MethodTooLargeException).
+ */
+@Composable
+private fun CircleVideoMessageContent(
+    message: MessageEntity,
+    myVideoProgress: Float?,
+    isSelectionMode: Boolean,
+    onLongClick: () -> Unit,
+    viewModel: MainViewModel?
+) {
+    val uploadProgress = myVideoProgress
+    val videoUrl = message.mediaUrl ?: ""
+    val context = LocalContext.current
+    var isExpanded by remember { mutableStateOf(false) }
+    // Verhindert, dass ein durch gedrückt-Halten ausgelöstes Markieren
+    // zusätzlich noch als Einzel-Tipp (Circle-Video öffnen) erkannt wird.
+    var suppressNextCircleClick by remember { mutableStateOf(false) }
+    val circleSize = 180.dp
+    val expandedSize = 260.dp
+    val animatedSize by animateDpAsState(
+        targetValue = if (isExpanded) expandedSize else circleSize,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "circleExpand"
+    )
+    val accentColor = MaterialTheme.colorScheme.primary
+
+    if (uploadProgress != null || videoUrl.isEmpty()) {
+        // Upload-Fortschritt
+        Box(
+            modifier = Modifier
+                .size(circleSize)
+                .clip(CircleShape)
+                .background(Color(0xFF1C1C1C)),
+            contentAlignment = Alignment.Center
+        ) {
+            when {
+                uploadProgress == -2f -> {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.Warning, contentDescription = null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(28.dp))
+                        Spacer(Modifier.height(4.dp))
+                        Text("Wiederholen", color = MaterialTheme.colorScheme.primary, fontSize = 13.sp,
+                            modifier = Modifier.clickable { message.clientMessageId?.let { viewModel?.retryUpload(it) } })
+                    }
+                }
+                uploadProgress == -1f -> CircularProgressIndicator(
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(40.dp),
+                    strokeWidth = 3.dp
+                )
+                uploadProgress != null -> {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(
+                            progress = { uploadProgress / 100f },
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(40.dp),
+                            strokeWidth = 3.dp
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text("${uploadProgress.toInt()}%", color = Color.White, fontSize = 11.sp)
+                        Spacer(Modifier.height(2.dp))
+                        Text("Abbrechen", color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp,
+                            modifier = Modifier.clickable { message.clientMessageId?.let { viewModel?.cancelUpload(it) } })
+                    }
+                }
+                else -> CircularProgressIndicator(color = Color.White, modifier = Modifier.size(40.dp), strokeWidth = 3.dp)
+            }
+        }
+    } else {
+        val circleChatId = message.chatId
+        val circleId = remember(videoUrl) { message.clientMessageId ?: videoUrl }
+        var hasBeenViewed by remember { mutableStateOf(false) }
+        var progress by remember(videoUrl) { mutableStateOf(0f) }
+        var isDragging by remember { mutableStateOf(false) }
+        var previewDone by remember(videoUrl) { mutableStateOf(false) }
+        // Repeat-Button erscheint, sobald die aufgeklappte Ton-Wiedergabe fertig ist.
+        var showRepeat by remember(videoUrl) { mutableStateOf(false) }
+        // Steuert die zentrale Play-Overlay-Anzeige: sobald der Player nicht spielt
+        // (wartet auf Decoder-Slot, pausiert nach Vorschau, oder Fehler) sieht der
+        // Nutzer ein Play-Symbol statt eines schwarzen, scheinbar toten Kreises.
+        var isCirclePlaying by remember(videoUrl) { mutableStateOf(false) }
+
+        // ExoPlayer wird erstellt, startet aber NICHT automatisch – der
+        // CircleVideoPreviewCoordinator erlaubt max. 2 stumme Vorschauen gleichzeitig.
+        val circlePlayer = remember(videoUrl) {
+            val publicUri = viewModel?.getPublicMediaUri(videoUrl, true)
+            val playUri = when {
+                publicUri != null -> publicUri
+                else -> {
+                    val localPath = viewModel?.getCachedVideoPath(videoUrl, circleChatId)
+                    if (localPath != null) android.net.Uri.fromFile(java.io.File(localPath))
+                    else { viewModel?.ensureVideoCached(videoUrl, circleChatId); android.net.Uri.parse(videoUrl) }
+                }
+            }
+            ExoPlayer.Builder(context).build().apply {
+                setMediaItem(MediaItem.fromUri(playUri))
+                volume = 0f            // Vorschau ohne Ton
+                // prepare() bewusst NICHT hier: würde sofort einen Hardware-Decoder
+                // belegen. Vorbereitet wird erst, wenn der Coordinator einen Slot
+                // vergibt bzw. beim Aufklappen – so überlasten viele Circle-Videos
+                // die begrenzten Decoder nicht mehr.
+                playWhenReady = false  // erst durch Coordinator gestartet
+                repeatMode = androidx.media3.common.Player.REPEAT_MODE_OFF
+                addListener(object : androidx.media3.common.Player.Listener {
+                    override fun onIsPlayingChanged(isPlaying: Boolean) {
+                        isCirclePlaying = isPlaying
+                        if (!isPlaying) viewModel?.exportVideoToMovies(videoUrl, circleChatId)
+                    }
+                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                        // Häufigster Fall: zu viele gleichzeitige Hardware-Decoder,
+                        // Decoder-Init schlägt fehl. Früher unbehandelt => App-Crash
+                        // beim Antippen des schwarzen Kreises. Jetzt sauber abfangen:
+                        // Decoder freigeben und Slot zurückgeben, damit ein anderes
+                        // Video nachrücken kann.
+                        isCirclePlaying = false
+                        try {
+                            playWhenReady = false
+                            stop()
+                        } catch (_: Exception) {}
+                        if (isExpanded) {
+                            CircleVideoPreviewCoordinator.endPriority(circleId)
+                        } else {
+                            CircleVideoPreviewCoordinator.release(circleId)
+                        }
+                    }
+                })
+            }
+        }
+        // Fortschritt live abfragen (außer während Ziehen)
+        LaunchedEffect(circlePlayer) {
+            while (true) {
+                val dur = circlePlayer.duration
+                if (dur > 0 && !isDragging) {
+                    progress = (circlePlayer.currentPosition.toFloat() / dur).coerceIn(0f, 1f)
+                }
+                kotlinx.coroutines.delay(40)
+            }
+        }
+        // Vorschau-Slot anfordern + freigeben, wenn die einmalige Vorschau endet
+        DisposableEffect(circlePlayer, circleId) {
+            val endListener = object : androidx.media3.common.Player.Listener {
+                override fun onPlaybackStateChanged(state: Int) {
+                    if (state == androidx.media3.common.Player.STATE_ENDED) {
+                        if (isExpanded) {
+                            // Aufgeklappte Ton-Wiedergabe fertig → Repeat-Button zeigen, Player pausieren
+                            showRepeat = true
+                            circlePlayer.playWhenReady = false
+                        } else {
+                            // Stumme Vorschau einmal gelaufen → Decoder freigeben (stop),
+                            // damit ein wartendes Circle-Video (sonst schwarz) einen Decoder
+                            // bekommt. Play-Overlay macht den Kreis weiter antippbar.
+                            previewDone = true
+                            circlePlayer.playWhenReady = false
+                            try { circlePlayer.stop() } catch (_: Exception) {}
+                            CircleVideoPreviewCoordinator.release(circleId)
+                        }
+                    }
+                }
+            }
+            circlePlayer.addListener(endListener)
+            if (!previewDone && !isExpanded) {
+                CircleVideoPreviewCoordinator.request(
+                    circleId,
+                    onGrant = {
+                        if (!isExpanded && !previewDone) {
+                            if (circlePlayer.playbackState == androidx.media3.common.Player.STATE_IDLE) circlePlayer.prepare()
+                            circlePlayer.volume = 0f
+                            circlePlayer.seekTo(0)
+                            circlePlayer.playWhenReady = true
+                        }
+                    },
+                    onSuspend = {
+                        // Vom Coordinator angehalten (ein anderes Video wird aufgeklappt):
+                        // Wiedergabe stoppen und Decoder freigeben.
+                        circlePlayer.playWhenReady = false
+                        try { circlePlayer.stop() } catch (_: Exception) {}
+                    }
+                )
+            }
+            onDispose {
+                circlePlayer.removeListener(endListener)
+                CircleVideoPreviewCoordinator.endPriority(circleId)
+                CircleVideoPreviewCoordinator.release(circleId)
+                viewModel?.exportVideoToMovies(videoUrl, circleChatId)
+                circlePlayer.release()
+            }
+        }
+        // Nur die tonende (aufgeklappte) Wiedergabe hält Fokus: andere
+        // Wiedergaben pausieren beim Aufklappen, danach laufen sie weiter.
+        TransientMediaFocus(circlePlayer, active = isExpanded)
+
+        Box(
+            modifier = Modifier
+                .size(animatedSize)
+                .combinedClickable(
+                    onClick = {
+                        if (suppressNextCircleClick) {
+                            suppressNextCircleClick = false
+                        } else if (!isSelectionMode) {
+                            isExpanded = !isExpanded
+                            hasBeenViewed = true
+                            showRepeat = false
+                            if (isExpanded) {
+                                // Vorrang holen → alle stummen Vorschauen anhalten und deren
+                                // Decoder freigeben, damit dieses Video sicher spielt.
+                                CircleVideoPreviewCoordinator.beginPriority(circleId)
+                                if (circlePlayer.playbackState == androidx.media3.common.Player.STATE_IDLE) circlePlayer.prepare()
+                                circlePlayer.volume = 1f
+                                circlePlayer.seekTo(0)
+                                circlePlayer.playWhenReady = true
+                            } else {
+                                circlePlayer.volume = 0f
+                                circlePlayer.playWhenReady = false
+                                try { circlePlayer.stop() } catch (_: Exception) {}
+                                // Vorrang abgeben → wartende Vorschauen dürfen wieder laufen.
+                                CircleVideoPreviewCoordinator.endPriority(circleId)
+                            }
+                        }
+                    },
+                    onLongClick = {
+                        suppressNextCircleClick = true
+                        onLongClick()
+                    }
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            // Video-Vorschau/-Wiedergabe (Platz für Ring lassen)
+            Box(
+                modifier = Modifier
+                    .size(animatedSize - 10.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black),
+                contentAlignment = Alignment.Center
+            ) {
+                AndroidView(
+                    factory = { ctx ->
+                        PlayerView(ctx).apply {
+                            player = circlePlayer
+                            useController = false
+                            resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            // Fortschrittsring: abgespielter Teil in Akzentfarbe, Rest grau; Ziehen = Springen
+            Canvas(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(circlePlayer) {
+                        detectDragGestures(
+                            onDragStart = { isDragging = true },
+                            onDragEnd = {
+                                val dur = circlePlayer.duration
+                                if (dur > 0) circlePlayer.seekTo((progress * dur).toLong())
+                                isDragging = false
+                            }
+                        ) { change, _ ->
+                            val cx = size.width / 2f
+                            val cy = size.height / 2f
+                            val dx = change.position.x - cx
+                            val dy = change.position.y - cy
+                            var deg = Math.toDegrees(
+                                kotlin.math.atan2(dy.toDouble(), dx.toDouble())
+                            ).toFloat() + 90f
+                            if (deg < 0f) deg += 360f
+                            progress = (deg / 360f).coerceIn(0f, 1f)
+                            val dur = circlePlayer.duration
+                            if (dur > 0) circlePlayer.seekTo((progress * dur).toLong())
+                        }
+                    }
+            ) {
+                val stroke = 4.dp.toPx()
+                val inset = stroke / 2f
+                // grauer Hintergrundring (noch nicht abgespielt)
+                drawArc(
+                    color = Color.Gray.copy(alpha = 0.55f),
+                    startAngle = -90f,
+                    sweepAngle = 360f,
+                    useCenter = false,
+                    topLeft = Offset(inset, inset),
+                    size = Size(size.width - stroke, size.height - stroke),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke)
+                )
+                // Fortschritt (abgespielt) in Akzentfarbe
+                drawArc(
+                    color = accentColor,
+                    startAngle = -90f,
+                    sweepAngle = 360f * progress,
+                    useCenter = false,
+                    topLeft = Offset(inset, inset),
+                    size = Size(size.width - stroke, size.height - stroke),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = stroke,
+                        cap = androidx.compose.ui.graphics.StrokeCap.Round
+                    )
+                )
+            }
+
+            // Play-Symbol in der Mitte, wenn nicht gespielt wird (wartet auf Decoder-Slot,
+            // pausiert nach Vorschau oder Decoder-Fehler) – so ist der Kreis nie ein
+            // scheinbar toter schwarzer Fleck, sondern klar antippbar.
+            if (!isCirclePlaying && !showRepeat) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = "Abspielen",
+                    tint = Color.White.copy(alpha = 0.85f),
+                    modifier = Modifier.size(44.dp)
+                )
+            }
+
+            // Repeat-Button in der Mitte, sobald die Ton-Wiedergabe (aufgeklappt) fertig ist
+            if (isExpanded && showRepeat) {
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.55f))
+                        .clickable {
+                            showRepeat = false
+                            if (circlePlayer.playbackState == androidx.media3.common.Player.STATE_IDLE) circlePlayer.prepare()
+                            circlePlayer.volume = 1f
+                            circlePlayer.seekTo(0)
+                            circlePlayer.playWhenReady = true
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Replay,
+                        contentDescription = "Wiederholen",
+                        tint = Color.White,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+            }
+
+            // Gesehen-Indikator
+            if (hasBeenViewed) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp)
+                        .size(20.dp)
+                        .background(Color.Black.copy(alpha = 0.5f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
         }
     }
 }

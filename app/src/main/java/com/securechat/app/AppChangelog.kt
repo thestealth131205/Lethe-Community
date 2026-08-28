@@ -24,6 +24,26 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.157",
+            title = "Stabilitätsverbesserung bei Circle-Videos",
+            items = listOf(
+                "Interner Umbau: Der Anzeige-Code für Circle-Videos in Chats wurde in eine eigene Komponente ausgelagert, um seltene Abstürze beim Kompilieren auf manchen Geräten zu vermeiden",
+            ),
+            shortSummary = "Interne Stabilitätsverbesserung bei Circle-Videos"
+        ),
+
+        ChangelogEntry(
+            version = "10.4.156",
+            title = "Circle-Videos & Lethe Media Player verbessert",
+            items = listOf(
+                "Circle-Videos: Ein antippbares Play-Symbol zeigt jetzt immer an, ob ein Video gerade läuft oder wartet \u2013 kein scheinbar toter schwarzer Kreis mehr; nach dem Aufklappen mit Ton erscheint ein Wiederholen-Button",
+                "Circle-Videos stürzen nicht mehr ab, wenn mehrere gleichzeitig sichtbar sind \u2013 die begrenzten Video-Decoder des Geräts werden jetzt sauber verwaltet",
+                "Lethe Media Player: Shuffle und Wiederholung lassen sich jetzt auch in Android Auto direkt über eigene Buttons umschalten",
+            ),
+            shortSummary = "Stabilere Circle-Videos und Shuffle/Wiederholung in Android Auto"
+        ),
+
+        ChangelogEntry(
             version = "10.4.155",
             title = "Benachrichtigungen & Videocalls verbessert",
             items = listOf(
@@ -46,29 +66,6 @@ object AppChangelog {
                 "Sparks: Beim Erstellen füllt ein vergrößerter, unscharfer Hintergrund den freien Bildschirmbereich aus; Tonaussetzer bei kurzer Musik und zu langer Bilddauer behoben",
             ),
             shortSummary = "Zuverlässigeres Casten, echte Hintergrundauswahl bei Videocalls und verbesserte Sparks"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.153",
-            title = "Benachrichtigungen, Support & Sparks verbessert",
-            items = listOf(
-                "Chat-Benachrichtigungen werden jetzt auch beim Wegwischen sofort als zugestellt/gelesen markiert",
-                "Deutlich mehr Benachrichtigungen (Anrufe, Nearby, Spark- & Diskussions-Kommentare, Likes, Support-Antworten, Spiele-Rangliste, Kreator-Bewerbungen) kommen jetzt zuverlässig an \u2013 auch ohne Google-Dienste",
-                "Neu: Antwortfunktion für Support-Tickets und Kreator-Bewerbungen mit eigener Status-Übersicht \u201eMeine Bewerbung\u201c",
-                "Sparks: Bilder/Videos werden beim Erstellen nicht mehr verzerrt \u2013 neue Formatauswahl mit Zoom & Verschieben; im Feed werden nicht-vertikale Formate proportional korrekt dargestellt",
-            ),
-            shortSummary = "Zuverlässigere Benachrichtigungen, Support-Antworten und unverzerrte Sparks"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.152",
-            title = "Weiterleiten, Reaktionen & Zuverl\u00e4ssigkeit",
-            items = listOf(
-                "Beim Weiterleiten werden Kontakte und Gruppen jetzt nach H\u00e4ufigkeit sortiert, Gruppenbilder angezeigt und angepinnte Chats erscheinen ganz oben",
-                "Die Emoji-Reaktionsleiste wird jetzt unter der Nachricht angezeigt, wenn oben kein Platz ist \u2013 so ist sie immer sofort sichtbar",
-                "Die App bleibt zuverl\u00e4ssiger im Hintergrund verbunden und startet nach einem Ger\u00e4te-Neustart automatisch wieder \u2013 die Meldung \u201eDu k\u00f6nntest neue Nachrichten haben\u201c erscheint nicht mehr unn\u00f6tig",
-            ),
-            shortSummary = "Besseres Weiterleiten, gut sichtbare Reaktionsleiste und zuverl\u00e4ssigere Hintergrundverbindung"
         ),
 
     )
