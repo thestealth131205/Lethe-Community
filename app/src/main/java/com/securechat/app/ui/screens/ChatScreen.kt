@@ -141,6 +141,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -7583,7 +7584,7 @@ fun ForwardSheet(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 internal fun MessageBubble(
     message: MessageEntity,
@@ -9919,6 +9920,7 @@ internal fun MessageBubble(
                                     var copyDone by remember { mutableStateOf(false) }
                                     var isEditing by remember { mutableStateOf(false) }
                                     var editedCode by remember(codeText) { mutableStateOf(codeText) }
+                                    var isFullscreenCode by remember { mutableStateOf(false) }
                                     Column(modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 4.dp)) {
                                         Surface(
                                             shape = RoundedCornerShape(8.dp),
@@ -9934,16 +9936,29 @@ internal fun MessageBubble(
                                                     horizontalArrangement = Arrangement.SpaceBetween,
                                                     verticalAlignment = Alignment.CenterVertically
                                                 ) {
-                                                    IconButton(
-                                                        onClick = { isEditing = !isEditing },
-                                                        modifier = Modifier.size(28.dp)
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = if (isEditing) Icons.Default.Close else Icons.Default.Edit,
-                                                            contentDescription = if (isEditing) "Abbrechen" else "Bearbeiten",
-                                                            tint = if (isEditing) Color(0xFFFF5555) else Color(0xFFAAAAAA),
-                                                            modifier = Modifier.size(16.dp)
-                                                        )
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        IconButton(
+                                                            onClick = { isFullscreenCode = true },
+                                                            modifier = Modifier.size(28.dp)
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Fullscreen,
+                                                                contentDescription = "Vollbild",
+                                                                tint = Color(0xFFAAAAAA),
+                                                                modifier = Modifier.size(16.dp)
+                                                            )
+                                                        }
+                                                        IconButton(
+                                                            onClick = { isEditing = !isEditing },
+                                                            modifier = Modifier.size(28.dp)
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = if (isEditing) Icons.Default.Close else Icons.Default.Edit,
+                                                                contentDescription = if (isEditing) "Abbrechen" else "Bearbeiten",
+                                                                tint = if (isEditing) Color(0xFFFF5555) else Color(0xFFAAAAAA),
+                                                                modifier = Modifier.size(16.dp)
+                                                            )
+                                                        }
                                                     }
                                                     IconButton(
                                                         onClick = {
@@ -9992,6 +10007,65 @@ internal fun MessageBubble(
                                                         modifier = Modifier
                                                             .horizontalScroll(codeHScrollState)
                                                             .padding(horizontal = 12.dp, vertical = 10.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if (isFullscreenCode) {
+                                        Dialog(
+                                            onDismissRequest = { isFullscreenCode = false },
+                                            properties = DialogProperties(usePlatformDefaultWidth = false)
+                                        ) {
+                                            var fsEditedCode by remember { mutableStateOf(editedCode) }
+                                            Scaffold(
+                                                topBar = {
+                                                    TopAppBar(
+                                                        title = { Text("Code", fontWeight = FontWeight.Bold) },
+                                                        navigationIcon = {
+                                                            IconButton(onClick = { isFullscreenCode = false }) {
+                                                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Zurück")
+                                                            }
+                                                        },
+                                                        actions = {
+                                                            IconButton(onClick = {
+                                                                editedCode = fsEditedCode
+                                                                viewModel?.editMessage(message.localId, "/*${fsEditedCode}*/")
+                                                                isEditing = false
+                                                                isFullscreenCode = false
+                                                            }) {
+                                                                Icon(Icons.Default.Save, contentDescription = "Speichern")
+                                                            }
+                                                        },
+                                                        colors = TopAppBarDefaults.topAppBarColors(
+                                                            containerColor = Color(0xFF2A2A3E),
+                                                            titleContentColor = Color.White,
+                                                            navigationIconContentColor = Color.White,
+                                                            actionIconContentColor = Color(0xFF4CAF50)
+                                                        )
+                                                    )
+                                                }
+                                            ) { padding ->
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .padding(padding)
+                                                        .background(Color(0xFF1E1E2E))
+                                                ) {
+                                                    BasicTextField(
+                                                        value = fsEditedCode,
+                                                        onValueChange = { fsEditedCode = it },
+                                                        textStyle = TextStyle(
+                                                            color = Color(0xFFD4D4D4),
+                                                            fontSize = 14.sp,
+                                                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                                            lineHeight = 20.sp
+                                                        ),
+                                                        cursorBrush = SolidColor(Color(0xFFD4D4D4)),
+                                                        modifier = Modifier
+                                                            .fillMaxSize()
+                                                            .verticalScroll(rememberScrollState())
+                                                            .padding(16.dp)
                                                     )
                                                 }
                                             }

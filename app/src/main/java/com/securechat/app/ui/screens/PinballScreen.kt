@@ -71,7 +71,10 @@ private val PB_HEART_C  = Color(0xFFFF4D6D)
 private class PbBall(
     var x: Float, var y: Float, var vx: Float = 0f, var vy: Float = 0f,
     val r: Float = 9f, var launched: Boolean = false
-) { val trail = ArrayDeque<Offset>(); var guiding = false; var captured = false; var stuckFrames = 0 }
+) {
+    val trail = ArrayDeque<Offset>(); var guiding = false; var captured = false
+    var stuckFrames = 0; var anchorX = x; var anchorY = y
+}
 
 private class PbBumper(val x: Float, val y: Float, val r: Float, val score: Int, val big: Boolean) {
     var flash = 0f; var hits = 0
@@ -374,19 +377,31 @@ private fun stepPbBall(g: PbGs, b: PbBall) {
     b.trail.addLast(Offset(b.x, b.y))
     if (b.trail.size > 8) b.trail.removeFirst()
 
-    // Anti-Klemm: Kugel, die zu lange fast still steht (Dead-Spot, z. B. rechte Rinne über dem Flipper),
-    // löst sich von selbst mit einem sanften Stoss nach oben. Flipper-Cradle (y ≈ 640) bleibt unberührt.
-    val sp2 = hypot(b.vx, b.vy)
-    if (b.y < 610f && sp2 < 0.8f) {
-        b.stuckFrames++
-        if (b.stuckFrames > 100) {
-            b.vy -= 4.5f
-            b.vx += (Random.nextFloat() * 2f - 1f) * 3f
+    // Anti-Klemm: Kugel, die sich länger als 3 Sekunden nicht weiter als das Doppelte ihres
+    // Durchmessers von der Stelle entfernt, an der der Timer zu laufen begann (Dead-Spot, z. B.
+    // rechte Rinne über dem Flipper), verschwindet und fällt neu von ganz oben mittig herunter.
+    // Flipper-Cradle (y ≈ 640) bleibt unberührt, damit das gewollte Halten der Kugel am Flipper
+    // nicht versehentlich als Klemmer gewertet wird.
+    if (b.y < 610f) {
+        val drift = hypot(b.x - b.anchorX, b.y - b.anchorY)
+        val tolerance = 4f * b.r   // zweimal der Durchmesser (2 * 2r)
+        if (drift > tolerance) {
+            b.anchorX = b.x; b.anchorY = b.y
             b.stuckFrames = 0
-            g.shake = max(g.shake, 0.4f)
+        } else {
+            b.stuckFrames++
+            if (b.stuckFrames > 188) {   // ~3 Sekunden bei 16 ms Frame-Delay
+                b.x = PB_W * 0.5f; b.y = PB_WALL + b.r
+                b.vx = 0f; b.vy = 0f
+                b.anchorX = b.x; b.anchorY = b.y
+                b.stuckFrames = 0
+                b.trail.clear()
+                g.shake = max(g.shake, 0.4f)
+            }
         }
     } else {
         b.stuckFrames = 0
+        b.anchorX = b.x; b.anchorY = b.y
     }
 }
 

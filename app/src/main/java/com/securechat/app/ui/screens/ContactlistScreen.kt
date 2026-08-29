@@ -180,6 +180,7 @@ fun ContactlistScreen(
         }
     }
     val callMessages by viewModel.callMessages.collectAsState(initial = emptyList())
+    val callBadgeCount by viewModel.callBadgeCount.collectAsState()
     var showDeleteAccountConfirm by remember { mutableStateOf(false) }
     var showDeleteAccountFinal by remember { mutableStateOf(false) }
     var isDeletingAccount by remember { mutableStateOf(false) }
@@ -1095,29 +1096,38 @@ fun ContactlistScreen(
                     Spacer(Modifier.width(6.dp))
                     // Tab: Anrufe
                     val anrufeSelected = selectedContactTab == 2
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = if (anrufeSelected) MaterialTheme.colorScheme.primary else Color(0xFF2A2A2A),
-                        modifier = Modifier
-                            .height(36.dp)
-                            .clickable { selectedContactTab = if (anrufeSelected) 0 else 2 }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    BadgedBox(badge = {
+                        if (callBadgeCount > 0) {
+                            Badge(
+                                containerColor = MaterialTheme.colorScheme.error,
+                                contentColor = MaterialTheme.colorScheme.onError
+                            ) { Text(if (callBadgeCount > 99) "99+" else "$callBadgeCount", fontSize = 9.sp) }
+                        }
+                    }) {
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = if (anrufeSelected) MaterialTheme.colorScheme.primary else Color(0xFF2A2A2A),
+                            modifier = Modifier
+                                .height(36.dp)
+                                .clickable { selectedContactTab = if (anrufeSelected) 0 else 2 }
                         ) {
-                            Icon(
-                                Icons.Default.Call,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                                tint = if (anrufeSelected) MaterialTheme.colorScheme.onPrimary else Color(0xFFAAAAAA)
-                            )
-                            Text(
-                                stringResource(com.securechat.app.R.string.contacts_tab_calls),
-                                fontSize = 11.sp,
-                                color = if (anrufeSelected) MaterialTheme.colorScheme.onPrimary else Color(0xFFAAAAAA)
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Call,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = if (anrufeSelected) MaterialTheme.colorScheme.onPrimary else Color(0xFFAAAAAA)
+                                )
+                                Text(
+                                    stringResource(com.securechat.app.R.string.contacts_tab_calls),
+                                    fontSize = 11.sp,
+                                    color = if (anrufeSelected) MaterialTheme.colorScheme.onPrimary else Color(0xFFAAAAAA)
+                                )
+                            }
                         }
                     }
                 }
@@ -1425,7 +1435,12 @@ fun ContactlistScreen(
                             buildCallSummaries(callMessages, myName)
                         }
                         val callRecordings by viewModel.callRecordings.collectAsState()
-                        // Aufzeichnungen laden wenn Tab geöffnet wird
+                        // Aufzeichnungen laden + Anruf-Benachrichtigungen als gelesen+erhalten
+                        // markieren wenn der Tab geöffnet wird
+                        DisposableEffect(Unit) {
+                            viewModel.setCallListVisible(true)
+                            onDispose { viewModel.setCallListVisible(false) }
+                        }
                         LaunchedEffect(Unit) { viewModel.loadCallRecordings() }
 
                         // Jede Aufzeichnung GENAU EINEM Anruf-Eintrag zuordnen: dem Eintrag

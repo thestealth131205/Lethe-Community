@@ -191,6 +191,7 @@ private class JodGs(val canvasW: Float, val canvasH: Float) {
     var extraPlatL6c: Boolean = false
     var monsterSpawnedL2: Boolean = false
     var heartSpawnedL2: Boolean = false
+    var heartSpawnedL2b: Boolean = false
     var isBubble: Boolean = false
     var bubbleMs: Long = 0L
     var bubbleSpawnedL4: Boolean = false
@@ -320,6 +321,11 @@ private fun addJodPlatform(gs: JodGs, canvasW: Float, worldY: Float, easy: Boole
     val specialPlaced = !easy && when {
         gs.level == 2 && gs.score >= 80 && !gs.heartSpawnedL2 -> {
             gs.heartSpawnedL2 = true
+            gs.items += JodItem(gs.nextId++, iX, iY, JodItemType.HEART)
+            true
+        }
+        gs.level == 2 && gs.score >= 120 && !gs.heartSpawnedL2b -> {
+            gs.heartSpawnedL2b = true
             gs.items += JodItem(gs.nextId++, iX, iY, JodItemType.HEART)
             true
         }

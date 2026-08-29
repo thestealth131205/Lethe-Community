@@ -24,6 +24,25 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.159",
+            title = "Flipper-Automat verbessert",
+            items = listOf(
+                "Im Pinball-Spiel verschwindet eine Kugel jetzt automatisch und fällt von oben mittig neu herunter, wenn sie länger als 3 Sekunden praktisch an derselben Stelle festhängt",
+            ),
+            shortSummary = "Festhängende Kugeln im Flipper-Spiel lösen sich jetzt automatisch"
+        ),
+
+        ChangelogEntry(
+            version = "10.4.158",
+            title = "Anrufliste & Code-Blöcke verbessert",
+            items = listOf(
+                "Verpasste Videocall-Benachrichtigungen werden jetzt beim Öffnen der Anrufliste automatisch als gelesen markiert, inkl. Anzeige der Anzahl ungelesener verpasster Anrufe",
+                "Code-Blöcke im Chat lassen sich jetzt über ein neues Symbol im Vollbild anzeigen und bearbeiten",
+            ),
+            shortSummary = "Anrufliste markiert verpasste Anrufe automatisch als gelesen, Code-Blöcke im Vollbild bearbeitbar"
+        ),
+
+        ChangelogEntry(
             version = "10.4.157",
             title = "Stabilitätsverbesserung bei Circle-Videos",
             items = listOf(
@@ -41,31 +60,6 @@ object AppChangelog {
                 "Lethe Media Player: Shuffle und Wiederholung lassen sich jetzt auch in Android Auto direkt über eigene Buttons umschalten",
             ),
             shortSummary = "Stabilere Circle-Videos und Shuffle/Wiederholung in Android Auto"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.155",
-            title = "Benachrichtigungen & Videocalls verbessert",
-            items = listOf(
-                "Status-Benachrichtigungen und Herz-Reaktionen auf deinen Status kommen jetzt auch ohne Google-Dienste zuverl\u00e4ssig an",
-                "Wenn jemand auf deine Nachricht reagiert, wirst du jetzt benachrichtigt (z.\u202fB. \u201eAlex hat auf deine Nachricht mit \u2764\ufe0f reagiert\u201c)",
-                "Behoben: Videocall st\u00fcrzte beim Aktivieren von Hintergrund-Unsch\u00e4rfe oder Farbverlauf ab",
-                "Behoben: Nach einem abgest\u00fcrzten Videocall wurde der Ton dauerhaft f\u00e4lschlich \u00fcber die H\u00f6rmuschel ausgegeben",
-                "Admins werden jetzt auch ohne Google-Dienste \u00fcber neue Support-Tickets benachrichtigt",
-            ),
-            shortSummary = "Zuverl\u00e4ssigere Benachrichtigungen und stabilere Videocalls"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.154",
-            title = "Media Player, Videocalls & Sparks verbessert",
-            items = listOf(
-                "Lethe Media Player: Wiedergabe bricht beim Casten nach einem Lied nicht mehr ab; Shuffle/Wiederholung sind jetzt auch beim Casten nutzbar, Lautstärketasten regeln direkt das Cast-Gerät",
-                "Geteilte Musik-Links sind jetzt kurz und funktionieren beim Favorisieren sofort, ohne den Song erneut zu öffnen",
-                "Videocalls: Statt nur \u201eHintergrund unscharf\u201c gibt es jetzt eine echte Hintergrundauswahl (unscharf, Farbverläufe oder eigenes Galeriebild) mit weichen Kanten",
-                "Sparks: Beim Erstellen füllt ein vergrößerter, unscharfer Hintergrund den freien Bildschirmbereich aus; Tonaussetzer bei kurzer Musik und zu langer Bilddauer behoben",
-            ),
-            shortSummary = "Zuverlässigeres Casten, echte Hintergrundauswahl bei Videocalls und verbesserte Sparks"
         ),
 
     )

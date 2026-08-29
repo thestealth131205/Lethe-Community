@@ -425,6 +425,30 @@ class MainViewModel @Inject constructor(
         _nearbyBadgeCount.value = 0
     }
 
+    /** Anzahl verpasster Anrufe seit dem letzten Öffnen der Anrufliste (Badge auf dem "Anrufe"-Tab). */
+    private val _callBadgeCount = MutableStateFlow(0)
+    val callBadgeCount: StateFlow<Int> = _callBadgeCount.asStateFlow()
+
+    /** Wird aufgerufen wenn der Nutzer die Anrufliste (Anruf-Verlauf-Tab) öffnet: setzt den
+     *  Badge-Zähler zurück und bestätigt alle noch unbestätigten Anruf-Benachrichtigungen
+     *  (verpasst/abgelehnt/beendet) dem Server gegenüber als zugestellt+gelesen. */
+    fun clearCallBadge() {
+        _callBadgeCount.value = 0
+        viewModelScope.launch(Dispatchers.IO) {
+            val myId = _currentUser.value?.userId ?: return@launch
+            val unconfirmed = messageDao.getUnconfirmedCallSystemMessages(myId)
+            if (unconfirmed.isEmpty()) return@launch
+            unconfirmed.forEach { m ->
+                if (!m.messageId.isNullOrBlank()) {
+                    webSocketManager.sendMessage("delivered", m.senderId, mapOf("message_id" to m.messageId))
+                }
+            }
+            // Sammel-Lesebestätigung (Server matcht alle unread Nachrichten mit sender_id = "lethe_system")
+            webSocketManager.sendMessage("read_receipt", "lethe_system", mapOf("chat_partner" to "lethe_system"))
+            messageDao.markCallSystemMessagesReadAndDelivered(myId)
+        }
+    }
+
     private val hiddenNearbyPrefs by lazy {
         context.getSharedPreferences("hidden_nearby_profiles", android.content.Context.MODE_PRIVATE)
     }
@@ -3166,6 +3190,16 @@ class MainViewModel @Inject constructor(
     fun setContactListVisible(visible: Boolean) {
         _isContactListVisible.value = visible
         if (visible) _chatBadgeCount.value = 0
+    }
+
+    /** True während der Anrufliste-Tab (Anruf-Verlauf) sichtbar ist. */
+    private val _isCallListVisible = MutableStateFlow(false)
+
+    /** Wird beim Betreten/Verlassen des Anrufliste-Tabs aufgerufen. Beim Betreten werden
+     *  alle offenen Anruf-Benachrichtigungen sofort als gelesen+erhalten markiert. */
+    fun setCallListVisible(visible: Boolean) {
+        _isCallListVisible.value = visible
+        if (visible) clearCallBadge()
     }
 
     /** State für aktuell eingehende Kontaktanfragen. */
@@ -9851,8 +9885,15 @@ class MainViewModel @Inject constructor(
                     maybeBackupPlaintext(messageId, contentBlob)
                 }
 
-                // Systemnachrichten: keine Benachrichtigung anzeigen
-                if (isSystemMsg) return
+                // Systemnachrichten: keine Benachrichtigung anzeigen, aber verpasste Anrufe
+                // erhöhen den Badge-Zähler der Anrufliste (bzw. werden sofort bestätigt,
+                // falls die Anrufliste gerade geöffnet ist).
+                if (isSystemMsg) {
+                    if (mediaType == "call_missed") {
+                        if (_isCallListVisible.value) clearCallBadge() else _callBadgeCount.value++
+                    }
+                    return
+                }
 
                 // Poll-Nachricht: sofort in Room cachen damit UI sie anzeigen kann
                 if (mediaType == "poll") {

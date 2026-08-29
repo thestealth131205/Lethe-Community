@@ -190,6 +190,15 @@ interface MessageDao {
     @Query("SELECT COUNT(*) FROM messages WHERE messageId = :messageId AND isDeliveredAsNotification = 1")
     suspend fun isDeliveredAsNotification(messageId: String): Int
 
+    /** Anruf-System-Nachrichten (verpasst/abgelehnt/beendet), die noch nicht als
+     *  zugestellt+gelesen bestätigt wurden. Für die Anrufliste (Anruf-Verlauf-Tab). */
+    @Query("SELECT * FROM messages WHERE receiverId = :myId AND mediaType IN ('call_missed', 'call_declined', 'call_rejected', 'call_ended', 'call_initiated', 'call_accepted') AND deliveryStatus < 3")
+    suspend fun getUnconfirmedCallSystemMessages(myId: String): List<MessageEntity>
+
+    /** Markiert alle Anruf-System-Nachrichten als zugestellt+gelesen (Anrufliste wurde geöffnet). */
+    @Query("UPDATE messages SET deliveryStatus = 3 WHERE receiverId = :myId AND mediaType IN ('call_missed', 'call_declined', 'call_rejected', 'call_ended', 'call_initiated', 'call_accepted')")
+    suspend fun markCallSystemMessagesReadAndDelivered(myId: String)
+
     /** Opt-in Chat-Backup: markiert eine Nachricht als bereits als Klartext gesichert (Dedup). */
     @Query("UPDATE messages SET backedUp = 1 WHERE messageId = :messageId")
     suspend fun markBackedUp(messageId: String)
