@@ -378,30 +378,23 @@ private fun stepPbBall(g: PbGs, b: PbBall) {
     if (b.trail.size > 8) b.trail.removeFirst()
 
     // Anti-Klemm: Kugel, die sich länger als 3 Sekunden nicht weiter als das Doppelte ihres
-    // Durchmessers von der Stelle entfernt, an der der Timer zu laufen begann (Dead-Spot, z. B.
-    // rechte Rinne über dem Flipper), verschwindet und fällt neu von ganz oben mittig herunter.
-    // Flipper-Cradle (y ≈ 640) bleibt unberührt, damit das gewollte Halten der Kugel am Flipper
-    // nicht versehentlich als Klemmer gewertet wird.
-    if (b.y < 610f) {
-        val drift = hypot(b.x - b.anchorX, b.y - b.anchorY)
-        val tolerance = 4f * b.r   // zweimal der Durchmesser (2 * 2r)
-        if (drift > tolerance) {
+    // Durchmessers von der Stelle entfernt, an der der Timer zu laufen begann (egal wo auf dem
+    // Feld — auch auf dem Flipper liegend), verschwindet und fällt neu von ganz oben mittig herunter.
+    val drift = hypot(b.x - b.anchorX, b.y - b.anchorY)
+    val tolerance = 4f * b.r   // zweimal der Durchmesser (2 * 2r)
+    if (drift > tolerance) {
+        b.anchorX = b.x; b.anchorY = b.y
+        b.stuckFrames = 0
+    } else {
+        b.stuckFrames++
+        if (b.stuckFrames > 188) {   // ~3 Sekunden bei 16 ms Frame-Delay
+            b.x = PB_W * 0.5f; b.y = PB_WALL + b.r
+            b.vx = 0f; b.vy = 0f
             b.anchorX = b.x; b.anchorY = b.y
             b.stuckFrames = 0
-        } else {
-            b.stuckFrames++
-            if (b.stuckFrames > 188) {   // ~3 Sekunden bei 16 ms Frame-Delay
-                b.x = PB_W * 0.5f; b.y = PB_WALL + b.r
-                b.vx = 0f; b.vy = 0f
-                b.anchorX = b.x; b.anchorY = b.y
-                b.stuckFrames = 0
-                b.trail.clear()
-                g.shake = max(g.shake, 0.4f)
-            }
+            b.trail.clear()
+            g.shake = max(g.shake, 0.4f)
         }
-    } else {
-        b.stuckFrames = 0
-        b.anchorX = b.x; b.anchorY = b.y
     }
 }
 

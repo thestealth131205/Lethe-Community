@@ -24,6 +24,15 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.160",
+            title = "Flipper-Automat: Festhänger-Erkennung verbessert",
+            items = listOf(
+                "Im Pinball-Spiel greift die Erkennung festhängender Kugeln jetzt auf dem gesamten Spielfeld, auch wenn eine Kugel ruhig auf dem Flipper liegen bleibt – vorher konnte das Spiel dadurch nicht beendet werden",
+            ),
+            shortSummary = "Festhängende Kugeln werden im Flipper-Spiel jetzt überall zuverlässig erkannt"
+        ),
+
+        ChangelogEntry(
             version = "10.4.159",
             title = "Flipper-Automat verbessert",
             items = listOf(
