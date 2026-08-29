@@ -24,6 +24,15 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.161",
+            title = "Flipper-Automat: Respawn-Position korrigiert",
+            items = listOf(
+                "Im Pinball-Spiel spawnt eine festhängende Kugel jetzt leicht links der Mitte statt exakt mittig, damit sie nicht mehr zwischen oberem Bumper und Decke gefangen werden und so Punkte gefarmt werden können",
+            ),
+            shortSummary = "Flipper-Respawn-Position angepasst, um Punkte-Farming zu verhindern"
+        ),
+
+        ChangelogEntry(
             version = "10.4.160",
             title = "Flipper-Automat: Festhänger-Erkennung verbessert",
             items = listOf(
@@ -58,17 +67,6 @@ object AppChangelog {
                 "Interner Umbau: Der Anzeige-Code für Circle-Videos in Chats wurde in eine eigene Komponente ausgelagert, um seltene Abstürze beim Kompilieren auf manchen Geräten zu vermeiden",
             ),
             shortSummary = "Interne Stabilitätsverbesserung bei Circle-Videos"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.156",
-            title = "Circle-Videos & Lethe Media Player verbessert",
-            items = listOf(
-                "Circle-Videos: Ein antippbares Play-Symbol zeigt jetzt immer an, ob ein Video gerade läuft oder wartet \u2013 kein scheinbar toter schwarzer Kreis mehr; nach dem Aufklappen mit Ton erscheint ein Wiederholen-Button",
-                "Circle-Videos stürzen nicht mehr ab, wenn mehrere gleichzeitig sichtbar sind \u2013 die begrenzten Video-Decoder des Geräts werden jetzt sauber verwaltet",
-                "Lethe Media Player: Shuffle und Wiederholung lassen sich jetzt auch in Android Auto direkt über eigene Buttons umschalten",
-            ),
-            shortSummary = "Stabilere Circle-Videos und Shuffle/Wiederholung in Android Auto"
         ),
 
     )

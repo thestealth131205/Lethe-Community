@@ -379,7 +379,9 @@ private fun stepPbBall(g: PbGs, b: PbBall) {
 
     // Anti-Klemm: Kugel, die sich länger als 3 Sekunden nicht weiter als das Doppelte ihres
     // Durchmessers von der Stelle entfernt, an der der Timer zu laufen begann (egal wo auf dem
-    // Feld — auch auf dem Flipper liegend), verschwindet und fällt neu von ganz oben mittig herunter.
+    // Feld — auch auf dem Flipper liegend), verschwindet und fällt neu von oben (leicht links der
+    // Mitte, versetzt zum oberen Bumper) herunter — sonst könnte sie zwischen Bumper und Decke
+    // hin- und herprallen und Punkte "farmen".
     val drift = hypot(b.x - b.anchorX, b.y - b.anchorY)
     val tolerance = 4f * b.r   // zweimal der Durchmesser (2 * 2r)
     if (drift > tolerance) {
@@ -388,7 +390,7 @@ private fun stepPbBall(g: PbGs, b: PbBall) {
     } else {
         b.stuckFrames++
         if (b.stuckFrames > 188) {   // ~3 Sekunden bei 16 ms Frame-Delay
-            b.x = PB_W * 0.5f; b.y = PB_WALL + b.r
+            b.x = PB_W * 0.5f - 70f; b.y = PB_WALL + b.r
             b.vx = 0f; b.vy = 0f
             b.anchorX = b.x; b.anchorY = b.y
             b.stuckFrames = 0
