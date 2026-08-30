@@ -24,6 +24,16 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.162",
+            title = "Kopfhörer-Ausgabe & Jump-or-Die verbessert",
+            items = listOf(
+                "Lethe Media Player: Der Ton kommt jetzt zuverlässig über eingesteckte Klinken-Kopfhörer, USB- und Bluetooth-Geräte (auch neuere LE-Audio-Geräte) statt fälschlich über den Lautsprecher",
+                "Jump or Die: Wer einmal über 1000 Punkte hatte, bekommt bis zum Verlassen des Spiels bei jedem Neustart zwei schwarze Löcher – das zweite erscheint 10 Stufen vor dem ersten",
+            ),
+            shortSummary = "Kopfhörer-Ausgabe im Media Player korrigiert, zweites schwarzes Loch in Jump or Die"
+        ),
+
+        ChangelogEntry(
             version = "10.4.161",
             title = "Flipper-Automat: Respawn-Position korrigiert",
             items = listOf(
@@ -58,15 +68,6 @@ object AppChangelog {
                 "Code-Blöcke im Chat lassen sich jetzt über ein neues Symbol im Vollbild anzeigen und bearbeiten",
             ),
             shortSummary = "Anrufliste markiert verpasste Anrufe automatisch als gelesen, Code-Blöcke im Vollbild bearbeitbar"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.157",
-            title = "Stabilitätsverbesserung bei Circle-Videos",
-            items = listOf(
-                "Interner Umbau: Der Anzeige-Code für Circle-Videos in Chats wurde in eine eigene Komponente ausgelagert, um seltene Abstürze beim Kompilieren auf manchen Geräten zu vermeiden",
-            ),
-            shortSummary = "Interne Stabilitätsverbesserung bei Circle-Videos"
         ),
 
     )

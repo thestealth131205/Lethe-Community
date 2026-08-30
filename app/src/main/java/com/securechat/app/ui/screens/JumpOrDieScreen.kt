@@ -204,6 +204,7 @@ private class JodGs(val canvasW: Float, val canvasH: Float) {
     var consecutiveWoodCount: Int = 0     // Anzahl aufeinanderfolgender WOOD-Plattformen (max 3)
     // Wurmloch
     var wormholeSpawned: Boolean = false
+    var wormhole2Spawned: Boolean = false
     var playWormhole: Boolean = false
     var wormholeTriggered: Boolean = false
     // Werte aus Server-Status (werden vom Composable gesetzt)
@@ -369,11 +370,19 @@ private fun addJodPlatform(gs: JodGs, canvasW: Float, worldY: Float, easy: Boole
             gs.items += JodItem(gs.nextId++, iX, iY, JodItemType.BUBBLE)
             true
         }
-        // Wurmloch: in Level 4 spät (Score > 420), nur einmal, wenn continuous_play >= 10,
-        // hole heute noch verfügbar, höchste Session-Score >= 500 und < 1000
+        // Erstes Wurmloch: in Level 4 spät (Score > 420), nur einmal. Erscheint ab 1000 erreichten
+        // Session-Punkten IMMER (bei jedem Neustart bis zum Verlassen des Spiels), sonst wie bisher
+        // nach 10 Fehlversuchen (continuous_play >= 10) mit min. 500 Punkten und wenn heute verfügbar.
         gs.level == 4 && gs.score > 420 && !gs.wormholeSpawned
-            && gs.continuousPlay >= 10 && gs.holeAvailable && gs.highScore >= 500 && gs.highScore < 1000 -> {
+            && (gs.highScore >= 1000 || (gs.continuousPlay >= 10 && gs.holeAvailable && gs.highScore >= 500)) -> {
             gs.wormholeSpawned = true
+            gs.items += JodItem(gs.nextId++, iX, iY, JodItemType.WORMHOLE)
+            true
+        }
+        // Zweites Wurmloch: nur wenn man einmal über 1000 Punkte hatte – immer 10 Stufen
+        // (10 Plattformen = 50 Punkte) vor dem ersten Loch.
+        gs.level == 4 && gs.score > 370 && !gs.wormhole2Spawned && gs.highScore >= 1000 -> {
+            gs.wormhole2Spawned = true
             gs.items += JodItem(gs.nextId++, iX, iY, JodItemType.WORMHOLE)
             true
         }
