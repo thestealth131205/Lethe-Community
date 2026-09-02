@@ -396,7 +396,7 @@ class MainActivity : FragmentActivity() {
                                 // Text-Share: Textfeld im Chat vorbefüllen
                                 viewModel.setPendingChatText(share.text)
                                 viewModel.clearPendingShare()
-                                navController.navigate("chat/$targetChatId")
+                                navController.navigate(if (isGroup) "chat/$targetChatId?isGroup=true" else "chat/$targetChatId")
                             }
                             share.uri != null && share.mimeType?.startsWith("image/") == true -> {
                                 // Direct Share: Image Editor anzeigen statt direkt senden.
@@ -421,7 +421,7 @@ class MainActivity : FragmentActivity() {
                                 else if (isGroup) viewModel.sendGroupMediaMessage(targetChatId, share.uri, mediaType)
                                 else viewModel.sendMediaMessage(targetChatId, share.uri, mediaType)
                                 viewModel.clearPendingShare()
-                                navController.navigate("chat/$targetChatId")
+                                navController.navigate(if (isGroup) "chat/$targetChatId?isGroup=true" else "chat/$targetChatId")
                             }
                             share.uris != null -> {
                                 // Mehrere Medien: alle direkt senden
@@ -437,7 +437,7 @@ class MainActivity : FragmentActivity() {
                                     else viewModel.sendMediaMessage(targetChatId, uri, mediaType)
                                 }
                                 viewModel.clearPendingShare()
-                                navController.navigate("chat/$targetChatId")
+                                navController.navigate(if (isGroup) "chat/$targetChatId?isGroup=true" else "chat/$targetChatId")
                             }
                             else -> viewModel.clearPendingShare()
                         }
@@ -996,8 +996,9 @@ class MainActivity : FragmentActivity() {
                         composable("share_target") {
                             ShareTargetScreen(
                                 viewModel = viewModel,
-                                onNavigateToChat = { chatId ->
-                                    navController.navigate("chat/$chatId") {
+                                onNavigateToChat = { chatId, isGroup ->
+                                    val route = if (isGroup) "chat/$chatId?isGroup=true" else "chat/$chatId"
+                                    navController.navigate(route) {
                                         popUpTo("share_target") { inclusive = true }
                                     }
                                 },

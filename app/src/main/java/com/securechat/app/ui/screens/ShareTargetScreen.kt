@@ -38,7 +38,7 @@ import com.securechat.app.ui.theme.topBarTitleColor
 @Composable
 fun ShareTargetScreen(
     viewModel: MainViewModel,
-    onNavigateToChat: (String) -> Unit,
+    onNavigateToChat: (String, Boolean) -> Unit,
     onDismiss: () -> Unit,
     onNavigateToImageEditor: ((Uri, String, String?) -> Unit)? = null,
     onNavigateToStatusCreate: (() -> Unit)? = null
@@ -53,12 +53,13 @@ fun ShareTargetScreen(
 
     // CRASH FIX: Navigation-Ziel merken, dann EINMAL via LaunchedEffect navigieren
     var singleNavigationTarget by remember { mutableStateOf<String?>(null) }
+    var singleNavigationIsGroup by remember { mutableStateOf(false) }
     val hadShare = remember { pendingShare != null }
 
     LaunchedEffect(pendingShare) {
         if (hadShare && pendingShare == null) {
             val target = singleNavigationTarget
-            if (target != null) onNavigateToChat(target)
+            if (target != null) onNavigateToChat(target, singleNavigationIsGroup)
             else onDismiss()
         }
     }
@@ -115,6 +116,18 @@ fun ShareTargetScreen(
         if (share.text != null && selectedContacts.size == 1 && selectedGroupIds.isEmpty() && !selectedSelfNotes) {
             viewModel.setPendingChatText(share.text)
             singleNavigationTarget = selectedContacts[0].userId
+            singleNavigationIsGroup = false
+            viewModel.clearLinkPreview()
+            viewModel.clearPendingShare()
+            return
+        }
+
+        // Einzel-Text/Link-Share zu genau einer Gruppe → Gruppenchat öffnen, Text ins Textfeld setzen
+        // (statt sofort zu senden – analog zum 1:1-Fall, damit der Link/Text erst im Textfeld erscheint)
+        if (share.text != null && selectedGroupIds.size == 1 && selectedContacts.isEmpty() && !selectedSelfNotes) {
+            viewModel.setPendingChatText(share.text)
+            singleNavigationTarget = selectedGroupIds.first()
+            singleNavigationIsGroup = true
             viewModel.clearLinkPreview()
             viewModel.clearPendingShare()
             return
@@ -199,8 +212,18 @@ fun ShareTargetScreen(
 
         // Navigation-Ziel setzen (nur wenn genau 1 Empfänger)
         singleNavigationTarget = when {
-            selectedContacts.size == 1 && selectedGroupIds.isEmpty() && !selectedStatus && !selectedSelfNotes -> selectedContacts[0].userId
-            selectedSelfNotes && selectedContacts.isEmpty() && selectedGroupIds.isEmpty() && !selectedStatus -> "self_notes"
+            selectedContacts.size == 1 && selectedGroupIds.isEmpty() && !selectedStatus && !selectedSelfNotes -> {
+                singleNavigationIsGroup = false
+                selectedContacts[0].userId
+            }
+            selectedGroupIds.size == 1 && selectedContacts.isEmpty() && !selectedStatus && !selectedSelfNotes -> {
+                singleNavigationIsGroup = true
+                selectedGroupIds.first()
+            }
+            selectedSelfNotes && selectedContacts.isEmpty() && selectedGroupIds.isEmpty() && !selectedStatus -> {
+                singleNavigationIsGroup = false
+                "self_notes"
+            }
             else -> null
         }
 

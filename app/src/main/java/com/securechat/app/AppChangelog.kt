@@ -24,6 +24,19 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.165",
+            title = "Startbildschirm-Widgets & Gruppen-Verbesserungen",
+            items = listOf(
+                "Neu: Kontakte und Gruppen lassen sich als Widget auf den Startbildschirm legen – immer mit dem aktuellen Profil- bzw. Gruppenbild, ein Tipp öffnet direkt den Chat",
+                "Gruppennachrichten erscheinen jetzt sofort, auch wenn sie per Benachrichtigung eintreffen – kein Warten mehr und kein erneutes Öffnen des Chats nötig",
+                "Ein geändertes Gruppenbild wird jetzt auch dann geladen, wenn man während der Änderung offline war oder erst später zur Gruppe hinzugefügt wurde",
+                "Teilen an eine Gruppe öffnet den Gruppenchat jetzt mit vorbefülltem Text/Bild, statt sofort und ungefragt zu senden",
+                "Profil- und Gruppenbilder werden regelmäßig auf Aktualität geprüft und nur bei echter Änderung neu geladen",
+            ),
+            shortSummary = "Startbildschirm-Widgets für Kontakte/Gruppen, schnellere Gruppennachrichten und zuverlässigere Gruppenbilder"
+        ),
+
+        ChangelogEntry(
             version = "10.4.163",
             title = "Video-Wiedergabe & Benachrichtigungen verbessert",
             items = listOf(
@@ -52,15 +65,6 @@ object AppChangelog {
                 "Im Pinball-Spiel spawnt eine festhängende Kugel jetzt leicht links der Mitte statt exakt mittig, damit sie nicht mehr zwischen oberem Bumper und Decke gefangen werden und so Punkte gefarmt werden können",
             ),
             shortSummary = "Flipper-Respawn-Position angepasst, um Punkte-Farming zu verhindern"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.160",
-            title = "Flipper-Automat: Festhänger-Erkennung verbessert",
-            items = listOf(
-                "Im Pinball-Spiel greift die Erkennung festhängender Kugeln jetzt auf dem gesamten Spielfeld, auch wenn eine Kugel ruhig auf dem Flipper liegen bleibt – vorher konnte das Spiel dadurch nicht beendet werden",
-            ),
-            shortSummary = "Festhängende Kugeln werden im Flipper-Spiel jetzt überall zuverlässig erkannt"
         ),
 
     )

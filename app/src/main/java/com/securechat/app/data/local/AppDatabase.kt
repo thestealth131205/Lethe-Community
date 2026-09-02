@@ -8,7 +8,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [UserEntity::class, ContactEntity::class, MessageEntity::class, StatusEntity::class, PollEntity::class, GroupEntity::class, GroupSenderKeyEntity::class, MusicMetadataEntity::class],
-    version = 39,
+    version = 40,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -341,6 +341,16 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 // True = der Partner hat MICH blockiert (ich kann ihm nicht mehr schreiben)
                 db.execSQL("ALTER TABLE contacts ADD COLUMN blockedByPartner INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        val MIGRATION_39_40 = object : Migration(39, 40) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Persistierter Bild-Cache-Abgleich: letzte Prüfung + Server-Timestamp des Bildes
+                db.execSQL("ALTER TABLE contacts ADD COLUMN imageCheckedAt INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE contacts ADD COLUMN imageUpdatedAt INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `groups` ADD COLUMN imageCheckedAt INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `groups` ADD COLUMN imageUpdatedAt INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

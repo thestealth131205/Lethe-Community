@@ -321,6 +321,7 @@ data class UserResponse(
     @SerializedName("is_creator") val isCreator: Boolean = false,
     @SerializedName("is_bot") val isBot: Boolean = false,
     @SerializedName("profile_image_url") val profileImageUrl: String?,
+    @SerializedName("profile_image_updated_at") val profileImageUpdatedAt: Long? = null,
     val info: String? = null,
     val links: String? = null,
     val instagram: String? = null,
@@ -894,6 +895,7 @@ data class GroupResponse(
     @SerializedName("member_count") val memberCount: Int,
     @SerializedName("created_at") val createdAt: String?,
     @SerializedName("group_image_url") val groupImageUrl: String? = null,
+    @SerializedName("group_image_updated_at") val groupImageUpdatedAt: Long? = null,
     val description: String? = null
 )
 

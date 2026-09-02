@@ -161,6 +161,29 @@
             android:name=".MarkAsReadReceiver"
             android:exported="false" />
 
+        <!-- Startbildschirm-Widget: zeigt Avatar + Namen eines einzelnen Kontakts/einer Gruppe -->
+        <receiver
+            android:name=".widget.ContactWidgetProvider"
+            android:exported="false"
+            android:label="@string/widget_contact_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/contact_widget_info" />
+        </receiver>
+
+        <!-- Widget-Konfiguration: Auswahl des Kontakts/der Gruppe beim Platzieren des Widgets -->
+        <activity
+            android:name=".widget.WidgetConfigureActivity"
+            android:exported="true"
+            android:theme="@style/Theme.SecureChat">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
         <!-- Startet Hintergrund-Arbeit (WebSocket/Reconnect) nach Geräte-Neustart & App-Update neu -->
         <receiver
             android:name=".BootReceiver"

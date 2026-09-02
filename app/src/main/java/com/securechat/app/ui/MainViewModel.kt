@@ -8775,6 +8775,7 @@ class MainViewModel @Inject constructor(
                     val existing = groupDao.getGroupById(groupId)
                     if (existing != null && url != null) {
                         groupDao.insertGroup(existing.copy(groupImageUrl = url))
+                        com.securechat.app.widget.ContactWidgetProvider.refreshWidgetsFor(context, isGroup = true, targetId = groupId)
                     }
                     _statusMessage.value = "Gruppenbild aktualisiert ✓"
                 } else {
@@ -9170,6 +9171,10 @@ class MainViewModel @Inject constructor(
                 if (connected) {
                     Timber.tag("LETHE_WS").d("Verbunden – lade verpasste Nachrichten nach")
                     syncMissedMessages()
+                    // Verpasste group_updated-Events (u.a. Gruppenbild-/Namensänderung während
+                    // Offline/Doze) nachholen – sonst aktualisiert sich das Gruppenbild erst beim
+                    // nächsten kompletten App-Neustart.
+                    loadGroups()
                     restoreListenTogetherSession()
                     retryPendingMessages()
                     // Chat-Focus nach (Re-)Connect am Server wiederherstellen bzw. aufheben,
@@ -9187,11 +9192,15 @@ class MainViewModel @Inject constructor(
             }
         }
 
-        // FCM-Fallback: Nachricht per REST nachladen wenn WS sie nicht geliefert hat
+        // FCM-Fallback: Nachricht per REST nachladen wenn WS sie nicht geliefert hat.
+        // Der FcmMessageBus emittiert bei Gruppen-Pushes die group_id (siehe PushPayloadHandler),
+        // daher hier auf Gruppe prüfen und den passenden Loader wählen – sonst würde für eine
+        // Gruppe fälschlich der 1:1-Loader laufen und die Gruppennachricht NIE nachgeladen
+        // (Notification erscheint, Nachricht aber erst nach WS-Reconnect/Chat-Neuöffnen).
         viewModelScope.launch {
-            FcmMessageBus.newMessageSenderIds.collect { senderId ->
-                Timber.tag("LETHE_FCM").d("FCM-Bus: lade Nachrichten von $senderId nach")
-                loadMessages(senderId)
+            FcmMessageBus.newMessageSenderIds.collect { chatId ->
+                Timber.tag("LETHE_FCM").d("FCM-Bus: lade Nachrichten von $chatId nach")
+                if (isGroupChat(chatId)) loadGroupMessages(chatId) else loadMessages(chatId)
             }
         }
 
@@ -10830,13 +10839,22 @@ class MainViewModel @Inject constructor(
                 val groupId = (raw?.get("group_id") ?: (msg as? Map<*, *>)?.get("group_id")) as? String
                 val groupName = (raw?.get("name") ?: raw?.get("group_name")) as? String
                 val createdBy = (raw?.get("created_by")) as? String
+                val groupImageUrl = (raw?.get("group_image_url") as? String)?.let { url ->
+                    if (url.startsWith("http")) url else "https://letheapp.de$url"
+                }
+                val groupDescription = raw?.get("description") as? String
                 if (groupId != null && groupName != null) {
+                    // Bereits bekannte Gruppendaten erhalten (z.B. bei erneutem Aktivierungs-Push),
+                    // damit createdAt/memberCount/Bild nicht überschrieben werden.
+                    val existing = groupDao.getGroupById(groupId)
                     groupDao.insertGroup(GroupEntity(
                         groupId = groupId,
                         name = groupName,
-                        createdBy = createdBy ?: "",
-                        memberCount = 0,
-                        createdAt = System.currentTimeMillis()
+                        createdBy = createdBy ?: existing?.createdBy ?: "",
+                        memberCount = existing?.memberCount ?: 0,
+                        createdAt = existing?.createdAt ?: System.currentTimeMillis(),
+                        groupImageUrl = groupImageUrl ?: existing?.groupImageUrl,
+                        description = groupDescription ?: existing?.description
                     ))
                     Timber.tag("LETHE_WS").d("Gruppe aktiviert & eingefügt: $groupName ($groupId)")
                 } else {
@@ -12000,14 +12018,20 @@ class MainViewModel @Inject constructor(
                 val response = apiService.getGroups()
                 if (response.isSuccessful) {
                     response.body()?.forEach { g ->
+                        // Bestehenden createdAt erhalten, sonst würde die Gruppensortierung bei
+                        // jedem loadGroups()-Aufruf (u.a. Reconnect) neu gewürfelt.
+                        val existing = groupDao.getGroupById(g.id)
                         groupDao.insertGroup(GroupEntity(
                             groupId = g.id, name = g.name, createdBy = g.createdBy,
                             memberCount = g.memberCount,
-                            createdAt = System.currentTimeMillis(),
+                            createdAt = existing?.createdAt ?: System.currentTimeMillis(),
                             groupImageUrl = g.groupImageUrl?.let { url ->
                                 if (url.startsWith("http")) url else "https://letheapp.de$url"
                             },
-                            description = g.description
+                            description = g.description,
+                            // Persistierten Bild-Cache-Abgleich erhalten (REPLACE würde ihn sonst nullen)
+                            imageCheckedAt = existing?.imageCheckedAt ?: 0,
+                            imageUpdatedAt = existing?.imageUpdatedAt ?: 0
                         ))
                     }
                 }
@@ -16010,7 +16034,7 @@ class MainViewModel @Inject constructor(
                     }
                     _p2pPartnerDisabled.value = p2pMap
                     serverContacts.forEach { item ->
-                        val existingAlias = contactDao.getContactById(item.partnerId)?.customAlias
+                        val existingContact = contactDao.getContactById(item.partnerId)
                         contactDao.insertContact(
                             ContactEntity(
                                 userId = item.partnerId,
@@ -16020,7 +16044,7 @@ class MainViewModel @Inject constructor(
                                 profileImageUrl = item.partnerImage?.let { toAbsoluteUrl(it) },
                                 status = "accepted",
                                 isBot = item.partnerIsBot,
-                                customAlias = existingAlias,
+                                customAlias = existingContact?.customAlias,
                                 isAnonymous = item.isAnonymous,
                                 instagram = item.partnerInstagram,
                                 tiktok = item.partnerTiktok,
@@ -16028,7 +16052,10 @@ class MainViewModel @Inject constructor(
                                 info = item.partnerInfo,
                                 letheId = item.partnerLetheId,
                                 isVerified = item.partnerIsVerified,
-                                blockedByPartner = item.blockedByPartner
+                                blockedByPartner = item.blockedByPartner,
+                                // Persistierten Bild-Cache-Abgleich erhalten (REPLACE würde ihn sonst nullen)
+                                imageCheckedAt = existingContact?.imageCheckedAt ?: 0,
+                                imageUpdatedAt = existingContact?.imageUpdatedAt ?: 0
                             )
                         )
                         withContext(Dispatchers.IO) {
@@ -16060,13 +16087,19 @@ class MainViewModel @Inject constructor(
     /** Laufender Refresh-Job – wird beim Login/Session-Restore gestartet. */
     private var profileRefreshJob: Job? = null
 
+    /** Bilder werden pro Kontakt/Gruppe frühestens alle 2 Tage erneut beim Server geprüft. */
+    private val imageRecheckIntervalMs = 2L * 24 * 60 * 60 * 1000
+
     /**
-     * Startet eine Endlosschleife, die nacheinander (nicht parallel) für jeden Kontakt
-     * das aktuelle Profilbild vom Server abruft und die Room-DB bei Änderung aktualisiert.
+     * Startet eine Endlosschleife, die – gedrosselt pro Eintrag auf einmal alle 2 Tage – für jeden
+     * Kontakt und jede Gruppe prüft, ob es beim Server ein neueres Profil-/Gruppenbild gibt
+     * (Vergleich des vom Backend gelieferten Bild-Timestamps mit dem lokal gespeicherten) und die
+     * Room-DB bei Änderung aktualisiert. Der letzte Prüfzeitpunkt wird persistiert (imageCheckedAt),
+     * sodass beim Öffnen der App nur wirklich veraltete Einträge erneut abgefragt werden.
      *
      * - Initialer Delay: 15 s (App soll zuerst stabil laufen)
      * - Delay zwischen den Kontakten: 2 s (Server schonen)
-     * - Interval pro Runde: 5 Minuten
+     * - Interval pro Runde: 6 h (das 2-Tage-Gate pro Eintrag begrenzt die tatsächlichen Abfragen)
      *
      * Ein laufender Job wird vor Neustart automatisch abgebrochen (z. B. bei Profil-Wechsel).
      * delay() ist ein Cancellation-Point – kein explizites isActive-Check nötig.
@@ -16078,33 +16111,90 @@ class MainViewModel @Inject constructor(
         profileRefreshJob = viewModelScope.launch {
             delay(15_000L)
             while (true) {
-                refreshContactProfileImagesSequentially()
-                delay(5 * 60_000L)
+                refreshStaleProfileImagesSequentially()
+                delay(6 * 60 * 60_000L)
             }
         }
     }
 
-    private suspend fun refreshContactProfileImagesSequentially() {
+    private suspend fun refreshStaleProfileImagesSequentially() {
+        val now = System.currentTimeMillis()
+
+        // --- Kontakte: Profilbild pro Eintrag ---
         val contacts = try {
             contactDao.getAllContacts().first()
         } catch (e: Exception) {
-            return
+            emptyList()
         }
         for (contact in contacts) {
+            if (now - contact.imageCheckedAt < imageRecheckIntervalMs) continue
             try {
                 val response = apiService.getUser(contact.userId)
                 if (response.isSuccessful) {
-                    val user = response.body() ?: continue
-                    val newUrl = user.profileImageUrl?.let { toAbsoluteUrl(it) }
-                    if (newUrl != contact.profileImageUrl) {
-                        contactDao.insertContact(contact.copy(profileImageUrl = newUrl))
-                        Timber.tag("LETHE_PROFILE").d("Profilbild aktualisiert: ${contact.userId}")
+                    val user = response.body()
+                    if (user != null) {
+                        val serverTs = user.profileImageUpdatedAt ?: 0L
+                        val newUrl = user.profileImageUrl?.let { toAbsoluteUrl(it) }
+                        if (serverTs > contact.imageUpdatedAt && newUrl != contact.profileImageUrl) {
+                            contactDao.insertContact(contact.copy(
+                                profileImageUrl = newUrl,
+                                imageUpdatedAt = serverTs,
+                                imageCheckedAt = now
+                            ))
+                            com.securechat.app.widget.ContactWidgetProvider.refreshWidgetsFor(context, isGroup = false, targetId = contact.userId)
+                            Timber.tag("LETHE_PROFILE").d("Profilbild aktualisiert: ${contact.userId}")
+                        } else {
+                            contactDao.insertContact(contact.copy(
+                                imageUpdatedAt = if (serverTs > 0) serverTs else contact.imageUpdatedAt,
+                                imageCheckedAt = now
+                            ))
+                        }
                     }
                 }
             } catch (e: Exception) {
                 Timber.tag("LETHE_PROFILE").w("Profilbild-Check fehlgeschlagen (${contact.userId}): ${e.message}")
             }
             delay(2_000L)
+        }
+
+        // --- Gruppen: Gruppenbild ---
+        // /groups liefert alle Gruppen auf einmal → nur abfragen wenn mindestens eine veraltet ist.
+        val groups = try {
+            groupDao.getAllGroups().first()
+        } catch (e: Exception) {
+            emptyList()
+        }
+        if (groups.any { now - it.imageCheckedAt >= imageRecheckIntervalMs }) {
+            try {
+                val response = apiService.getGroups()
+                if (response.isSuccessful) {
+                    val serverGroups = response.body()?.associateBy { it.id } ?: emptyMap()
+                    for (group in groups) {
+                        if (now - group.imageCheckedAt < imageRecheckIntervalMs) continue
+                        val sg = serverGroups[group.groupId] ?: continue
+                        val serverTs = sg.groupImageUpdatedAt ?: 0L
+                        val newUrl = sg.groupImageUrl?.let { url ->
+                            if (url.startsWith("http")) url else "https://letheapp.de$url"
+                        }
+                        if (serverTs > group.imageUpdatedAt && newUrl != group.groupImageUrl) {
+                            groupDao.insertGroup(group.copy(
+                                groupImageUrl = newUrl,
+                                imageUpdatedAt = serverTs,
+                                imageCheckedAt = now
+                            ))
+                            com.securechat.app.widget.ContactWidgetProvider.refreshWidgetsFor(context, isGroup = true, targetId = group.groupId)
+                            Timber.tag("LETHE_PROFILE").d("Gruppenbild aktualisiert: ${group.groupId}")
+                        } else {
+                            groupDao.insertGroup(group.copy(
+                                imageUpdatedAt = if (serverTs > 0) serverTs else group.imageUpdatedAt,
+                                imageCheckedAt = now
+                            ))
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Timber.tag("LETHE_PROFILE").w("Gruppenbild-Check fehlgeschlagen: ${e.message}")
+            }
         }
     }
 

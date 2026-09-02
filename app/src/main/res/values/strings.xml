@@ -1934,4 +1934,9 @@
     <!-- ── COINS SCREEN EXTRA ── -->
     <string name="coins_payment_playstore_value">Play Store (Google Pay)</string>
     <string name="coins_payment_stripe_value">Stripe (credit card / SEPA)</string>
+
+    <!-- ── HOME SCREEN WIDGET ── -->
+    <string name="widget_contact_label">Lethe Contact</string>
+    <string name="widget_picker_title">Choose Contact or Group</string>
+    <string name="widget_picker_empty">No contacts or groups available yet</string>
 </resources>

@@ -1929,4 +1929,9 @@
     <!-- ── COINS SCREEN EXTRA ── -->
     <string name="coins_payment_playstore_value">Play Store (Google Pay)</string>
     <string name="coins_payment_stripe_value">Stripe (Kreditkarte / SEPA)</string>
+
+    <!-- ── STARTBILDSCHIRM-WIDGET ── -->
+    <string name="widget_contact_label">Lethe Kontakt</string>
+    <string name="widget_picker_title">Kontakt oder Gruppe wählen</string>
+    <string name="widget_picker_empty">Noch keine Kontakte oder Gruppen vorhanden</string>
 </resources>

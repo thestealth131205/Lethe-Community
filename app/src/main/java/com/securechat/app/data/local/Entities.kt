@@ -53,7 +53,9 @@ data class ContactEntity(
     val info: String? = null,
     val letheId: String? = null,      // Eindeutige LetheID des Kontakts (für anonymen Chat-Flow)
     val isVerified: Boolean = false,  // Bezahlter Verifizierungshaken
-    val blockedByPartner: Boolean = false // True = der Partner hat MICH blockiert (ich kann ihm nicht mehr schreiben)
+    val blockedByPartner: Boolean = false, // True = der Partner hat MICH blockiert (ich kann ihm nicht mehr schreiben)
+    val imageCheckedAt: Long = 0,     // Letzter Zeitpunkt (ms), zu dem das Profilbild beim Server abgefragt wurde
+    val imageUpdatedAt: Long = 0      // Server-Timestamp (Unix-Sek.) des aktuell lokal gespeicherten Bildes
 )
 
 /**
@@ -138,7 +140,9 @@ data class GroupEntity(
     val memberCount: Int = 0,
     val createdAt: Long,
     val groupImageUrl: String? = null,
-    val description: String? = null
+    val description: String? = null,
+    val imageCheckedAt: Long = 0,     // Letzter Zeitpunkt (ms), zu dem das Gruppenbild beim Server abgefragt wurde
+    val imageUpdatedAt: Long = 0      // Server-Timestamp (Unix-Sek.) des aktuell lokal gespeicherten Bildes
 )
 
 /**
