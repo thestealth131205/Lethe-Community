@@ -4028,6 +4028,22 @@ class MainViewModel @Inject constructor(
     }
 
     /**
+     * Löst die abspielbare lokale URI für ein Video auf: bevorzugt die Galerie-Kopie
+     * (Movies), dann den Chat-Cache; ist beides nicht vorhanden, wird die Datei über
+     * den authentifizierten OkHttp-Client heruntergeladen und lokal gecacht. Erst wenn
+     * sich kein lokaler Pfad ermitteln lässt, wird als letzter Ausweg die Netz-URL geliefert.
+     * Suspendiert bis die Datei verfügbar ist – der Player zeigt derweil einen Ladeindikator
+     * statt eines schwarzen Bildes mit 00:00 (ExoPlayer kann die rohe URL sonst nicht laden).
+     */
+    suspend fun resolveVideoPlayUri(url: String, chatId: String): android.net.Uri? {
+        if (url.isBlank()) return null
+        getPublicMediaUri(url, true)?.let { return it }
+        getCachedVideoPath(url, chatId)?.let { return android.net.Uri.fromFile(java.io.File(it)) }
+        val cached = try { mediaCache.getForChat(url, chatId, "video") } catch (_: Exception) { null }
+        return cached?.let { android.net.Uri.fromFile(it) } ?: android.net.Uri.parse(url)
+    }
+
+    /**
      * Stellt sicher, dass die Video-Datei im Disk-Cache liegt (lädt sie ggf. im
      * Hintergrund herunter). Beim nächsten Abspielen wird sie dann lokal genutzt.
      */
@@ -7941,8 +7957,11 @@ class MainViewModel @Inject constructor(
                     if (response.isSuccessful) {
                         onResult(true, "SMS gesendet")
                     } else {
-                        val err = response.errorBody()?.string() ?: "Fehler ${response.code()}"
-                        onResult(false, err)
+                        val err = response.errorBody()?.string() ?: ""
+                        val detail = try {
+                            org.json.JSONObject(err).optString("detail", "Fehler ${response.code()}")
+                        } catch (_: Exception) { "Fehler ${response.code()}" }
+                        onResult(false, detail)
                     }
                 }
             } catch (e: Exception) {

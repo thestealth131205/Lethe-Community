@@ -163,6 +163,12 @@ fun PhoneInputField(
  * "+49" + "1761234567" → "+491761234567"
  */
 fun buildE164(countryCode: String, localNumber: String): String {
-    val digits = localNumber.filter { it.isDigit() }
+    var digits = localNumber.filter { it.isDigit() }.trimStart('0')
+    // Doppelte Landesvorwahl erkennen (z.B. Copy&Paste einer bereits vollständigen Nummer):
+    // "+49" + "4915207472635" würde sonst zu "+494915207472635" werden.
+    val codeDigits = countryCode.removePrefix("+")
+    if (codeDigits.isNotEmpty() && digits.length > codeDigits.length && digits.startsWith(codeDigits)) {
+        digits = digits.substring(codeDigits.length)
+    }
     return "$countryCode$digits"
 }

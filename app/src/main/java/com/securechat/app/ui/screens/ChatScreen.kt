@@ -9311,51 +9311,56 @@ internal fun MessageBubble(
                                 ) {
                                     val playerCtx = LocalContext.current
                                     val playChatId = message.chatId
-                                    val exoPlayer = remember {
-                                        val publicUri = viewModel?.getPublicMediaUri(videoUrl, true)
-                                        val playUri = when {
-                                            publicUri != null -> publicUri
-                                            else -> {
-                                                val localPath = viewModel?.getCachedVideoPath(videoUrl, playChatId)
-                                                if (localPath != null) android.net.Uri.fromFile(java.io.File(localPath))
-                                                else { viewModel?.ensureVideoCached(videoUrl, playChatId); android.net.Uri.parse(videoUrl) }
-                                            }
-                                        }
-                                        ExoPlayer.Builder(playerCtx).build().apply {
-                                            setMediaItem(MediaItem.fromUri(playUri))
-                                            prepare()
-                                            playWhenReady = true
-                                            // Nach Pause/Stopp Video in den Movies-Ordner verschieben.
-                                            addListener(object : androidx.media3.common.Player.Listener {
-                                                override fun onIsPlayingChanged(isPlaying: Boolean) {
-                                                    if (!isPlaying) viewModel?.exportVideoToMovies(videoUrl, playChatId)
-                                                }
-                                            })
-                                        }
+                                    // Abspielbare URI asynchron auflösen (lädt das Video ggf. über den
+                                    // authentifizierten Client in den Cache). Bis dahin Ladeindikator statt
+                                    // schwarzem Player mit 00:00 – ExoPlayer kann die rohe Netz-URL nicht
+                                    // zuverlässig laden, weshalb zuvor nur ein schwarzes Bild erschien.
+                                    val playUri by produceState<android.net.Uri?>(
+                                        initialValue = null, videoUrl, playChatId
+                                    ) {
+                                        value = viewModel?.resolveVideoPlayUri(videoUrl, playChatId)
                                     }
-                                    DisposableEffect(exoPlayer) {
-                                        onDispose {
-                                            viewModel?.exportVideoToMovies(videoUrl, playChatId)
-                                            exoPlayer.release()
-                                        }
-                                    }
-                                    // Andere Wiedergaben (Musik/fremde Apps) pausieren, danach fortsetzen
-                                    TransientMediaFocus(exoPlayer, active = true)
                                     Box(
                                         modifier = Modifier
                                             .fillMaxSize()
                                             .background(Color.Black),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        AndroidView(
-                                            factory = { ctx ->
-                                                PlayerView(ctx).apply {
-                                                    player = exoPlayer
-                                                    useController = true
+                                        val resolvedUri = playUri
+                                        if (resolvedUri == null) {
+                                            CircularProgressIndicator(color = Color.White)
+                                        } else {
+                                            val exoPlayer = remember(resolvedUri) {
+                                                ExoPlayer.Builder(playerCtx).build().apply {
+                                                    setMediaItem(MediaItem.fromUri(resolvedUri))
+                                                    prepare()
+                                                    playWhenReady = true
+                                                    // Nach Pause/Stopp Video in den Movies-Ordner verschieben.
+                                                    addListener(object : androidx.media3.common.Player.Listener {
+                                                        override fun onIsPlayingChanged(isPlaying: Boolean) {
+                                                            if (!isPlaying) viewModel?.exportVideoToMovies(videoUrl, playChatId)
+                                                        }
+                                                    })
                                                 }
-                                            },
-                                            modifier = Modifier.fillMaxSize()
-                                        )
+                                            }
+                                            DisposableEffect(exoPlayer) {
+                                                onDispose {
+                                                    viewModel?.exportVideoToMovies(videoUrl, playChatId)
+                                                    exoPlayer.release()
+                                                }
+                                            }
+                                            // Andere Wiedergaben (Musik/fremde Apps) pausieren, danach fortsetzen
+                                            TransientMediaFocus(exoPlayer, active = true)
+                                            AndroidView(
+                                                factory = { ctx ->
+                                                    PlayerView(ctx).apply {
+                                                        player = exoPlayer
+                                                        useController = true
+                                                    }
+                                                },
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        }
                                         // Menü + Schließen-Button oben rechts
                                         var showVideoMenu by remember { mutableStateOf(false) }
                                         Row(

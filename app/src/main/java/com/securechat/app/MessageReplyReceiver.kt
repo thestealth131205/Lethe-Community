@@ -4,9 +4,14 @@ import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.drawable.BitmapDrawable
 import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
 import androidx.core.app.RemoteInput
+import androidx.core.graphics.drawable.IconCompat
+import coil.ImageLoader
+import coil.request.ImageRequest
 import com.securechat.app.data.local.MessageDao
 import com.securechat.app.data.local.MessageEntity
 import com.securechat.app.data.local.UserDao
@@ -84,7 +89,27 @@ class MessageReplyReceiver : BroadcastReceiver() {
                 }
 
                 // Benachrichtigung mit gesendeter Nachricht aktualisieren (Wear OS Feedback)
-                val mePerson = Person.Builder().setName("Du").setKey("me").build()
+                // Eigenes Profilbild laden, damit die "Du"-Nachricht mit Avatar erscheint
+                // (statt des generischen Platzhalters).
+                val myImageUrl = me.profileImageUrl?.let {
+                    if (it.startsWith("http")) it else "https://letheapp.de$it"
+                }
+                val myIcon: Bitmap? = if (myImageUrl != null) {
+                    try {
+                        val request = ImageRequest.Builder(context)
+                            .data(myImageUrl)
+                            .allowHardware(false)
+                            .size(128, 128)
+                            .build()
+                        (ImageLoader(context).execute(request).drawable as? BitmapDrawable)?.bitmap
+                    } catch (_: Exception) { null }
+                } else null
+
+                val mePerson = Person.Builder()
+                    .setName("Du")
+                    .setKey("me")
+                    .apply { myIcon?.let { setIcon(IconCompat.createWithBitmap(it)) } }
+                    .build()
                 val senderPerson = Person.Builder().setName(senderName).setKey(receiverId).build()
 
                 val channelId = if (isGroup) NotificationHelper.CHANNEL_ID_GROUPS else NotificationHelper.CHANNEL_ID_MESSAGES

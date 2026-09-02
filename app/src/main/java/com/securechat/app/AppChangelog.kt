@@ -24,6 +24,18 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.163",
+            title = "Video-Wiedergabe & Benachrichtigungen verbessert",
+            items = listOf(
+                "Ältere, hochgescrollte Videos im Chat spielen jetzt zuverlässig ab, statt beim Antippen schwarz mit 00:00 zu bleiben – bis dahin wird ein Ladekreis angezeigt",
+                "Beim direkten Antworten aus einer Benachrichtigung wird jetzt wieder das eigene Profilbild neben \"Du\" angezeigt",
+                "Bei der Registrierung wird eine bereits eingegebene Landesvorwahl nicht mehr fälschlich verdoppelt, wodurch die SMS mit dem Code zuverlässig ankommt",
+                "Ein fehlgeschlagener SMS-Versand beim Registrieren wird jetzt sofort als Fehlermeldung angezeigt statt stillschweigend zu warten",
+            ),
+            shortSummary = "Videowiedergabe, Antwort-Benachrichtigung mit Profilbild und SMS-Versand bei der Registrierung verbessert"
+        ),
+
+        ChangelogEntry(
             version = "10.4.162",
             title = "Kopfhörer-Ausgabe & Jump-or-Die verbessert",
             items = listOf(
@@ -49,25 +61,6 @@ object AppChangelog {
                 "Im Pinball-Spiel greift die Erkennung festhängender Kugeln jetzt auf dem gesamten Spielfeld, auch wenn eine Kugel ruhig auf dem Flipper liegen bleibt – vorher konnte das Spiel dadurch nicht beendet werden",
             ),
             shortSummary = "Festhängende Kugeln werden im Flipper-Spiel jetzt überall zuverlässig erkannt"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.159",
-            title = "Flipper-Automat verbessert",
-            items = listOf(
-                "Im Pinball-Spiel verschwindet eine Kugel jetzt automatisch und fällt von oben mittig neu herunter, wenn sie länger als 3 Sekunden praktisch an derselben Stelle festhängt",
-            ),
-            shortSummary = "Festhängende Kugeln im Flipper-Spiel lösen sich jetzt automatisch"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.158",
-            title = "Anrufliste & Code-Blöcke verbessert",
-            items = listOf(
-                "Verpasste Videocall-Benachrichtigungen werden jetzt beim Öffnen der Anrufliste automatisch als gelesen markiert, inkl. Anzeige der Anzahl ungelesener verpasster Anrufe",
-                "Code-Blöcke im Chat lassen sich jetzt über ein neues Symbol im Vollbild anzeigen und bearbeiten",
-            ),
-            shortSummary = "Anrufliste markiert verpasste Anrufe automatisch als gelesen, Code-Blöcke im Vollbild bearbeitbar"
         ),
 
     )
