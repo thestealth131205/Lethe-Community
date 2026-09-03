@@ -24,6 +24,18 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.166",
+            title = "Live-Standort deutlich verbessert",
+            items = listOf(
+                "Der eigene Live-Standort in der Chat-Blase und auf der Vollbildkarte bleibt nicht mehr eingefroren, sondern zieht live mit",
+                "Neu: Beim Teilen des Live-Standorts kann die Hintergrund-Standortberechtigung erteilt werden – dann werden Positions-Updates alle 5 statt alle 20 Sekunden übertragen, auch wenn die App im Hintergrund ist",
+                "Auf der Vollbildkarte reißt der eingestellte Zoom/Ausschnitt nicht mehr bei jedem Positions-Update zurück",
+                "Neuer \"A\"-Button auf der Vollbildkarte: aktiviert einen Auto-Zoom, der die Karte bei jedem Update automatisch auf alle geteilten Standorte zentriert",
+            ),
+            shortSummary = "Live-Standort aktualisiert sich zuverlässig, optional alle 5s im Hintergrund, plus Auto-Zoom-Button auf der Karte"
+        ),
+
+        ChangelogEntry(
             version = "10.4.165",
             title = "Startbildschirm-Widgets & Gruppen-Verbesserungen",
             items = listOf(
@@ -56,15 +68,6 @@ object AppChangelog {
                 "Jump or Die: Wer einmal über 1000 Punkte hatte, bekommt bis zum Verlassen des Spiels bei jedem Neustart zwei schwarze Löcher – das zweite erscheint 10 Stufen vor dem ersten",
             ),
             shortSummary = "Kopfhörer-Ausgabe im Media Player korrigiert, zweites schwarzes Loch in Jump or Die"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.161",
-            title = "Flipper-Automat: Respawn-Position korrigiert",
-            items = listOf(
-                "Im Pinball-Spiel spawnt eine festhängende Kugel jetzt leicht links der Mitte statt exakt mittig, damit sie nicht mehr zwischen oberem Bumper und Decke gefangen werden und so Punkte gefarmt werden können",
-            ),
-            shortSummary = "Flipper-Respawn-Position angepasst, um Punkte-Farming zu verhindern"
         ),
 
     )

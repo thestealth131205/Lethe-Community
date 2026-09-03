@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.LinearEasing
@@ -49,6 +50,7 @@ import com.securechat.app.getCurrentLocationOnce
 import com.securechat.app.ui.MainViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.BoundingBox
@@ -206,10 +208,15 @@ fun LiveMapsScreen(
         }
     }
 
-    // Auto-refresh every 20 seconds
+    // Auto-Refresh des eigenen Standorts: bei erteilter Hintergrund-Standort-Berechtigung
+    // alle 5 s (schnelleres Nachziehen), sonst wie bisher alle 20 s. Das Intervall wird pro
+    // Durchlauf neu ermittelt, damit eine nachträglich erteilte Berechtigung sofort greift.
     LaunchedEffect(Unit) {
         while (true) {
-            delay(20_000L)
+            val backgroundGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
+                context.checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) ==
+                    PackageManager.PERMISSION_GRANTED
+            delay(if (backgroundGranted) 5_000L else 20_000L)
             if (context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED
             ) {
@@ -218,9 +225,19 @@ fun LiveMapsScreen(
         }
     }
 
+    // Merkt sich, für welche Teilnehmer-Kombination zuletzt automatisch gezoomt wurde —
+    // verhindert, dass jede reine Positions-Aktualisierung (alle paar Sekunden) den vom
+    // Nutzer eingestellten Zoom/Ausschnitt zurücksetzt. Nur wenn jemand NEU dazukommt
+    // (oder beim allerersten Laden) wird automatisch neu gezoomt.
+    var autoZoomedKeys by remember { mutableStateOf<Set<String>?>(null) }
+
+    // "Auto bester Ausschnitt": wenn aktiv, wird die Karte bei JEDEM Update so gezoomt,
+    // dass alle Pins bestmöglich sichtbar und zentriert sind.
+    var autoFitEnabled by remember { mutableStateOf(false) }
+
     // Marker neu aufbauen, sobald sich Pins oder eigener Standort ändern.
-    // Avatare werden asynchron geladen und gecacht; danach Auto-Zoom auf alle Punkte.
-    LaunchedEffect(mergedPins, myLocation, selfInLivePins) {
+    // Avatare werden asynchron geladen und gecacht; Auto-Zoom nur bei neuen Teilnehmern.
+    LaunchedEffect(mergedPins, myLocation, selfInLivePins, autoFitEnabled) {
         // Versatz bei identischen Positionen, damit mehrere Marker sichtbar bleiben
         val groups = mutableMapOf<Pair<Int, Int>, MutableList<Int>>()
         mergedPins.forEachIndexed { i, pin ->
@@ -266,19 +283,46 @@ fun LiveMapsScreen(
         mapView.overlays.addAll(newOverlays)
         mapView.invalidate()
 
-        // Auto-Zoom auf alle Punkte (nach Layout, damit Breite/Höhe bekannt sind)
-        if (allPoints.isNotEmpty()) {
-            mapView.post {
-                if (allPoints.size >= 2) {
-                    val bb = BoundingBox.fromGeoPoints(allPoints)
-                    try {
-                        mapView.zoomToBoundingBox(bb, true, 120)
-                    } catch (_: Exception) {
+        if (autoFitEnabled) {
+            // "Auto bester Ausschnitt" aktiv: bei jedem Update die Kamera so setzen,
+            // dass alle Pins bestmöglich sichtbar und zentriert sind.
+            if (allPoints.isNotEmpty()) {
+                mapView.post {
+                    if (allPoints.size >= 2) {
+                        val bb = BoundingBox.fromGeoPoints(allPoints)
+                        try {
+                            mapView.zoomToBoundingBox(bb, true, 120)
+                        } catch (_: Exception) {
+                            mapView.controller.animateTo(allPoints[0])
+                        }
+                    } else {
+                        mapView.controller.setZoom(15.0)
                         mapView.controller.animateTo(allPoints[0])
                     }
-                } else {
-                    mapView.controller.setZoom(15.0)
-                    mapView.controller.animateTo(allPoints[0])
+                }
+            }
+        } else {
+            // Auto-Zoom nur beim ersten Laden oder wenn sich die Teilnehmer-Kombination
+            // ändert (neuer Live-Standort kommt dazu / einer verschwindet) — reine
+            // Positions-Updates eines bereits sichtbaren Teilnehmers verändern die
+            // Kamera nicht mehr, damit ein manuell eingestellter Zoom/Ausschnitt bestehen bleibt.
+            val currentKeys = mergedPins.mapTo(mutableSetOf()) { it.senderId }.apply {
+                if (!selfInLivePins && myLocation != null) add("__me__")
+            }
+            if (allPoints.isNotEmpty() && currentKeys != autoZoomedKeys) {
+                autoZoomedKeys = currentKeys
+                mapView.post {
+                    if (allPoints.size >= 2) {
+                        val bb = BoundingBox.fromGeoPoints(allPoints)
+                        try {
+                            mapView.zoomToBoundingBox(bb, true, 120)
+                        } catch (_: Exception) {
+                            mapView.controller.animateTo(allPoints[0])
+                        }
+                    } else {
+                        mapView.controller.setZoom(15.0)
+                        mapView.controller.animateTo(allPoints[0])
+                    }
                 }
             }
         }
@@ -379,6 +423,30 @@ fun LiveMapsScreen(
                     contentColor = MaterialTheme.colorScheme.primary
                 ) {
                     Icon(Icons.Filled.MyLocation, contentDescription = stringResource(R.string.live_maps_center_cd))
+                }
+
+                // "Auto bester Ausschnitt"-Toggle: Klick zeigt Tooltip und schaltet den
+                // automatischen Ausschnitt (alle Pins zentriert/gezoomt) an bzw. aus.
+                val autoFitTooltipState = rememberTooltipState()
+                val autoFitScope = rememberCoroutineScope()
+                TooltipBox(
+                    positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                    tooltip = { PlainTooltip { Text("Auto bester Ausschnitt") } },
+                    state = autoFitTooltipState,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(16.dp)
+                ) {
+                    FloatingActionButton(
+                        onClick = {
+                            autoFitEnabled = !autoFitEnabled
+                            autoFitScope.launch { autoFitTooltipState.show() }
+                        },
+                        containerColor = if (autoFitEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                        contentColor = if (autoFitEnabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
+                    ) {
+                        Text("A", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                    }
                 }
             }
 

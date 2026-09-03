@@ -26,11 +26,14 @@ class LiveLocationService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private val stopRunnable = Runnable { stopSelf() }
 
+    private var backgroundMode = false
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START_OR_RESUME -> {
                 val receiverId = intent.getStringExtra(EXTRA_RECEIVER_ID) ?: ""
                 val durationMs = intent.getLongExtra(EXTRA_DURATION_MS, 30 * 60 * 1000L)
+                backgroundMode = intent.getBooleanExtra(EXTRA_BACKGROUND_GRANTED, false)
                 _activeReceiverId = receiverId
                 _isRunning.tryEmit(true)
                 startForegroundNotification()
@@ -40,7 +43,10 @@ class LiveLocationService : Service() {
             }
             ACTION_STOP -> stopSelf()
         }
-        return START_NOT_STICKY
+        // Mit Hintergrund-Standort-Recht den Dienst bei einem System-Kill neu starten und das
+        // Intent (Empfänger + Dauer) erneut zustellen, damit das Teilen im Hintergrund zuverlässig
+        // weiterläuft. Ohne das Recht bleibt es beim bisherigen Foreground-only-Verhalten.
+        return if (backgroundMode) START_REDELIVER_INTENT else START_NOT_STICKY
     }
 
     private fun startForegroundNotification() {
@@ -60,7 +66,10 @@ class LiveLocationService : Service() {
         )
         val notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("Live-Standort wird geteilt")
-            .setContentText("Tippe um das Teilen zu beenden")
+            .setContentText(
+                if (backgroundMode) "Wird auch im Hintergrund geteilt · Tippe um zu beenden"
+                else "Tippe um das Teilen zu beenden"
+            )
             .setSmallIcon(R.drawable.ic_notification)
             .addAction(0, "Beenden", stopPendingIntent)
             .setOngoing(true)
@@ -121,6 +130,7 @@ class LiveLocationService : Service() {
         const val ACTION_STOP = "com.securechat.app.LIVE_LOC_STOP"
         const val EXTRA_RECEIVER_ID = "receiver_id"
         const val EXTRA_DURATION_MS = "duration_ms"
+        const val EXTRA_BACKGROUND_GRANTED = "background_granted"
         private const val NOTIFICATION_ID = 8901
 
         private val _locationUpdates = MutableSharedFlow<LocationUpdate>(

@@ -29,6 +29,9 @@
     <!-- STANDORT (Für Entfernungsmessung in der Liste) -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Hintergrund-Standort: optional, für zuverlässiges Live-Standort-Teilen wenn die App
+         nicht im Vordergrund ist. Lehnt der Nutzer ab, wird weiter der Foreground-Service genutzt. -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
     <!-- Medien-Zugriff: READ_EXTERNAL_STORAGE nur für API < 33, darüber READ_MEDIA_* -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"

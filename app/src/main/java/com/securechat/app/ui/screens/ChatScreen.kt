@@ -6797,6 +6797,33 @@ private fun AttachLocationSubMenu(
     var uploadedPreviewUrl by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
 
+    // Startet den Live-Standort-Service. `backgroundGranted` = Hintergrund-Standort erlaubt →
+    // der Service läuft dann im Hintergrund-Modus (Updates auch wenn die App nicht sichtbar ist),
+    // sonst wird wie bisher der reine Foreground-Service genutzt.
+    fun startLiveLocationService(durationMs: Long, backgroundGranted: Boolean) {
+        val svcIntent = Intent(context, com.securechat.app.LiveLocationService::class.java).apply {
+            action = com.securechat.app.LiveLocationService.ACTION_START_OR_RESUME
+            putExtra(com.securechat.app.LiveLocationService.EXTRA_RECEIVER_ID, receiverId)
+            putExtra(com.securechat.app.LiveLocationService.EXTRA_DURATION_MS, durationMs)
+            putExtra(com.securechat.app.LiveLocationService.EXTRA_BACKGROUND_GRANTED, backgroundGranted)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            context.startForegroundService(svcIntent)
+        } else {
+            context.startService(svcIntent)
+        }
+    }
+
+    // Merkt sich die Dauer, während die Hintergrund-Standort-Abfrage läuft.
+    var pendingLiveDurationMs by remember { mutableStateOf<Long?>(null) }
+    val backgroundLocationLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        // Egal ob erlaubt oder abgelehnt: Service starten (abgelehnt → Foreground-Modus wie bisher).
+        pendingLiveDurationMs?.let { startLiveLocationService(it, granted) }
+        pendingLiveDurationMs = null
+    }
+
     fun fetchLocation() {
         locationLoading = true
         getCurrentLocationOnce(context) { loc ->
@@ -6981,7 +7008,9 @@ private fun AttachLocationSubMenu(
                             "\uD83D\uDCCDlive:${selectedMode} https://maps.google.com/?q=${loc.latitude},${loc.longitude}$previewSuffix"
                         }
                         onSend(msg)
-                        // Foreground Service für kontinuierliches Live-Tracking starten
+                        // Live-Tracking starten. Vorher – falls noch nicht vorhanden – den
+                        // Hintergrund-Standort anfragen: erlaubt der Nutzer, läuft der Service im
+                        // Hintergrund-Modus, sonst wird wie bisher der Foreground-Service genutzt.
                         if (selectedMode != null) {
                             val durationMs = when (selectedMode) {
                                 "30m" -> 30 * 60 * 1000L
@@ -6991,15 +7020,15 @@ private fun AttachLocationSubMenu(
                                 "8h"  -> 8 * 60 * 60 * 1000L
                                 else  -> 30 * 60 * 1000L
                             }
-                            val svcIntent = Intent(context, com.securechat.app.LiveLocationService::class.java).apply {
-                                action = com.securechat.app.LiveLocationService.ACTION_START_OR_RESUME
-                                putExtra(com.securechat.app.LiveLocationService.EXTRA_RECEIVER_ID, receiverId)
-                                putExtra(com.securechat.app.LiveLocationService.EXTRA_DURATION_MS, durationMs)
-                            }
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                context.startForegroundService(svcIntent)
+                            val hasBackground = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
+                                context.checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) ==
+                                PackageManager.PERMISSION_GRANTED
+                            if (hasBackground) {
+                                startLiveLocationService(durationMs, true)
                             } else {
-                                context.startService(svcIntent)
+                                // Abfrage anstoßen; der Service wird im Callback (erlaubt/abgelehnt) gestartet.
+                                pendingLiveDurationMs = durationMs
+                                backgroundLocationLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
                             }
                         }
                     }
@@ -9893,13 +9922,27 @@ internal fun MessageBubble(
                         val locPreviewUrl = liveLocMatch?.groupValues?.get(4)?.takeIf { it.isNotEmpty() }
                             ?: locMatch?.groupValues?.get(3)?.takeIf { it.isNotEmpty() }
                         if (locLat != null && locLng != null) {
+                            // Bei Live-Standort die aktuelle Position aus den Echtzeit-Updates
+                            // (WS "location_update") verwenden statt der einmalig geteilten
+                            // Koordinaten aus der Nachricht selbst — sonst bleibt die Bubble
+                            // beim Absende-Zeitpunkt eingefroren, egal wie weit sich der
+                            // Sender bewegt.
+                            val livePin = if (liveDuration != null && viewModel != null) {
+                                val livePins by viewModel.liveLocationPins.collectAsState()
+                                livePins[message.senderId]?.takeIf { System.currentTimeMillis() - it.updatedAt < 60_000L }
+                            } else null
+                            val effectiveLat = livePin?.lat ?: locLat
+                            val effectiveLng = livePin?.lng ?: locLng
                             LocationMessageBubble(
-                                lat = locLat,
-                                lng = locLng,
+                                lat = effectiveLat,
+                                lng = effectiveLng,
                                 isFromMe = isFromMe,
                                 liveDuration = liveDuration,
                                 messageTimestamp = message.timestamp,
-                                previewImageUrl = locPreviewUrl,
+                                // Statischer Vorschau-Screenshot nur bei einmaligem Standort
+                                // sinnvoll — bei Live-Standort muss die Karte auf die
+                                // aktuelle Position zentriert nachgeladen werden.
+                                previewImageUrl = if (liveDuration != null) null else locPreviewUrl,
                                 onTapLive = if (liveDuration != null) {
                                     { onNavigateToLiveMaps?.invoke(chatId) }
                                 } else null

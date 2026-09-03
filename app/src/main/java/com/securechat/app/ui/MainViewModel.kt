@@ -7612,6 +7612,12 @@ class MainViewModel @Inject constructor(
                     receiverId = update.receiverId,
                     payload = mapOf("lat" to update.lat, "lng" to update.lng)
                 )
+                // Eigenen Standort auch lokal einspeisen, damit der eigene Pin auf der
+                // eigenen Live-Karte / in der Chat-Bubble live nachzieht statt auf der
+                // statischen Ursprungsposition aus der Chat-Nachricht eingefroren zu bleiben.
+                _currentUser.value?.userId?.let { myId ->
+                    _liveLocationPins.value = _liveLocationPins.value + (myId to LiveLocationPin(myId, update.lat, update.lng))
+                }
             }
         }
     }
