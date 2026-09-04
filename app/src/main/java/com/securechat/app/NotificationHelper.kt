@@ -628,16 +628,30 @@ class NotificationHelper @Inject constructor(
         val title = if (callType == "VOICE") "Eingehender Sprachanruf" else "Eingehender Videoanruf"
         val text  = if (callType == "VOICE") "$callerName ruft an …" else "$callerName möchte einen Videoanruf …"
 
+        // CallStyle ist zwingend nötig, damit WearOS-Uhren (und Android Auto) die
+        // Benachrichtigung als echten Anruf mit Annehmen/Ablehnen-Anruf-UI erkennen –
+        // eine reine setCategory(CATEGORY_CALL)+addAction-Notification wird auf der Uhr
+        // nur als gewöhnliche Benachrichtigung angezeigt.
+        val caller = Person.Builder()
+            .setName(callerName)
+            .setImportant(true)
+            .build()
+
+        val callStyle = NotificationCompat.CallStyle.forIncomingCall(
+            caller,
+            declinePendingIntent,
+            acceptPendingIntent
+        )
+
         val builder = NotificationCompat.Builder(context, CHANNEL_ID_CALLS)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setStyle(callStyle)
             .setAutoCancel(false)
             .setOngoing(true)  // Nicht swipe-away-bar während der Klingelphase
-            .addAction(android.R.drawable.ic_menu_call, "Annehmen", acceptPendingIntent)
-            .addAction(android.R.drawable.ic_delete, "Ablehnen", declinePendingIntent)
 
         if (canUseFullScreen) {
             builder.setFullScreenIntent(fullScreenPendingIntent, true)

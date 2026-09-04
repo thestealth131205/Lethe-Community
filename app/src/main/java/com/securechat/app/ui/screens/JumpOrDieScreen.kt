@@ -656,9 +656,14 @@ private fun stepJod(gs: JodGs, canvasW: Float, canvasH: Float, sensor: JodSensor
         if (item.collected) continue
         val iCX = item.worldX + gs.itemSz / 2f
         val iCY = item.worldY + gs.itemSz / 2f
+        // Schwarzes Loch, Schutzschild und Bubble: 50 % größere Trefferzone (einfacher zu erreichen)
+        val hitMul = when (item.type) {
+            JodItemType.WORMHOLE, JodItemType.SHIELD, JodItemType.BUBBLE -> 1.5f
+            else -> 1f
+        }
         // Spring: Spielerfüße müssen zur Spring-Oberkante passen – vertikale Toleranz entsprechend größer
-        val vTol = if (item.type == JodItemType.SPRING) (gs.playerH + gs.itemSz) * 0.6f else gs.playerH * 0.6f
-        if (abs(pCenterX - iCX) < gs.playerW * 0.6f && abs(pCenterY - iCY) < vTol) {
+        val vTol = (if (item.type == JodItemType.SPRING) (gs.playerH + gs.itemSz) * 0.6f else gs.playerH * 0.6f) * hitMul
+        if (abs(pCenterX - iCX) < gs.playerW * 0.6f * hitMul && abs(pCenterY - iCY) < vTol) {
             when (item.type) {
                 JodItemType.SPRING  -> {
                     // Swept-Collision wie bei Plattformen: prevFeetY prüfen damit schneller Fall nicht überspringt
@@ -986,9 +991,12 @@ private fun DrawScope.drawJodGame(
                     dstSize = IntSize(jW.toInt(), jH.toInt()))
             } else drawJetpack(item.worldX, sy, gs.itemSz)
             JodItemType.SHIELD  -> if (shieldItemBitmap != null) {
+                val sSz = specialItemSz * 1.5f   // 50 % größer, einfacher zu erreichen
+                val sX  = item.worldX - (sSz - specialItemSz) / 2f
+                val sYc = sy - (sSz - specialItemSz) / 2f
                 drawImage(shieldItemBitmap,
-                    dstOffset = IntOffset(item.worldX.toInt(), sy.toInt()),
-                    dstSize = IntSize(specialItemSz.toInt(), specialItemSz.toInt()))
+                    dstOffset = IntOffset(sX.toInt(), sYc.toInt()),
+                    dstSize = IntSize(sSz.toInt(), sSz.toInt()))
             }
             JodItemType.HEART   -> if (heartItemBitmap != null) {
                 drawImage(heartItemBitmap,
@@ -996,18 +1004,24 @@ private fun DrawScope.drawJodGame(
                     dstSize = IntSize(specialItemSz.toInt(), specialItemSz.toInt()))
             }
             JodItemType.BUBBLE  -> if (bubbleBitmap != null) {
-                val bH = specialItemSz
+                val bH = specialItemSz * 1.5f    // 50 % größer, einfacher zu erreichen
                 val bW = bH * (196f / 256f)
+                val bX = item.worldX - (bW - specialItemSz * (196f / 256f)) / 2f
+                val bY = sy - (bH - specialItemSz) / 2f
                 drawImage(bubbleBitmap,
-                    dstOffset = IntOffset(item.worldX.toInt(), sy.toInt()),
+                    dstOffset = IntOffset(bX.toInt(), bY.toInt()),
                     dstSize = IntSize(bW.toInt(), bH.toInt()))
             }
             JodItemType.WORMHOLE -> {
-                val wSz = specialItemSz * 1.4f
+                val wBase = specialItemSz * 1.4f
+                val wSz = wBase * 1.5f            // 50 % größer, einfacher zu erreichen
+                // um die ursprüngliche Position zentriert wachsen lassen
+                val cxW = item.worldX + wBase / 2f
+                val cyW = sy + wBase / 2f
                 val pulse = (sin(gs.frameCount * 0.08f) * 0.12f + 1f).toFloat()
                 val wSzP = wSz * pulse
-                val wX = item.worldX - (wSzP - wSz) / 2f
-                val wY = sy - (wSzP - wSz) / 2f
+                val wX = cxW - wSzP / 2f
+                val wY = cyW - wSzP / 2f
                 if (wormholeBitmap != null) {
                     drawImage(wormholeBitmap,
                         dstOffset = IntOffset(wX.toInt(), wY.toInt()),
@@ -1016,11 +1030,11 @@ private fun DrawScope.drawJodGame(
                     drawCircle(
                         Brush.radialGradient(
                             listOf(Color(0xFFAA00FF), Color(0xFF6600CC), Color.Transparent),
-                            center = Offset(item.worldX + wSz / 2f, sy + wSz / 2f),
+                            center = Offset(cxW, cyW),
                             radius = wSzP / 2f
                         ),
                         radius = wSzP / 2f,
-                        center = Offset(item.worldX + wSz / 2f, sy + wSz / 2f)
+                        center = Offset(cxW, cyW)
                     )
                 }
             }

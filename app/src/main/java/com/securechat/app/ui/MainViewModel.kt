@@ -10984,12 +10984,20 @@ class MainViewModel @Inject constructor(
                     groupId           = groupId,
                     groupName         = groupName
                 )
-                if (!_onlyFcmMode.value) notificationHelper.showIncomingCallNotification(callerName, callType)
-                // Bildschirm gesperrt ODER App im Hintergrund → IncomingCallActivity starten.
-                // So ist immer eine persistente Anruf-UI sichtbar, unabhängig davon ob
-                // USE_FULL_SCREEN_INTENT gewährt wurde oder der Heads-Up-Banner weggeklickt wird.
+                // App im Vordergrund: die In-App-Anruf-UI (incoming_call-Screen) zeigt den Anruf
+                // bereits im Vollbild an. Dann KEINE zusätzliche Heads-Up-Benachrichtigung posten –
+                // sonst erscheint erst der kleine Banner mit den zwei Buttons und ~1s später nochmal
+                // die Vollbild-UI (die vom Nutzer gemeldete Doppel-Benachrichtigung).
                 val kg = context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
-                if (kg?.isKeyguardLocked == true || !_isAppInForeground.value) {
+                val screenLocked = kg?.isKeyguardLocked == true
+                if (!_isAppInForeground.value && !_onlyFcmMode.value) {
+                    notificationHelper.showIncomingCallNotification(callerName, callType)
+                }
+                // Vollbild-Activity NUR bei gesperrtem Bildschirm selbst starten. Im entsperrten
+                // Hintergrund bleibt es beim Heads-Up-Banner mit Annehmen/Ablehnen-Buttons, das
+                // beim Wegklicken erneut per FCM erscheint – kein Vollbild-Hijack, der ~1s nach dem
+                // Banner über die gerade genutzte App poppt.
+                if (screenLocked) {
                     IncomingCallActivity.startFromBackground(context)
                 }
                 startRingtone()
@@ -11268,6 +11276,12 @@ class MainViewModel @Inject constructor(
                 // mit der Person hinterlassen, damit der Empfänger den Anrufversuch sieht.
                 val failedCallPartner = _activeCallPartnerId.value ?: lastCallOfferPartner
                 if (failedCallPartner != null) {
+                    // Falls der Empfänger-WS zwischenzeitlich doch wieder da ist und er klingelt,
+                    // beenden wir den Anruf sauber: Der Server leitet dieses call_end über den
+                    // WebSocket an den Empfänger weiter (main.py) → dessen call_end-Handler stoppt
+                    // Klingeln/Notification sofort. (Kein FCM-Fallback mehr: ws-Geräte werden über
+                    // den persistenten WebSocketKeepaliveService erreicht, nicht per Push.)
+                    webSocketManager.sendMessage("call_end", failedCallPartner, emptyMap<String, Any>())
                     recordMissedCallAttempt(failedCallPartner, _activeCallType.value)
                     lastCallOfferPartner = null   // verhindert doppelten Hinweis bei Folge-Events
                 }

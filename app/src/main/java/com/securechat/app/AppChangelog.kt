@@ -24,6 +24,18 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.167",
+            title = "Anruf-Benachrichtigungen & Jump or Die verbessert",
+            items = listOf(
+                "Eingehende Anrufe werden auf der SmartWatch (WearOS) jetzt korrekt als Anruf mit Annehmen/Ablehnen angezeigt statt nur als normale Nachricht",
+                "Beim Videoanruf erscheint beim Angerufenen nicht mehr kurz nacheinander erst ein Banner und dann die Vollbildansicht – je nach Bildschirmzustand nur noch eine der beiden",
+                "Bricht der Anrufer ab, weil der Angerufene nicht erreichbar ist, hört es bei diesem jetzt sofort auf zu klingeln, statt bis zum eigenen Timeout weiterzulaufen",
+                "Jump or Die: Schwarzes Loch, Schutzschild und Blase sind jetzt 50% größer und leichter zu treffen",
+            ),
+            shortSummary = "WearOS-Anrufanzeige, Anruf-Benachrichtigung entdoppelt, zuverlässiger Anrufabbruch, größere Items in Jump or Die"
+        ),
+
+        ChangelogEntry(
             version = "10.4.166",
             title = "Live-Standort deutlich verbessert",
             items = listOf(
@@ -58,16 +70,6 @@ object AppChangelog {
                 "Ein fehlgeschlagener SMS-Versand beim Registrieren wird jetzt sofort als Fehlermeldung angezeigt statt stillschweigend zu warten",
             ),
             shortSummary = "Videowiedergabe, Antwort-Benachrichtigung mit Profilbild und SMS-Versand bei der Registrierung verbessert"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.162",
-            title = "Kopfhörer-Ausgabe & Jump-or-Die verbessert",
-            items = listOf(
-                "Lethe Media Player: Der Ton kommt jetzt zuverlässig über eingesteckte Klinken-Kopfhörer, USB- und Bluetooth-Geräte (auch neuere LE-Audio-Geräte) statt fälschlich über den Lautsprecher",
-                "Jump or Die: Wer einmal über 1000 Punkte hatte, bekommt bis zum Verlassen des Spiels bei jedem Neustart zwei schwarze Löcher – das zweite erscheint 10 Stufen vor dem ersten",
-            ),
-            shortSummary = "Kopfhörer-Ausgabe im Media Player korrigiert, zweites schwarzes Loch in Jump or Die"
         ),
 
     )
