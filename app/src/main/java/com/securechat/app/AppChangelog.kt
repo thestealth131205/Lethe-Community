@@ -24,6 +24,19 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.168",
+            title = "Code-Anhänge & Chat-Verbesserungen",
+            items = listOf(
+                "Neu: Dateien lassen sich jetzt als Code-Anhang senden (eigenes Symbol im Anhang-Menü) – werden im Chat als Codeblock mit Syntax-Hervorhebung angezeigt und mit Originalnamen gespeichert",
+                "Neu: Ein Codeblock lässt sich auch direkt im Textfeld eingeben (/* dateiname.endung ... */) – wird automatisch als Code-Datei gesendet",
+                "Der Code-Betrachter hat jetzt einen Download-Button und erkennt zusätzlich C#, C++, HTML, PHP, Java, XML, JSON, YAML und Python",
+                "Tippt man auf eine zitierte Nachricht, wird die Originalnachricht beim Hinspringen kurz hervorgehoben",
+                "Circle- und normale Videos im Chat werden nach dem ersten Abspielen nicht mehr schwarz und lassen sich weiterhin abspielen",
+            ),
+            shortSummary = "Code-Anhänge im Chat, verbesserter Code-Betrachter, Zitat-Hervorhebung und Video-Wiedergabe-Fix"
+        ),
+
+        ChangelogEntry(
             version = "10.4.167",
             title = "Anruf-Benachrichtigungen & Jump or Die verbessert",
             items = listOf(
@@ -58,18 +71,6 @@ object AppChangelog {
                 "Profil- und Gruppenbilder werden regelmäßig auf Aktualität geprüft und nur bei echter Änderung neu geladen",
             ),
             shortSummary = "Startbildschirm-Widgets für Kontakte/Gruppen, schnellere Gruppennachrichten und zuverlässigere Gruppenbilder"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.163",
-            title = "Video-Wiedergabe & Benachrichtigungen verbessert",
-            items = listOf(
-                "Ältere, hochgescrollte Videos im Chat spielen jetzt zuverlässig ab, statt beim Antippen schwarz mit 00:00 zu bleiben – bis dahin wird ein Ladekreis angezeigt",
-                "Beim direkten Antworten aus einer Benachrichtigung wird jetzt wieder das eigene Profilbild neben \"Du\" angezeigt",
-                "Bei der Registrierung wird eine bereits eingegebene Landesvorwahl nicht mehr fälschlich verdoppelt, wodurch die SMS mit dem Code zuverlässig ankommt",
-                "Ein fehlgeschlagener SMS-Versand beim Registrieren wird jetzt sofort als Fehlermeldung angezeigt statt stillschweigend zu warten",
-            ),
-            shortSummary = "Videowiedergabe, Antwort-Benachrichtigung mit Profilbild und SMS-Versand bei der Registrierung verbessert"
         ),
 
     )

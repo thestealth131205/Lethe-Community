@@ -328,6 +328,15 @@ interface ApiService {
         @Part file: MultipartBody.Part
     ): Response<Map<String, String>>
 
+    /** Code-Datei-Upload: Server speichert unter /uploads/code/{chat_id}/ mit Originalnamen + Endung. */
+    @Multipart
+    @POST("upload/media")
+    suspend fun uploadCodeFile(
+        @Part("media_type") mediaType: okhttp3.RequestBody,
+        @Part("chat_id") chatId: okhttp3.RequestBody,
+        @Part file: MultipartBody.Part
+    ): Response<Map<String, String>>
+
     @Multipart
     @POST("chats/{chatId}/listen-together/upload")
     suspend fun uploadListenTogetherTrack(

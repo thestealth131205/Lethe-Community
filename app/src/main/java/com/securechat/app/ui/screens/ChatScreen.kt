@@ -155,6 +155,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -1291,6 +1292,7 @@ fun ChatScreen(
     onNavigateToImageEditor: ((Uri) -> Unit)? = null,
     onNavigateToMultiImageEditor: ((List<Uri>) -> Unit)? = null,
     onOpenDocument: ((url: String, fileName: String) -> Unit)? = null,
+    onOpenCode: ((url: String, fileName: String) -> Unit)? = null,
     onNavigateTo3DViewer: ((fileUrl: String, filename: String, textureUrl: String) -> Unit)? = null,
     onNavigateToContent: ((contentId: String) -> Unit)? = null,
     onNavigateToSpark: ((sparkId: String) -> Unit)? = null,
@@ -1581,6 +1583,8 @@ fun ChatScreen(
     // Auswahl-Modus
     var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
     val isSelectionMode = selectedIds.isNotEmpty()
+    // Ziel-Nachricht, die nach einem Zitat-Sprung kurz hervorgehoben wird (wie beim Gedrückthalten)
+    var replyJumpHighlightLocalId by remember { mutableStateOf<Long?>(null) }
     var showForwardSheet by remember { mutableStateOf(false) }
     var showMessageInfoDialog by remember { mutableStateOf(false) }
     var showSelectionMoreMenu by remember { mutableStateOf(false) }
@@ -2135,6 +2139,9 @@ fun ChatScreen(
     val documentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         uri?.let { viewModel.sendDocumentMessage(chatId, it, isGroup) }
     }
+    val codeLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        uri?.let { viewModel.sendCodeMessage(chatId, it, isGroup) }
+    }
     var pendingObjUri by remember { mutableStateOf<Uri?>(null) }
     // Zustand für den Preis-Dialog vor dem 3D-Versand (zusammengefasst um Register zu sparen)
     var threeDPending by remember { mutableStateOf(ThreeDPending()) }
@@ -2686,6 +2693,7 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
                             "Bild / Video" to "Foto oder Video aus der Galerie auswählen und senden.",
                             "Musik" to "Musikdatei aus dem Gerät senden.",
                             "Dokument" to "Beliebige Datei (PDF, ZIP, …) versenden.",
+                            "Code" to "Code-/Textdatei senden – wird im Chat als Codeblock angezeigt.",
                             "Standort" to "Aktuellen GPS-Standort als Google-Maps-Link senden.",
                             "Umfrage" to "Abstimmung mit Frage und Antwortoptionen erstellen.",
                             "3D-Datei" to "STL-, 3MF- oder OBJ-Datei senden und im Chat als 3D-Vorschau anzeigen lassen."
@@ -3796,6 +3804,7 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
 
                                     val isSelected = msg.localId in selectedIds
                                     val isSearchHighlight = searchQuery.isNotBlank() && msg.localId == currentSearchResultLocalId
+                                    val isReplyJumpHighlight = msg.localId == replyJumpHighlightLocalId
                                     var offsetX by remember { mutableStateOf(0f) }
                                     val msgIsFromMe = currentUserForSound?.userId?.let { msg.senderId == it } ?: (msg.senderId != chatId)
                                     Row(
@@ -3805,6 +3814,7 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
                                             .background(
                                                 when {
                                                     isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+                                                    isReplyJumpHighlight -> MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
                                                     isSearchHighlight -> Color(0xFFFFEB3B).copy(alpha = 0.25f)
                                                     else -> Color.Transparent
                                                 }
@@ -3921,8 +3931,18 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
                                                             ci.entity.senderId == msg.replyToSenderId)
                                                     )
                                                 }
-                                                if (targetIdx >= 0) scope.launch {
-                                                    listState.animateScrollToItem(targetIdx)
+                                                if (targetIdx >= 0) {
+                                                    val targetItem = chatItems[targetIdx]
+                                                    scope.launch {
+                                                        listState.animateScrollToItem(targetIdx)
+                                                        if (targetItem is ChatListItem.Message) {
+                                                            replyJumpHighlightLocalId = targetItem.entity.localId
+                                                            delay(2000L)
+                                                            if (replyJumpHighlightLocalId == targetItem.entity.localId) {
+                                                                replyJumpHighlightLocalId = null
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                             },
                                             partnerName = contact?.username ?: contact?.fakeNumber,
@@ -3955,6 +3975,7 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
                                             },
                                             isSelectionMode = isSelectionMode,
                                             onOpenDocument = onOpenDocument,
+                                            onOpenCode = onOpenCode,
                                             onNavigateTo3DViewer = onNavigateTo3DViewer,
                                             onNavigateToContent = onNavigateToContent,
                                             onNavigateToSpark = onNavigateToSpark,
@@ -4600,6 +4621,7 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
                                     Triple(Icons.Default.MusicNote,   "Musik",           Color(0xFFFF9800)),
                                     Triple(Icons.Default.Mic,         "Sprach-\nnachricht", Color(0xFFE91E63)),
                                     Triple(Icons.Default.Description, "Dokument",        Color(0xFF607D8B)),
+                                    Triple(Icons.Default.Code,        "Code",            Color(0xFF37474F)),
                                     Triple(Icons.Default.LocationOn,  "Standort",        Color(0xFF009688)),
                                     Triple(Icons.Default.Poll,        "Umfrage",         Color(0xFF9C27B0)),
                                     Triple(Icons.Default.ViewInAr,    "3D-Datei\n.stl .obj .3mf", Color(0xFFA8A800)),
@@ -4614,6 +4636,7 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
                                         "Musik"           -> audioMusicLauncher.launch("audio/*")
                                         "Sprach-\nnachricht" -> audioLauncher.launch("audio/*")
                                         "Dokument"        -> documentLauncher.launch("*/*")
+                                        "Code"            -> codeLauncher.launch("*/*")
                                         "Standort"        -> {
                                             if (context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
                                                 == PackageManager.PERMISSION_GRANTED
@@ -4989,7 +5012,10 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
                                                 (reply?.mediaUrl ?: reply?.content)?.take(200)
                                             else reply?.content?.take(200)
                                             val lp = linkPreview
-                                            if (lp != null) {
+                                            val inlineCode = if (lp == null) viewModel.extractInlineCodeBlock(sendTxt) else null
+                                            if (inlineCode != null) {
+                                                viewModel.sendCodeText(chatId, inlineCode.first, inlineCode.second, isGroup)
+                                            } else if (lp != null) {
                                                 val json = org.json.JSONObject().apply {
                                                     put("url", lp.url); put("title", lp.title)
                                                     if (lp.description != null) put("description", lp.description)
@@ -5304,6 +5330,21 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
 
                         fun doSend() {
                             if (sendText.isBlank()) return
+                            val inlineCode = if (lp == null) viewModel.extractInlineCodeBlock(sendText) else null
+                            if (inlineCode != null) {
+                                viewModel.sendCodeText(chatId, inlineCode.first, inlineCode.second, isGroup)
+                                replyToMessage = null
+                                textState = TextFieldValue("")
+                                showEmojiPanel = false
+                                vibrateShort()
+                                if (chatSoundSendOn) {
+                                    try {
+                                        val tg = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 60)
+                                        tg.startTone(ToneGenerator.TONE_PROP_BEEP, 80)
+                                    } catch (_: Exception) {}
+                                }
+                                return
+                            }
                             if (lp != null) {
                                 val rawText = textState.text.trim()
                                 val json = org.json.JSONObject().apply {
@@ -5940,6 +5981,7 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
                                 Triple(Icons.Default.MusicNote,   "Musik",           Color(0xFFFF9800)),
                                 Triple(Icons.Default.Mic,         "Sprach-\nnachricht", Color(0xFFE91E63)),
                                 Triple(Icons.Default.Description, "Dokument",        Color(0xFF607D8B)),
+                                Triple(Icons.Default.Code,        "Code",            Color(0xFF37474F)),
                                 Triple(Icons.Default.LocationOn,  "Standort",        Color(0xFF009688)),
                                 Triple(Icons.Default.Poll,        "Umfrage",         Color(0xFF9C27B0)),
                                 Triple(Icons.Default.ViewInAr,    "3D-Datei\n.stl .obj .3mf", Color(0xFFA8A800)),
@@ -5954,6 +5996,7 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
                                     "Musik"           -> { showAttachSheet = false; audioMusicLauncher.launch("audio/*") }
                                     "Sprach-\nnachricht" -> { showAttachSheet = false; audioLauncher.launch("audio/*") }
                                     "Dokument"        -> { showAttachSheet = false; documentLauncher.launch("*/*") }
+                                    "Code"            -> { showAttachSheet = false; codeLauncher.launch("*/*") }
                                     "Standort"        -> {
                                         if (context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
                                             == PackageManager.PERMISSION_GRANTED
@@ -7637,6 +7680,7 @@ internal fun MessageBubble(
     onLongClick: () -> Unit = {},
     isSelectionMode: Boolean = false,
     onOpenDocument: ((url: String, fileName: String) -> Unit)? = null,
+    onOpenCode: ((url: String, fileName: String) -> Unit)? = null,
     onNavigateTo3DViewer: ((fileUrl: String, filename: String, textureUrl: String) -> Unit)? = null,
     onNavigateToContent: ((contentId: String) -> Unit)? = null,
     onNavigateToSpark: ((sparkId: String) -> Unit)? = null,
@@ -9163,6 +9207,33 @@ internal fun MessageBubble(
                             }
                         )
                     }
+                    "code" -> {
+                        val codeAccent = MaterialTheme.colorScheme.primary
+                        val codeUrl = run {
+                            val blob = message.content ?: ""
+                            try { org.json.JSONObject(blob).optString("file_url", "").ifBlank { null } }
+                            catch (_: Exception) { null }
+                        } ?: message.mediaUrl ?: ""
+                        CodeMessageCard(
+                            contentBlob = message.content ?: "",
+                            mediaUrl = codeUrl,
+                            accentColor = codeAccent,
+                            metaColor = metaColor,
+                            sentAt = timeText,
+                            onOpen = {
+                                if (!isSelectionMode) {
+                                    val blob = message.content ?: ""
+                                    val fileName = try {
+                                        org.json.JSONObject(blob).optString("filename", "").ifBlank { null }
+                                    } catch (_: Exception) { null }
+                                        ?: codeUrl.substringAfterLast('/').ifBlank { "Code" }
+                                    if (codeUrl.isNotBlank()) {
+                                        (onOpenCode ?: onOpenDocument)?.invoke(codeUrl, fileName)
+                                    }
+                                }
+                            }
+                        )
+                    }
                     "video" -> {
                         val uploadProgress = myVideoProgress
                         val videoUrl = message.mediaUrl ?: ""
@@ -9364,12 +9435,10 @@ internal fun MessageBubble(
                                                     setMediaItem(MediaItem.fromUri(resolvedUri))
                                                     prepare()
                                                     playWhenReady = true
-                                                    // Nach Pause/Stopp Video in den Movies-Ordner verschieben.
-                                                    addListener(object : androidx.media3.common.Player.Listener {
-                                                        override fun onIsPlayingChanged(isPlaying: Boolean) {
-                                                            if (!isPlaying) viewModel?.exportVideoToMovies(videoUrl, playChatId)
-                                                        }
-                                                    })
+                                                    // Export in die Galerie erst in onDispose: moveToPublic()
+                                                    // löscht die Cache-Datei, auf die dieser Player noch zeigt –
+                                                    // ein Export beim Pausieren würde Wiedergabe/Seek danach
+                                                    // schwarz machen.
                                                 }
                                             }
                                             DisposableEffect(exoPlayer) {
@@ -10516,7 +10585,10 @@ private fun CircleVideoMessageContent(
                 addListener(object : androidx.media3.common.Player.Listener {
                     override fun onIsPlayingChanged(isPlaying: Boolean) {
                         isCirclePlaying = isPlaying
-                        if (!isPlaying) viewModel?.exportVideoToMovies(videoUrl, circleChatId)
+                        // Export in die Galerie NICHT hier: moveToPublic() löscht die
+                        // Cache-Datei, auf die dieser Player noch zeigt – dann wäre das
+                        // Video beim erneuten prepare() (Antippen/Wiederholen) schwarz.
+                        // Der Export läuft erst in onDispose, wenn der Player entfernt wird.
                     }
                     override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                         // Häufigster Fall: zu viele gleichzeitige Hardware-Decoder,
@@ -11525,6 +11597,102 @@ fun DocumentMessageCard(
                 modifier = Modifier.size(18.dp)
             )
         }
+    }
+}
+
+/**
+ * Karte für Code-Nachrichten: zeigt Dateiname, einen scrollbaren Codeblock (Monospace) mit der
+ * Text-Vorschau aus dem content_blob und einen „Öffnen"-Button (lädt die Original-Datei herunter).
+ */
+@Composable
+fun CodeMessageCard(
+    contentBlob: String,
+    mediaUrl: String,
+    accentColor: Color,
+    metaColor: Color,
+    sentAt: String = "",
+    onOpen: () -> Unit
+) {
+    val json = try { org.json.JSONObject(contentBlob) } catch (_: Exception) { null }
+    val fileName = json?.optString("filename", "")?.ifBlank { null }
+        ?: mediaUrl.substringAfterLast('/').ifBlank { "Code" }
+    val preview = json?.optString("preview", "") ?: ""
+    val truncated = json?.optBoolean("truncated", false) ?: false
+
+    Column(
+        modifier = Modifier
+            .widthIn(min = 220.dp, max = 320.dp)
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+    ) {
+        // Kopfzeile: Icon + Dateiname + Öffnen-Button
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Code, contentDescription = null, tint = accentColor, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = fileName,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = metaColor.copy(alpha = 0.95f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(accentColor.copy(alpha = 0.13f))
+                    .clickable(onClick = onOpen),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.OpenInNew,
+                    contentDescription = "Öffnen",
+                    tint = accentColor,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+
+        if (preview.isNotBlank()) {
+            Spacer(Modifier.height(6.dp))
+            Surface(
+                color = Color(0xFF1E1E1E),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .heightIn(max = 260.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    val codeExt = fileName.substringAfterLast('.', "").lowercase()
+                    val highlightedPreview = remember(preview, codeExt) {
+                        buildAnnotatedString {
+                            append(highlightCode(preview, codeExt))
+                            if (truncated) append("\n…")
+                        }
+                    }
+                    Text(
+                        text = highlightedPreview,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        color = Color(0xFFD4D4D4),
+                        softWrap = false,
+                        modifier = Modifier
+                            .horizontalScroll(rememberScrollState())
+                            .padding(10.dp)
+                    )
+                }
+            }
+        }
+
+        Text(
+            text = sentAt,
+            fontSize = 10.sp,
+            color = metaColor.copy(alpha = 0.55f),
+            modifier = Modifier.padding(top = 4.dp)
+        )
     }
 }
 
@@ -12707,11 +12875,9 @@ private fun ChatMediaDialog(
                     setMediaItem(MediaItem.fromUri(playUri))
                     prepare()
                     playWhenReady = true
-                    addListener(object : androidx.media3.common.Player.Listener {
-                        override fun onIsPlayingChanged(isPlaying: Boolean) {
-                            if (!isPlaying) viewModel.exportVideoToMovies(fsVideoUrl, fsChatId)
-                        }
-                    })
+                    // Export in die Galerie erst in onDispose: moveToPublic() löscht die
+                    // Cache-Datei, auf die dieser Player noch zeigt – ein Export beim
+                    // Pausieren würde Wiedergabe/Seek danach schwarz machen.
                 }
             }
             DisposableEffect(exoPlayer) {
@@ -13492,11 +13658,9 @@ internal fun ContactProfileDialog(
                     setMediaItem(MediaItem.fromUri(playUri))
                     prepare()
                     playWhenReady = true
-                    addListener(object : androidx.media3.common.Player.Listener {
-                        override fun onIsPlayingChanged(isPlaying: Boolean) {
-                            if (!isPlaying) viewModel.exportVideoToMovies(fsVideoUrl, fsChatId)
-                        }
-                    })
+                    // Export in die Galerie erst in onDispose: moveToPublic() löscht die
+                    // Cache-Datei, auf die dieser Player noch zeigt – ein Export beim
+                    // Pausieren würde Wiedergabe/Seek danach schwarz machen.
                 }
             }
             DisposableEffect(exoPlayer) {

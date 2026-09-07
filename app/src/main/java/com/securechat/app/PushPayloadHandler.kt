@@ -126,6 +126,7 @@ class PushPayloadHandler @Inject constructor(
                         "video"    -> "🎥 Video"
                         "audio"    -> "🎤 Sprachnachricht"
                         "document" -> "📎 Dokument"
+                        "code"     -> "💻 Code"
                         "poll"     -> "📊 Umfrage"
                         else       -> "Neue Nachricht"
                     }
@@ -209,6 +210,7 @@ class PushPayloadHandler @Inject constructor(
                         mediaType == "image"    -> "$senderName: 📷 Bild"
                         mediaType == "video"    -> "$senderName: 🎥 Video"
                         mediaType == "document" -> "$senderName: 📎 Dokument"
+                        mediaType == "code"     -> "$senderName: 💻 Code"
                         mediaType == "poll"     -> "$senderName: 📊 Umfrage"
                         mediaType == "text" && contentBlob.startsWith("v2:") -> {
                             // E2EE-Gruppen-Blob entschlüsseln mit lokalem Sender-Key

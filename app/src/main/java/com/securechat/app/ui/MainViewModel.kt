@@ -5159,6 +5159,9 @@ class MainViewModel @Inject constructor(
     private val _currentDocument = MutableStateFlow<DocumentInfo?>(null)
     val currentDocument: StateFlow<DocumentInfo?> = _currentDocument.asStateFlow()
 
+    private val _currentCode = MutableStateFlow<DocumentInfo?>(null)
+    val currentCode: StateFlow<DocumentInfo?> = _currentCode.asStateFlow()
+
     /** Lädt das Creator-Profil (Banner, Profilbild, Bio, Diamonds, Abo-Preis) vom Server. */
     fun loadCreatorProfile() {
         viewModelScope.launch(Dispatchers.IO) {
@@ -7205,6 +7208,11 @@ class MainViewModel @Inject constructor(
         _currentDocument.value = DocumentInfo(url, fileName)
     }
 
+    /** Setzt die aktuell zu öffnende Code-Datei (URL + Dateiname) für CodeViewerScreen. */
+    fun openCode(url: String, fileName: String) {
+        _currentCode.value = DocumentInfo(url, fileName)
+    }
+
     /** Lädt eine Dokument-Datei (PDF, DOCX, TXT, Quellcode usw.) hoch und sendet sie als Chat-Nachricht. */
     fun sendDocumentMessage(chatId: String, uri: Uri, isGroup: Boolean = false) {
         viewModelScope.launch {
@@ -7315,6 +7323,232 @@ class MainViewModel @Inject constructor(
                 _mediaUploadStatus.value = MediaUploadStatus.Idle
                 _isLoading.value = false
             }
+        }
+    }
+
+    /**
+     * Lädt eine Code-/Textdatei hoch und sendet sie als Chat-Nachricht, die als Codeblock dargestellt
+     * wird. Die Datei wird serverseitig unter /uploads/code/{chat_id}/ mit Originalnamen + Endung
+     * gespeichert. Der content_blob enthält zusätzlich eine Text-Vorschau (für die Inline-Darstellung).
+     */
+    fun sendCodeMessage(chatId: String, uri: Uri, isGroup: Boolean = false) {
+        viewModelScope.launch {
+            _mediaUploadStatus.value = MediaUploadStatus.Uploading(0)
+            _isLoading.value = true
+            if (_currentUser.value == null) return@launch
+            var file: File? = null
+            try {
+                // Originalen Dateinamen aus ContentResolver lesen
+                val fileName = context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    cursor.moveToFirst()
+                    if (idx >= 0) cursor.getString(idx) else null
+                } ?: uri.lastPathSegment ?: "code.txt"
+
+                // Datei in den Cache kopieren (IO-Thread)
+                file = withContext(Dispatchers.IO) {
+                    val dest = File(context.cacheDir, "code_${System.currentTimeMillis()}_$fileName")
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        FileOutputStream(dest).use { input.copyTo(it) }
+                    }
+                    dest
+                }
+                val fileSize = file!!.length()
+
+                // Upload-Größenlimit prüfen (80 MB)
+                if (fileSize > MAX_UPLOAD_BYTES) {
+                    withContext(Dispatchers.IO) { file?.delete() }
+                    _statusMessage.value = "Datei zu groß (max. 80 MB)"
+                    _mediaUploadStatus.value = MediaUploadStatus.Idle
+                    return@launch
+                }
+
+                // Text-Vorschau für den Codeblock aus den ersten 256 KB lesen (UTF-8, best effort)
+                val previewCharLimit = 8000
+                val (previewText, previewTruncated) = withContext(Dispatchers.IO) {
+                    try {
+                        val cap = 256 * 1024
+                        val out = java.io.ByteArrayOutputStream()
+                        file!!.inputStream().use { input ->
+                            val tmp = ByteArray(8192)
+                            var total = 0
+                            while (total < cap) {
+                                val n = input.read(tmp)
+                                if (n <= 0) break
+                                val take = n.coerceAtMost(cap - total)
+                                out.write(tmp, 0, take)
+                                total += take
+                            }
+                        }
+                        val fullText = String(out.toByteArray(), Charsets.UTF_8)
+                        val clipped = if (fullText.length > previewCharLimit) fullText.substring(0, previewCharLimit) else fullText
+                        clipped to (fullText.length > previewCharLimit || fileSize > cap)
+                    } catch (_: Exception) { "" to false }
+                }
+
+                uploadCodeAttachment(chatId, fileName, file!!, previewText, previewTruncated, isGroup)
+            } catch (e: Exception) {
+                withContext(Dispatchers.IO) { runCatching { file?.delete() } }
+                _statusMessage.value = "Upload fehlgeschlagen: ${e.message}"
+                Timber.tag("Chat").e("sendCodeMessage failed", e)
+            } finally {
+                _mediaUploadStatus.value = MediaUploadStatus.Idle
+                _isLoading.value = false
+            }
+        }
+    }
+
+    /**
+     * Erkennt einen Inline-Codeblock der Form `/* dateiname.endung\n...code...*/` im Nachrichtentext.
+     * Die erste Zeile nach der Startmarkierung gibt den Dateinamen (inkl. Endung) an. Rückgabe:
+     * (Dateiname, Code-Inhalt) oder null, wenn der Text kein solcher Codeblock ist.
+     */
+    fun extractInlineCodeBlock(text: String): Pair<String, String>? {
+        val t = text.trim()
+        if (!t.startsWith("/*") || !t.endsWith("*/") || t.length < 4) return null
+        val inner = t.substring(2, t.length - 2)
+        val nl = inner.indexOf('\n')
+        if (nl < 0) return null
+        val fileName = inner.substring(0, nl).trim()
+        // Dateiname muss eine Endung haben und darf keine Pfadtrenner/ungültigen Zeichen enthalten
+        if (!Regex("^[^\\\\/:*?\"<>|\\r\\n]+\\.[A-Za-z0-9]{1,12}$").matches(fileName)) return null
+        val code = inner.substring(nl + 1).trimEnd('\n', '\r')
+        return fileName to code
+    }
+
+    /**
+     * Sendet einen inline eingegebenen Codeblock (`/* dateiname.endung ... */`) als Code-Anhang:
+     * schreibt den Inhalt in eine temporäre Datei mit dem angegebenen Originalnamen und lädt ihn
+     * über denselben Pfad wie [sendCodeMessage] hoch (Server legt die Datei im Chat-Ordner an).
+     */
+    fun sendCodeText(chatId: String, fileName: String, code: String, isGroup: Boolean = false) {
+        viewModelScope.launch {
+            _mediaUploadStatus.value = MediaUploadStatus.Uploading(0)
+            _isLoading.value = true
+            var file: File? = null
+            try {
+                val safeName = fileName.replace(Regex("[\\\\/:*?\"<>|\\r\\n]"), "_")
+                file = withContext(Dispatchers.IO) {
+                    val dest = File(context.cacheDir, "code_${System.currentTimeMillis()}_$safeName")
+                    dest.writeBytes(code.toByteArray(Charsets.UTF_8))
+                    dest
+                }
+                val fileSize = file!!.length()
+                if (fileSize > MAX_UPLOAD_BYTES) {
+                    withContext(Dispatchers.IO) { file?.delete() }
+                    _statusMessage.value = "Datei zu groß (max. 80 MB)"
+                    return@launch
+                }
+                val previewCharLimit = 8000
+                val previewText = if (code.length > previewCharLimit) code.substring(0, previewCharLimit) else code
+                val previewTruncated = code.length > previewCharLimit
+                uploadCodeAttachment(chatId, fileName, file!!, previewText, previewTruncated, isGroup)
+            } catch (e: Exception) {
+                withContext(Dispatchers.IO) { runCatching { file?.delete() } }
+                _statusMessage.value = "Upload fehlgeschlagen: ${e.message}"
+                Timber.tag("Chat").e("sendCodeText failed", e)
+            } finally {
+                _mediaUploadStatus.value = MediaUploadStatus.Idle
+                _isLoading.value = false
+            }
+        }
+    }
+
+    /**
+     * Gemeinsamer Upload-/Sende-Pfad für Code-Anhänge (aus Datei-Picker oder inline `/* ... */`-Block).
+     * Zeigt sofort eine Platzhalter-Bubble mit Dateiname + Vorschau, lädt die vorbereitete Cache-Datei
+     * hoch, verschickt die Nachricht per WebSocket und räumt die Cache-Datei danach auf.
+     */
+    private suspend fun uploadCodeAttachment(
+        chatId: String,
+        fileName: String,
+        file: File,
+        previewText: String,
+        previewTruncated: Boolean,
+        isGroup: Boolean
+    ) {
+        val me = _currentUser.value ?: return
+        val clientId = UUID.randomUUID().toString()
+        val fileSize = file.length()
+
+        // Platzhalter-Bubble sofort mit Dateiname + Vorschau anzeigen (URL noch leer)
+        val placeholderBlob = org.json.JSONObject().apply {
+            put("filename", fileName)
+            put("file_size", fileSize)
+            put("preview", previewText)
+            put("truncated", previewTruncated)
+        }.toString()
+        messageDao.insertMessage(
+            MessageEntity(
+                chatId = chatId,
+                senderId = me.userId,
+                receiverId = chatId,
+                content = placeholderBlob,
+                mediaType = "code",
+                mediaUrl = null,
+                timestamp = System.currentTimeMillis(),
+                isSent = false,
+                clientMessageId = clientId,
+                deliveryStatus = 0
+            )
+        )
+
+        try {
+            val requestFile = ProgressRequestBody(
+                delegate = file.asRequestBody("application/octet-stream".toMediaTypeOrNull()),
+                onProgress = { sent, total ->
+                    if (total > 0) {
+                        val pct = (sent * 100f / total).toInt().coerceIn(0, 99)
+                        _mediaUploadStatus.value = MediaUploadStatus.Uploading(pct)
+                    }
+                }
+            )
+            val body = MultipartBody.Part.createFormData("file", fileName, requestFile)
+            val typeBody = "code".toRequestBody("text/plain".toMediaTypeOrNull())
+            val chatIdBody = chatId.toRequestBody("text/plain".toMediaTypeOrNull())
+            val response = apiService.uploadCodeFile(typeBody, chatIdBody, body)
+            withContext(Dispatchers.IO) { runCatching { file.delete() } }
+
+            if (response.isSuccessful) {
+                val mediaUrl = response.body()?.get("url")?.let { toAbsoluteUrl(it) }
+                if (mediaUrl != null) {
+                    val finalBlob = org.json.JSONObject().apply {
+                        put("file_url", mediaUrl)
+                        put("filename", fileName)
+                        put("file_size", fileSize)
+                        put("preview", previewText)
+                        put("truncated", previewTruncated)
+                    }.toString()
+                    messageDao.updateMessageUrlAndContent(clientId, mediaUrl, finalBlob)
+                    if (chatId == "self_notes") {
+                        messageDao.markSelfNoteDelivered(clientId)
+                    } else if (isGroup) {
+                        webSocketManager.sendMessage("group_message", chatId, mapOf(
+                            "content_blob" to finalBlob,
+                            "media_type" to "code",
+                            "media_url" to mediaUrl,
+                            "group_id" to chatId,
+                            "client_message_id" to clientId,
+                            "sender_timestamp" to System.currentTimeMillis()
+                        ))
+                    } else {
+                        webSocketManager.sendMessage("message", chatId, mapOf(
+                            "content_blob" to finalBlob,
+                            "media_type" to "code",
+                            "media_url" to mediaUrl,
+                            "client_message_id" to clientId
+                        ))
+                    }
+                }
+            } else {
+                messageDao.deleteMessageByClientId(clientId)
+                _statusMessage.value = "Upload fehlgeschlagen (${response.code()})"
+            }
+        } catch (e: Exception) {
+            withContext(Dispatchers.IO) { runCatching { file.delete() } }
+            messageDao.deleteMessageByClientId(clientId)
+            _statusMessage.value = "Upload fehlgeschlagen: ${e.message}"
+            Timber.tag("Chat").e("uploadCodeAttachment failed", e)
         }
     }
 
@@ -9957,6 +10191,7 @@ class MainViewModel @Inject constructor(
                     "video"    -> "🎥 Video"
                     "audio"    -> "🎤 Sprachnachricht"
                     "document" -> "📎 Dokument"
+                    "code"     -> "💻 Code"
                     "poll"     -> "📊 Umfrage"
                     else       -> "[$mediaType]"
                 }

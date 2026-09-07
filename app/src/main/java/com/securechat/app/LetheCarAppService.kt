@@ -245,6 +245,7 @@ class ConversationListScreen(
         "image"    -> "\uD83D\uDCF7 Bild"
         "video"    -> "\uD83C\uDFA5 Video"
         "document" -> "\uD83D\uDCCE Dokument"
+        "code"     -> "\uD83D\uDCBB Code"
         "poll"     -> "\uD83D\uDCCA Umfrage"
         else       -> msg.content?.take(80) ?: "Neue Nachricht"
     }

@@ -114,6 +114,7 @@ class WebSocketReconnectWorker @AssistedInject constructor(
                             "audio" -> "🎙️ Sprachnachricht"
                             "image" -> "📷 Foto"
                             "video" -> "🎬 Video"
+                            "code"  -> "💻 Code"
                             else    -> {
                                 // contentBlob ist hier der roh gespeicherte Ciphertext (keine
                                 // Entschlüsselung im Worker möglich) → niemals roh anzeigen.

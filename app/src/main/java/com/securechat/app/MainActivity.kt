@@ -1554,6 +1554,13 @@ class MainActivity : FragmentActivity() {
                             )
                         }
 
+                        composable("code_viewer") {
+                            CodeViewerScreen(
+                                viewModel = viewModel,
+                                navController = navController
+                            )
+                        }
+
                         composable("vip") {
                             VipScreen(
                                 viewModel = viewModel,
@@ -1787,6 +1794,10 @@ class MainActivity : FragmentActivity() {
                                 onOpenDocument = { url, fileName ->
                                     viewModel.openDocument(url, fileName)
                                     navController.navigate("document_viewer")
+                                },
+                                onOpenCode = { url, fileName ->
+                                    viewModel.openCode(url, fileName)
+                                    navController.navigate("code_viewer")
                                 },
                                 onNavigateTo3DViewer = { fileUrl, fn, texUrl ->
                                     val encoded = java.net.URLEncoder.encode(fileUrl, "UTF-8")
