@@ -16,7 +16,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
 import androidx.core.app.RemoteInput
 import androidx.core.graphics.drawable.IconCompat
-import coil.ImageLoader
+import coil.imageLoader
 import coil.request.ImageRequest
 import dagger.hilt.android.qualifiers.ApplicationContext
 import android.os.Build
@@ -331,26 +331,24 @@ class NotificationHelper @Inject constructor(
         suspend fun loadBitmap(url: String?): Bitmap? = withContext(Dispatchers.IO) {
             if (url == null) return@withContext null
             try {
-                val loader = ImageLoader(context)
                 val request = ImageRequest.Builder(context)
                     .data(url)
                     .allowHardware(false)
                     .size(128, 128)
                     .build()
-                (loader.execute(request).drawable as? BitmapDrawable)?.bitmap
+                (context.imageLoader.execute(request).drawable as? BitmapDrawable)?.bitmap
             } catch (_: Exception) { null }
         }
 
         // Bild-URL → cache-Datei → content://-URI (für Android Auto / MessagingStyle.Message.setData)
         suspend fun downloadToContentUri(httpUrl: String): android.net.Uri? = withContext(Dispatchers.IO) {
             try {
-                val loader = ImageLoader(context)
                 val request = ImageRequest.Builder(context)
                     .data(httpUrl)
                     .allowHardware(false)
                     .size(320, 320)
                     .build()
-                val bitmap = (loader.execute(request).drawable as? BitmapDrawable)?.bitmap
+                val bitmap = (context.imageLoader.execute(request).drawable as? BitmapDrawable)?.bitmap
                     ?: return@withContext null
                 val cacheDir = java.io.File(context.cacheDir, "notification_images").also { it.mkdirs() }
                 val hash = httpUrl.hashCode().let { if (it < 0) "m${-it}" else "$it" }

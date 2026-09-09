@@ -39,8 +39,8 @@ import androidx.compose.ui.platform.LocalDensity
 import android.widget.Toast
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
-import coil.ImageLoader
 import coil.compose.AsyncImage
+import coil.imageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import com.securechat.app.data.network.CreatorContentResponse
@@ -1261,13 +1261,12 @@ private fun VipThreadHexTile(
     LaunchedEffect(thread.firstImageUrl) {
         val url = thread.firstImageUrl ?: return@LaunchedEffect
         try {
-            val loader = ImageLoader(context)
             val request = ImageRequest.Builder(context)
                 .data(url)
                 .size(1, 1)
                 .allowHardware(false)
                 .build()
-            val result = loader.execute(request)
+            val result = context.imageLoader.execute(request)
             val bmp = ((result as? SuccessResult)?.drawable
                 as? android.graphics.drawable.BitmapDrawable)?.bitmap
             if (bmp != null) {

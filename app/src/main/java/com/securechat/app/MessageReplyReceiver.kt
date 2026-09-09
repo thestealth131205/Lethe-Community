@@ -10,7 +10,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
 import androidx.core.app.RemoteInput
 import androidx.core.graphics.drawable.IconCompat
-import coil.ImageLoader
+import coil.imageLoader
 import coil.request.ImageRequest
 import com.securechat.app.data.local.MessageDao
 import com.securechat.app.data.local.MessageEntity
@@ -101,7 +101,7 @@ class MessageReplyReceiver : BroadcastReceiver() {
                             .allowHardware(false)
                             .size(128, 128)
                             .build()
-                        (ImageLoader(context).execute(request).drawable as? BitmapDrawable)?.bitmap
+                        (context.imageLoader.execute(request).drawable as? BitmapDrawable)?.bitmap
                     } catch (_: Exception) { null }
                 } else null
 

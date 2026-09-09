@@ -218,6 +218,7 @@ import androidx.compose.ui.graphics.lerp as lerpColor
 import androidx.compose.runtime.derivedStateOf
 import coil.compose.AsyncImage
 import coil.ImageLoader
+import coil.imageLoader
 import okhttp3.OkHttpClient
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -18654,12 +18655,15 @@ private fun ImageEditorDialog(
     LaunchedEffect(imageUrl) {
         withContext(Dispatchers.IO) {
             try {
-                val loader = coil.ImageLoader(context)
+                // Max. 2048px + Scale.FIT: verhindert OOM bei großen Fotos, bleibt für
+                // den Editor + Export (compress-Qualität 92) visuell verlustfrei genug.
                 val request = ImageRequest.Builder(context)
                     .data(imageUrl)
                     .allowHardware(false)
+                    .size(2048, 2048)
+                    .scale(coil.size.Scale.FIT)
                     .build()
-                val result = loader.execute(request)
+                val result = context.imageLoader.execute(request)
                 val drawable = (result as? coil.request.SuccessResult)?.drawable
                 sourceBitmap = (drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
             } catch (_: Exception) {}

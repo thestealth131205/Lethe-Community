@@ -14,7 +14,7 @@ import android.graphics.PorterDuffXfermode
 import android.graphics.RectF
 import android.graphics.drawable.BitmapDrawable
 import android.widget.RemoteViews
-import coil.ImageLoader
+import coil.imageLoader
 import coil.request.ImageRequest
 import com.securechat.app.MainActivity
 import com.securechat.app.R
@@ -124,7 +124,7 @@ class ContactWidgetProvider : AppWidgetProvider() {
                         .allowHardware(false)
                         .size(256, 256)
                         .build()
-                    (ImageLoader(context).execute(request).drawable as? BitmapDrawable)?.bitmap
+                    (context.imageLoader.execute(request).drawable as? BitmapDrawable)?.bitmap
                 } catch (_: Exception) { null }
             } else null
 

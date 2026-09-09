@@ -8,7 +8,7 @@ import androidx.core.app.Person
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
-import coil.ImageLoader
+import coil.imageLoader
 import coil.request.ImageRequest
 import com.securechat.app.data.local.ContactEntity
 import com.securechat.app.data.local.GroupEntity
@@ -177,13 +177,12 @@ class ShortcutHelper @Inject constructor(
     private suspend fun loadContactIcon(url: String?): Bitmap? = withContext(Dispatchers.IO) {
         if (url == null) return@withContext null
         try {
-            val loader = ImageLoader(context)
             val request = ImageRequest.Builder(context)
                 .data(url)
                 .allowHardware(false)
                 .size(128, 128)
                 .build()
-            (loader.execute(request).drawable as? BitmapDrawable)?.bitmap
+            (context.imageLoader.execute(request).drawable as? BitmapDrawable)?.bitmap
         } catch (_: Exception) { null }
     }
 }

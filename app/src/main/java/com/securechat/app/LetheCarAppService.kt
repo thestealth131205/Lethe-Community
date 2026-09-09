@@ -18,7 +18,7 @@ import androidx.car.app.model.SearchTemplate
 import androidx.car.app.model.Template
 import androidx.car.app.validation.HostValidator
 import androidx.core.graphics.drawable.IconCompat
-import coil.ImageLoader
+import coil.imageLoader
 import coil.request.ImageRequest
 import com.securechat.app.data.local.ContactDao
 import com.securechat.app.data.local.ContactEntity
@@ -214,13 +214,12 @@ class ConversationListScreen(
     private suspend fun loadBitmapFromUrl(url: String, size: Int): Bitmap? =
         withContext(Dispatchers.IO) {
             try {
-                val loader = ImageLoader(carContext)
                 val request = ImageRequest.Builder(carContext)
                     .data(url)
                     .allowHardware(false)
                     .size(size, size)
                     .build()
-                (loader.execute(request).drawable as? BitmapDrawable)?.bitmap
+                (carContext.imageLoader.execute(request).drawable as? BitmapDrawable)?.bitmap
             } catch (e: Exception) {
                 Timber.tag("LETHE_CAR").w(e, "Bitmap konnte nicht geladen werden: $url")
                 null

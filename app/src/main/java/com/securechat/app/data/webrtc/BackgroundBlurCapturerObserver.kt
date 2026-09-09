@@ -292,13 +292,15 @@ class BackgroundBlurCapturerObserver(
         if (activeMode == VirtualBackgroundMode.IMAGE && bgImage != null && !bgImage.isRecycled) {
             drawCoverImage(outCanvas, bgImage, w, h)
         } else {
-            // BLUR (auch Fallback, falls IMAGE ohne gültiges Bild): günstige Weichzeichnung
-            val blurFactor = 8
-            val smallW = (w / blurFactor).coerceAtLeast(1)
-            val smallH = (h / blurFactor).coerceAtLeast(1)
-            val small   = Bitmap.createScaledBitmap(original, smallW, smallH, true)
-            val blurred = Bitmap.createScaledBitmap(small, w, h, true)
-            small.recycle()
+            // BLUR (auch Fallback, falls IMAGE ohne gültiges Bild): mehrstufiger, progressiver
+            // Downscale/Upscale-Weichzeichner statt eines einzelnen großen Skalierungssprungs.
+            // Ein Ein-Schritt-Sprung (z.B. direkt auf 1/8) erzeugt bei bilinearer Filterung eine
+            // sichtbare "Kachel"/Mosaik-Optik, weil pro Zielpixel nur zwischen 2 weit entfernten
+            // Quellpixeln interpoliert wird – Details bleiben erkennbar. Mehrere Halbierungsschritte
+            // (jeweils bilinear gefiltert) mitteln dagegen bereits gemittelte Nachbarn, nähern so
+            // einen echten Gaußschen Weichzeichner an und wirken deutlich feiner UND (durch die
+            // höhere Gesamtstufenzahl, effektiv 16× statt vorher 8×) spürbar stärker unscharf.
+            val blurred = progressiveBoxBlur(original, w, h, steps = 4)
             outCanvas.drawBitmap(blurred, 0f, 0f, null)
             blurred.recycle()
         }
@@ -306,6 +308,48 @@ class BackgroundBlurCapturerObserver(
         outCanvas.drawBitmap(person, 0f, 0f, null)
         person.recycle()
         return result
+    }
+
+    /**
+     * Approximiert einen Gaußschen Weichzeichner durch mehrstufiges Downscale/Upscale
+     * (jeder Schritt halbiert bzw. verdoppelt die Auflösung, bilinear gefiltert). Deutlich
+     * weicher als ein einzelner großer Skalierungssprung (vermeidet die "Kachel"/Mosaik-Optik),
+     * da jeder Schritt bereits gemittelte Nachbarpixel erneut mittelt – die effektive Blurstärke
+     * entspricht einem Downscale-Faktor von 2^[steps].
+     */
+    private fun progressiveBoxBlur(source: Bitmap, targetW: Int, targetH: Int, steps: Int): Bitmap {
+        var current = source
+        var w = source.width
+        var h = source.height
+        val intermediates = mutableListOf<Bitmap>()
+
+        repeat(steps) {
+            val nextW = (w / 2).coerceAtLeast(2)
+            val nextH = (h / 2).coerceAtLeast(2)
+            if (nextW == w && nextH == h) return@repeat
+            val next = Bitmap.createScaledBitmap(current, nextW, nextH, true)
+            if (current !== source) intermediates.add(current)
+            current = next
+            w = nextW
+            h = nextH
+        }
+        repeat(steps) {
+            if (w == targetW && h == targetH) return@repeat
+            val nextW = (w * 2).coerceAtMost(targetW)
+            val nextH = (h * 2).coerceAtMost(targetH)
+            val next = Bitmap.createScaledBitmap(current, nextW, nextH, true)
+            if (current !== source) intermediates.add(current)
+            current = next
+            w = nextW
+            h = nextH
+        }
+        if (w != targetW || h != targetH) {
+            val final = Bitmap.createScaledBitmap(current, targetW, targetH, true)
+            if (current !== source) intermediates.add(current)
+            current = final
+        }
+        intermediates.forEach { it.recycle() }
+        return current
     }
 
     /** Zeichnet [image] deckend (center-crop, seitenverhältnis-erhaltend) auf die Zielfläche w×h. */

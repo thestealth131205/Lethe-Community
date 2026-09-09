@@ -24,6 +24,17 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.170",
+            title = "Speicher-Absturz behoben & Videoanruf-Weichzeichner verbessert",
+            items = listOf(
+                "Absturz beim Öffnen eines Gruppenchats mit neuem Bild durch Speicherüberlauf behoben – Bild-Zwischenspeicher wird jetzt effizienter genutzt",
+                "Der Bildeditor benötigt jetzt deutlich weniger Arbeitsspeicher, ohne Qualitätsverlust",
+                "Der Hintergrund-Weichzeichner bei Videoanrufen wirkt jetzt feiner und stärker statt grob verpixelt",
+            ),
+            shortSummary = "Absturz-Fix bei Gruppenbildern, sparsamerer Bildeditor, feinerer Videoanruf-Weichzeichner"
+        ),
+
+        ChangelogEntry(
             version = "10.4.169",
             title = "Akkuverbrauch im Hintergrund reduziert",
             items = listOf(
@@ -57,18 +68,6 @@ object AppChangelog {
                 "Jump or Die: Schwarzes Loch, Schutzschild und Blase sind jetzt 50% größer und leichter zu treffen",
             ),
             shortSummary = "WearOS-Anrufanzeige, Anruf-Benachrichtigung entdoppelt, zuverlässiger Anrufabbruch, größere Items in Jump or Die"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.166",
-            title = "Live-Standort deutlich verbessert",
-            items = listOf(
-                "Der eigene Live-Standort in der Chat-Blase und auf der Vollbildkarte bleibt nicht mehr eingefroren, sondern zieht live mit",
-                "Neu: Beim Teilen des Live-Standorts kann die Hintergrund-Standortberechtigung erteilt werden – dann werden Positions-Updates alle 5 statt alle 20 Sekunden übertragen, auch wenn die App im Hintergrund ist",
-                "Auf der Vollbildkarte reißt der eingestellte Zoom/Ausschnitt nicht mehr bei jedem Positions-Update zurück",
-                "Neuer \"A\"-Button auf der Vollbildkarte: aktiviert einen Auto-Zoom, der die Karte bei jedem Update automatisch auf alle geteilten Standorte zentriert",
-            ),
-            shortSummary = "Live-Standort aktualisiert sich zuverlässig, optional alle 5s im Hintergrund, plus Auto-Zoom-Button auf der Karte"
         ),
 
     )
