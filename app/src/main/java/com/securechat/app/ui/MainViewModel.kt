@@ -5995,6 +5995,16 @@ class MainViewModel @Inject constructor(
     private val _groupMembers = MutableStateFlow<Map<String, List<GroupMemberInfo>>>(emptyMap())
     val groupMembers: StateFlow<Map<String, List<GroupMemberInfo>>> = _groupMembers.asStateFlow()
 
+    // Einmaliges Signal: eigener Nutzer wurde aus dieser Gruppe entfernt (selbst verlassen
+    // oder von Admin/Ersteller entfernt) — eine offene ChatScreen-Instanz dieser Gruppe
+    // navigiert daraufhin zurück. Siehe [handleRemovedFromGroup].
+    private val _removedFromGroupId = MutableStateFlow<String?>(null)
+    val removedFromGroupId: StateFlow<String?> = _removedFromGroupId.asStateFlow()
+
+    fun consumeRemovedFromGroupSignal() {
+        _removedFromGroupId.value = null
+    }
+
     fun loadGroupMembers(groupId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -8977,15 +8987,25 @@ class MainViewModel @Inject constructor(
         }
     }
 
-    /** Entfernt ein Mitglied aus einer Gruppe. */
+    /** Entfernt ein Mitglied aus einer Gruppe (durch Ersteller/Admin; nicht sich selbst — siehe [leaveGroup]). */
     fun removeGroupMember(groupId: String, userId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                apiService.removeGroupMember(groupId, userId)
+                val response = apiService.removeGroupMember(groupId, userId)
+                if (!response.isSuccessful) {
+                    val err = response.errorBody()?.string() ?: ""
+                    val detail = try {
+                        org.json.JSONObject(err).optString("detail", "Fehler ${response.code()}")
+                    } catch (_: Exception) { "Fehler ${response.code()}" }
+                    _statusMessage.value = detail
+                    return@launch
+                }
                 val existing = groupDao.getGroupById(groupId)
                 if (existing != null && existing.memberCount > 0) {
                     groupDao.insertGroup(existing.copy(memberCount = existing.memberCount - 1))
                 }
+                _groupMembers.value = _groupMembers.value + (groupId to
+                    (_groupMembers.value[groupId] ?: emptyList()).filter { it.userId != userId })
             } catch (e: Exception) {
                 Timber.tag("MainViewModel").e("removeGroupMember fehlgeschlagen: ${e.message}")
             }
@@ -9634,8 +9654,17 @@ class MainViewModel @Inject constructor(
         for (member in members) {
             if (member.publicKey.length <= 100) continue  // Zu kurz → Legacy SHA-256-Key, überspringen
 
-            // Shared Secret ableiten falls noch nicht im Cache
-            if (!CryptoManager.hasSharedSecret(member.userId)) {
+            // Server liefert hier IMMER den aktuellen Key. Weicht er vom lokal gecachten
+            // Kontakt-Eintrag ab (z.B. weil ein "key_rotated"-Event verpasst wurde, während
+            // ein Mitglied sich neu registrieren musste), muss das Shared Secret zwingend neu
+            // abgeleitet werden – sonst wird das Sender-Key-Bundle mit einem veralteten Secret
+            // verschlüsselt und das Mitglied kann es nie entschlüsseln ("Schlüssel nicht verfügbar").
+            val existingContact = contactDao.getContactById(member.userId)
+            if (existingContact != null && existingContact.publicKey != member.publicKey) {
+                contactDao.updateContact(existingContact.copy(publicKey = member.publicKey))
+                CryptoManager.forceRederiveSharedSecret(member.userId, member.publicKey)
+                Timber.tag("LETHE_E2EE").i("generateAndDistributeGroupSenderKey: Public Key von ${member.userId} war veraltet – Shared Secret neu abgeleitet.")
+            } else if (!CryptoManager.hasSharedSecret(member.userId)) {
                 CryptoManager.deriveSharedSecret(member.userId, member.publicKey)
             }
 
@@ -9686,6 +9715,15 @@ class MainViewModel @Inject constructor(
             if (!response.isSuccessful) return
             val bundleResponse = response.body() ?: return
 
+            // Server liefert hier IMMER die aktuellen Public Keys aller Mitglieder – zuverlässiger
+            // als der lokale Kontakte-Cache, falls ein "key_rotated"-Event verpasst wurde (z.B. weil
+            // der eigene WS beim Re-Login des Owners nicht verbunden war). Best-effort: schlägt der
+            // Abruf fehl, wird unten auf den Kontakte-Cache zurückgefallen.
+            val freshKeysById = try {
+                apiService.getGroupMemberPublicKeys(groupId).takeIf { it.isSuccessful }
+                    ?.body()?.associateBy { it.userId } ?: emptyMap()
+            } catch (_: Exception) { emptyMap() }
+
             for (entry in bundleResponse.bundles) {
                 // Eigenen Key nicht überschreiben (der wurde in generateAndDistribute gesetzt)
                 if (entry.ownerId == me.userId) continue
@@ -9694,11 +9732,19 @@ class MainViewModel @Inject constructor(
                 val existing = groupSenderKeyDao.getKey(groupId, entry.ownerId)
                 if (existing != null && existing.version >= entry.version) continue
 
-                // Shared Secret mit dem Key-Owner nötig – aus Kontakte-DB holen
-                if (!CryptoManager.hasSharedSecret(entry.ownerId)) {
-                    val contact = contactDao.getContactById(entry.ownerId)
-                    if (contact != null && contact.publicKey.length > 100) {
-                        CryptoManager.deriveSharedSecret(entry.ownerId, contact.publicKey)
+                // Shared Secret mit dem Key-Owner sicherstellen – bei Public-Key-Abweichung zum
+                // lokalen Cache (verpasstes key_rotated-Event) zwingend neu ableiten, sonst bleibt
+                // das Bundle dauerhaft unentschlüsselbar ("Schlüssel nicht verfügbar").
+                val freshPublicKey = freshKeysById[entry.ownerId]?.publicKey
+                val contact = contactDao.getContactById(entry.ownerId)
+                if (freshPublicKey != null && freshPublicKey.length > 100 && contact?.publicKey != freshPublicKey) {
+                    if (contact != null) contactDao.updateContact(contact.copy(publicKey = freshPublicKey))
+                    CryptoManager.forceRederiveSharedSecret(entry.ownerId, freshPublicKey)
+                    Timber.tag("LETHE_E2EE").i("fetchAndStoreGroupSenderKeys: Public Key von ${entry.ownerId} war veraltet – Shared Secret neu abgeleitet.")
+                } else if (!CryptoManager.hasSharedSecret(entry.ownerId)) {
+                    val keyToUse = freshPublicKey ?: contact?.publicKey
+                    if (keyToUse != null && keyToUse.length > 100) {
+                        CryptoManager.deriveSharedSecret(entry.ownerId, keyToUse)
                     }
                 }
 
@@ -11019,12 +11065,16 @@ class MainViewModel @Inject constructor(
             "group_key_rotation" -> {
                 // Ein Mitglied hat die Gruppe verlassen oder wurde entfernt.
                 // Perfect Forward Secrecy: alle lokalen Keys löschen und neue generieren.
-                val payload = msg.payload as? Map<*, *>
-                val groupId = (payload?.get("group_id") ?: (msg as? Map<*, *>)?.get("group_id")) as? String
-                    ?: return
-                val removedUserId = payload?.get("removed_user_id") as? String
+                val payload = msg.payload as? Map<*, *> ?: return
+                val groupId = payload["group_id"] as? String ?: return
+                val removedUserId = payload["removed_user_id"] as? String
                 Timber.tag("LETHE_E2EE").d("Key-Rotation für Gruppe $groupId (entfernt: $removedUserId)")
-                rotateGroupSenderKey(groupId)
+                if (removedUserId != null && removedUserId == _currentUser.value?.userId) {
+                    // Ich selbst wurde von einem Admin/Ersteller aus der Gruppe entfernt.
+                    handleRemovedFromGroup(groupId, statusMessage = "Du wurdest aus der Gruppe entfernt")
+                } else {
+                    rotateGroupSenderKey(groupId)
+                }
             }
 
             "appointment_rsvp_update" -> {
@@ -16881,17 +16931,37 @@ class MainViewModel @Inject constructor(
             } catch (e: Exception) {
                 Timber.tag("MainViewModel").w("leaveGroup server: ${e.message}")
             }
-            groupDao.deleteGroup(group.groupId)
-            // Shortcut aus Share Sheet entfernen + Liste neu aufbauen
-            shortcutHelper.disableShortcut(group.groupId)
-            try {
-                val sorted = contactsSortedByRecent.first()
-                val allGroups = groupDao.getAllGroups().first()
-                val recentIds = messageDao.getRecentChatIds(50)
-                shortcutHelper.refreshTopContactShortcuts(sorted, allGroups, recentIds)
-            } catch (_: Exception) {}
-            _statusMessage.value = "Gruppe verlassen"
+            handleRemovedFromGroup(group.groupId, statusMessage = "Gruppe verlassen")
         }
+    }
+
+    /**
+     * Gemeinsamer Cleanup, wenn der eigene Nutzer nicht mehr Mitglied einer Gruppe ist —
+     * egal ob durch eigenes Verlassen oder durch Entfernen von Admin/Ersteller (WS
+     * "group_key_rotation" mit removed_user_id == eigene ID). Löscht die lokale Gruppe,
+     * entfernt den Share-Sheet-Shortcut und signalisiert einer offenen ChatScreen-Instanz
+     * dieser Gruppe (via [removedFromGroupId]) zurückzunavigieren.
+     */
+    private suspend fun handleRemovedFromGroup(groupId: String, statusMessage: String) {
+        groupDao.deleteGroup(groupId)
+        // Angepinnte gelöschte Gruppe entfernen – sonst blockiert die verwaiste ID dauerhaft
+        // das 2er-Pin-Limit (toggleGroupPin) für neu erstellte Gruppen.
+        if (groupId in _pinnedGroupIds.value) {
+            val updatedPins = _pinnedGroupIds.value - groupId
+            _pinnedGroupIds.value = updatedPins
+            pinnedPrefs.edit().putStringSet("pinned_groups", updatedPins).apply()
+        }
+        // Shortcut aus Share Sheet entfernen + Liste neu aufbauen
+        shortcutHelper.disableShortcut(groupId)
+        try {
+            val sorted = contactsSortedByRecent.first()
+            val allGroups = groupDao.getAllGroups().first()
+            val recentIds = messageDao.getRecentChatIds(50)
+            shortcutHelper.refreshTopContactShortcuts(sorted, allGroups, recentIds)
+        } catch (_: Exception) {}
+        _groupMembers.value = _groupMembers.value - groupId
+        _statusMessage.value = statusMessage
+        _removedFromGroupId.value = groupId
     }
 
     // --- GRUPPEN MEDIEN-AUFRUFE ---

@@ -24,6 +24,18 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.171",
+            title = "Mitglieder entfernen & Gruppen-Schlüssel-Fixes",
+            items = listOf(
+                "Neu: In der Mitgliederverwaltung einer Gruppe kann man sich jetzt selbst entfernen (Gruppe verlassen) – der Ersteller und Admins können auch andere Mitglieder entfernen",
+                "Entfernte Mitglieder sehen die Gruppe danach sofort nicht mehr in ihrer Chat-Liste",
+                "Fehler behoben, durch den sich nach dem Löschen einer angepinnten Gruppe keine neue Gruppe mehr anpinnen ließ",
+                "Fehler behoben, durch den ein Kontakt nach einer Neuanmeldung in manchen Gruppen keine Nachrichten mehr entschlüsseln konnte (\"Schlüssel nicht verfügbar\")",
+            ),
+            shortSummary = "Mitglieder aus Gruppen entfernen, Pin-Fix und Verschlüsselungs-Fix nach Neuanmeldung"
+        ),
+
+        ChangelogEntry(
             version = "10.4.170",
             title = "Speicher-Absturz behoben & Videoanruf-Weichzeichner verbessert",
             items = listOf(

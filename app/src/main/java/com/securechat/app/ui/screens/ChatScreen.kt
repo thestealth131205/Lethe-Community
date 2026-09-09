@@ -2446,6 +2446,16 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
         }
     }
 
+    // Eigener Nutzer wurde aus dieser Gruppe entfernt (Admin/Ersteller oder selbst verlassen) →
+    // Chat sofort schließen, die Gruppe ist bereits lokal gelöscht (MainViewModel.handleRemovedFromGroup).
+    val removedFromGroupId by viewModel.removedFromGroupId.collectAsState()
+    LaunchedEffect(removedFromGroupId) {
+        if (isGroup && removedFromGroupId == chatId) {
+            viewModel.consumeRemovedFromGroupSignal()
+            onNavigateBack()
+        }
+    }
+
     // Online-Status alle 30 Sekunden neu laden (schnellere offline-Erkennung)
     LaunchedEffect(chatId) {
         if (!isGroup && !isSelfChat) {
@@ -5911,10 +5921,17 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
     // Mitgliederverwaltung
     if (showGroupMembersSheet && isGroup) {
         val currentGroup = groups.find { it.groupId == chatId }
+        val myUserIdHere = viewModel.currentUser.collectAsState().value?.userId
         GroupMembersManagementSheet(
             groupId = chatId,
-            isCreator = currentGroup?.createdBy == viewModel.currentUser.collectAsState().value?.userId,
+            isCreator = currentGroup?.createdBy == myUserIdHere,
+            creatorId = currentGroup?.createdBy,
+            currentUserId = myUserIdHere,
             viewModel = viewModel,
+            onSelfLeave = {
+                currentGroup?.let { viewModel.leaveGroup(it) }
+                showGroupMembersSheet = false
+            },
             onDismiss = { showGroupMembersSheet = false }
         )
     }
@@ -15989,7 +16006,14 @@ private fun GroupEditScreen(
         GroupMembersManagementSheet(
             groupId = groupId,
             isCreator = grp?.createdBy == currentUser?.userId,
+            creatorId = grp?.createdBy,
+            currentUserId = currentUser?.userId,
             viewModel = viewModel,
+            onSelfLeave = {
+                grp?.let { viewModel.leaveGroup(it) }
+                showMembersSheet = false
+                onDismiss()
+            },
             onDismiss = { showMembersSheet = false }
         )
     }
@@ -16054,13 +16078,20 @@ private fun GroupEditScreen(
 private fun GroupMembersManagementSheet(
     groupId: String,
     isCreator: Boolean,
+    creatorId: String?,
+    currentUserId: String?,
     viewModel: com.securechat.app.ui.MainViewModel,
+    onSelfLeave: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val groupMembersMap by viewModel.groupMembers.collectAsState()
     val members = groupMembersMap[groupId] ?: emptyList()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showInviteSheet by remember { mutableStateOf(false) }
+    var memberToRemove by remember { mutableStateOf<com.securechat.app.data.network.GroupMemberInfo?>(null) }
+    // Kann ich andere Mitglieder entfernen? Nur Ersteller oder Admins (Rolle "admin").
+    val myRole = members.find { it.userId == currentUserId }?.role
+    val canRemoveOthers = isCreator || myRole == "admin"
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
@@ -16108,17 +16139,45 @@ private fun GroupMembersManagementSheet(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     items(members, key = { it.userId }) { member ->
+                        val isSelf = member.userId == currentUserId
+                        val canRemove = isSelf || (canRemoveOthers && member.userId != creatorId)
                         GroupMemberRow(
                             member = member,
                             isCreator = isCreator,
+                            canRemove = canRemove,
                             onRoleChange = { newRole ->
                                 viewModel.setGroupMemberRole(groupId, member.userId, newRole) {}
-                            }
+                            },
+                            onRemove = { memberToRemove = member }
                         )
                     }
                 }
             }
         }
+    }
+
+    memberToRemove?.let { target ->
+        val isSelf = target.userId == currentUserId
+        AlertDialog(
+            onDismissRequest = { memberToRemove = null },
+            title = { Text(if (isSelf) "Gruppe verlassen" else "Mitglied entfernen") },
+            text = {
+                Text(
+                    if (isSelf) "Möchtest du diese Gruppe wirklich verlassen?"
+                    else "Möchtest du ${target.name ?: target.fakeNumber ?: "dieses Mitglied"} wirklich aus der Gruppe entfernen?"
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    memberToRemove = null
+                    if (isSelf) onSelfLeave()
+                    else viewModel.removeGroupMember(groupId, target.userId)
+                }) { Text(if (isSelf) "Verlassen" else "Entfernen", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { memberToRemove = null }) { Text("Abbrechen") }
+            }
+        )
     }
 
     if (showInviteSheet) {
@@ -16286,7 +16345,9 @@ private fun GroupInviteContactsSheet(
 private fun GroupMemberRow(
     member: com.securechat.app.data.network.GroupMemberInfo,
     isCreator: Boolean,
-    onRoleChange: (String) -> Unit
+    canRemove: Boolean,
+    onRoleChange: (String) -> Unit,
+    onRemove: () -> Unit
 ) {
     val roleColor = when (member.role) {
         "admin"     -> Color(0xFFE65100)
@@ -16377,6 +16438,17 @@ private fun GroupMemberRow(
                 ) {
                     Text(roleLabel, fontSize = 11.sp, color = roleColor, fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                }
+            }
+
+            if (canRemove) {
+                IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        Icons.Default.PersonRemove,
+                        contentDescription = "Aus Gruppe entfernen",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
         }
@@ -17298,6 +17370,7 @@ private fun GroupInfoScreen(
     var mediaActionUrl by remember { mutableStateOf<String?>(null) }
     var fullscreenImageUrl by remember { mutableStateOf<String?>(null) }
     var fullscreenVideoUrl by remember { mutableStateOf<String?>(null) }
+    var memberToRemoveInfo by remember { mutableStateOf<com.securechat.app.data.network.GroupMemberInfo?>(null) }
 
     LaunchedEffect(pagerState.currentPage) { if (selectedMediaTab != pagerState.currentPage) selectedMediaTab = pagerState.currentPage }
     LaunchedEffect(selectedMediaTab) { if (pagerState.currentPage != selectedMediaTab) pagerState.animateScrollToPage(selectedMediaTab) }
@@ -17535,6 +17608,8 @@ private fun GroupInfoScreen(
                     1 -> {
                         // Mitglieder-Tab
                         val isCreator = group?.createdBy == myUser?.userId
+                        val myRoleHere = members.find { it.userId == myUser?.userId }?.role
+                        val canRemoveOthersHere = isCreator || myRoleHere == "admin"
                         if (members.isEmpty()) {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 CircularProgressIndicator(modifier = Modifier.size(32.dp))
@@ -17546,12 +17621,15 @@ private fun GroupInfoScreen(
                                 verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 items(members, key = { it.userId }) { member ->
+                                    val isSelfHere = member.userId == myUser?.userId
                                     GroupMemberRow(
                                         member = member,
                                         isCreator = isCreator,
+                                        canRemove = isSelfHere || (canRemoveOthersHere && member.userId != group?.createdBy),
                                         onRoleChange = { newRole ->
                                             viewModel.setGroupMemberRole(groupId, member.userId, newRole) {}
-                                        }
+                                        },
+                                        onRemove = { memberToRemoveInfo = member }
                                     )
                                 }
                             }
@@ -17606,6 +17684,34 @@ private fun GroupInfoScreen(
                 }
             }
         }
+    }
+
+    memberToRemoveInfo?.let { target ->
+        val isSelfTarget = target.userId == myUser?.userId
+        AlertDialog(
+            onDismissRequest = { memberToRemoveInfo = null },
+            title = { Text(if (isSelfTarget) "Gruppe verlassen" else "Mitglied entfernen") },
+            text = {
+                Text(
+                    if (isSelfTarget) "Möchtest du diese Gruppe wirklich verlassen?"
+                    else "Möchtest du ${target.name ?: target.fakeNumber ?: "dieses Mitglied"} wirklich aus der Gruppe entfernen?"
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    memberToRemoveInfo = null
+                    if (isSelfTarget) {
+                        group?.let { viewModel.leaveGroup(it) }
+                        onDismiss()
+                    } else {
+                        viewModel.removeGroupMember(groupId, target.userId)
+                    }
+                }) { Text(if (isSelfTarget) "Verlassen" else "Entfernen", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { memberToRemoveInfo = null }) { Text("Abbrechen") }
+            }
+        )
     }
 }
 
