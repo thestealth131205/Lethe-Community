@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit
 private val Context.speedTestDataStore: DataStore<Preferences> by preferencesDataStore(name = "upload_speed_test")
 
 /**
- * Hintergrund-Worker der alle 5 Minuten einen kurzen Upload-Geschwindigkeitstest durchführt.
+ * Hintergrund-Worker der alle 30 Minuten einen kurzen Upload-Geschwindigkeitstest durchführt.
  * Nur aktiv wenn KEINE WLAN-Verbindung besteht (nur Mobile Data).
  * Das Ergebnis (Mbps) wird lokal im DataStore gespeichert.
  */

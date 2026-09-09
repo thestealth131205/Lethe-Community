@@ -45,6 +45,17 @@ class WebSocketKeepaliveService : Service() {
             // Laufzeit im Doze-Modus eingefroren → der WebSocket starb unbemerkt (keine
             // Nachrichten / kein Online-Status) bis zum App-Neustart.
             acquireWakeLock()
+
+            // NotificationHandler pingt bereits parallel – wenn dessen letzte zwei Pings
+            // erfolgreich waren, ist die Verbindung nachweislich gesund und dieser (redundante)
+            // Ping wird diesmal ausgesetzt, statt unnötig Funkmodul/CPU zu wecken.
+            if (PingHealthTracker.lastTwoSuccessful()) {
+                Timber.tag("LETHE_BG").d("KeepaliveService: Ping ausgesetzt – NotificationHandler bestätigt Verbindung")
+                pingInterval = PING_INTERVAL_CONNECTED
+                handler.postDelayed(this, pingInterval)
+                return
+            }
+
             val connected = webSocketManager.isConnected()
             if (connected) {
                 webSocketManager.sendPing()

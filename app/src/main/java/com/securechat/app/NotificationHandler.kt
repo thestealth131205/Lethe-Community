@@ -59,8 +59,9 @@ class NotificationHandler : Service() {
     private var wsCollectorStarted = false
 
     companion object {
-        const val PING_INTERVAL_CONNECTED    = 30_000L  // 30s wenn verbunden
-        const val PING_INTERVAL_DISCONNECTED = 10_000L  // 10s wenn getrennt
+        const val PING_INTERVAL_CONNECTED_DAY   = 50_000L   // 50s tagsüber wenn verbunden
+        const val PING_INTERVAL_CONNECTED_NIGHT = 120_000L  // 2min nachts (22–6 Uhr) wenn verbunden
+        const val PING_INTERVAL_DISCONNECTED    = 10_000L   // 10s wenn getrennt
         const val NOTIFICATION_ID_FOREGROUND = 42
 
         fun start(context: Context) {
@@ -86,14 +87,21 @@ class NotificationHandler : Service() {
         override fun run() {
             val connected = webSocketManager.isConnected()
             webSocketManager.sendPing()  // ping wenn verbunden, reconnect-trigger wenn tot
+            PingHealthTracker.record(connected)
             if (connected) {
                 Timber.tag("LETHE_BG").d("NotificationHandler: Ping – WS verbunden")
-                handler.postDelayed(this, PING_INTERVAL_CONNECTED)
+                handler.postDelayed(this, currentPingIntervalConnected())
             } else {
                 Timber.tag("LETHE_BG").w("NotificationHandler: WS nicht verbunden – Reconnect-Versuch")
                 handler.postDelayed(this, PING_INTERVAL_DISCONNECTED)
             }
         }
+    }
+
+    /** 50s tagsüber, 2min nachts (22–6 Uhr) – reduziert Funk-/Wakeup-Last in der Nachtruhe. */
+    private fun currentPingIntervalConnected(): Long {
+        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        return if (hour >= 22 || hour < 6) PING_INTERVAL_CONNECTED_NIGHT else PING_INTERVAL_CONNECTED_DAY
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

@@ -24,6 +24,17 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.169",
+            title = "Akkuverbrauch im Hintergrund reduziert",
+            items = listOf(
+                "Der regelmäßige Geschwindigkeitstest im Hintergrund läuft jetzt nur noch halb so oft",
+                "Die Verbindungsprüfung läuft tagsüber etwas seltener und nachts (22-6 Uhr) deutlich seltener",
+                "Die Verbindungsprüfung setzt einen Durchlauf aus, wenn die letzten Prüfungen bereits erfolgreich waren",
+            ),
+            shortSummary = "Weniger Akkuverbrauch im Hintergrund durch optimierte Verbindungsprüfungen"
+        ),
+
+        ChangelogEntry(
             version = "10.4.168",
             title = "Code-Anhänge & Chat-Verbesserungen",
             items = listOf(
@@ -58,19 +69,6 @@ object AppChangelog {
                 "Neuer \"A\"-Button auf der Vollbildkarte: aktiviert einen Auto-Zoom, der die Karte bei jedem Update automatisch auf alle geteilten Standorte zentriert",
             ),
             shortSummary = "Live-Standort aktualisiert sich zuverlässig, optional alle 5s im Hintergrund, plus Auto-Zoom-Button auf der Karte"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.165",
-            title = "Startbildschirm-Widgets & Gruppen-Verbesserungen",
-            items = listOf(
-                "Neu: Kontakte und Gruppen lassen sich als Widget auf den Startbildschirm legen – immer mit dem aktuellen Profil- bzw. Gruppenbild, ein Tipp öffnet direkt den Chat",
-                "Gruppennachrichten erscheinen jetzt sofort, auch wenn sie per Benachrichtigung eintreffen – kein Warten mehr und kein erneutes Öffnen des Chats nötig",
-                "Ein geändertes Gruppenbild wird jetzt auch dann geladen, wenn man während der Änderung offline war oder erst später zur Gruppe hinzugefügt wurde",
-                "Teilen an eine Gruppe öffnet den Gruppenchat jetzt mit vorbefülltem Text/Bild, statt sofort und ungefragt zu senden",
-                "Profil- und Gruppenbilder werden regelmäßig auf Aktualität geprüft und nur bei echter Änderung neu geladen",
-            ),
-            shortSummary = "Startbildschirm-Widgets für Kontakte/Gruppen, schnellere Gruppennachrichten und zuverlässigere Gruppenbilder"
         ),
 
     )

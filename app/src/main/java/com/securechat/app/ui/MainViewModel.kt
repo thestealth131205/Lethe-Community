@@ -18824,8 +18824,8 @@ class MainViewModel @Inject constructor(
             reconnectRequest
         )
 
-        // Upload-Geschwindigkeitstest (alle 15 Min – WorkManager-Minimum)
-        val speedTestRequest = PeriodicWorkRequestBuilder<SpeedTestWorker>(15, TimeUnit.MINUTES)
+        // Upload-Geschwindigkeitstest (alle 30 Min – auf Hälfte der Frequenz reduziert)
+        val speedTestRequest = PeriodicWorkRequestBuilder<SpeedTestWorker>(30, TimeUnit.MINUTES)
             .build()
         wm.enqueueUniquePeriodicWork(
             "upload_speed_test",
