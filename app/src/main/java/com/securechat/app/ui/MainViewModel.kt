@@ -19698,11 +19698,6 @@ class MainViewModel @Inject constructor(
         Timber.tag("LETHE_LISTEN").d("Playlist geshuffelt und synchronisiert (${playlist.size} Tracks)")
     }
 
-    /**
-     * Lädt eine oder mehrere Musikdateien hoch (Listen Together) und startet
-     * danach automatisch eine Session mit der ersten Datei als aktiver Track
-     * und allen Dateien als Playlist.
-     */
     /** Lädt die verfügbaren Tracks für den Listen-Together-Ordner des Chats vom Server. */
     private suspend fun fetchAndApplyListenTogetherTracks(chatId: String) {
         try {
@@ -19771,86 +19766,6 @@ class MainViewModel @Inject constructor(
                 android.util.Log.e("ListenTogether", "Upload Exception: ${e.message}", e)
             } finally {
                 _listenTogetherUploading.value = false
-                _mediaUploadStatus.value = MediaUploadStatus.Idle
-            }
-        }
-    }
-
-    fun uploadAndStartListenTogether(chatId: String, uris: List<Uri>) {
-        if (uris.isEmpty()) return
-        viewModelScope.launch {
-            _mediaUploadStatus.value = MediaUploadStatus.Uploading(0)
-            val uploadedTracks = mutableListOf<ListenTogetherTrack>()
-            try {
-                uris.forEachIndexed { index, uri ->
-                    val displayName = context.contentResolver.query(
-                        uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null
-                    )?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
-                        ?: "music_${System.currentTimeMillis()}.mp3"
-                    val ext = displayName.substringAfterLast('.', "mp3").lowercase()
-                    val cacheFile = File(context.cacheDir, "lt_${System.currentTimeMillis()}_$index.$ext")
-                    withContext(Dispatchers.IO) {
-                        context.contentResolver.openInputStream(uri)?.use { input ->
-                            java.io.FileOutputStream(cacheFile).use { out -> input.copyTo(out) }
-                        }
-                    }
-
-                    var title    = displayName.substringBeforeLast('.')
-                    var artist   = "Unbekannt"
-                    var duration = 0L
-                    withContext(Dispatchers.IO) {
-                        runCatching {
-                            val retriever = MediaMetadataRetriever()
-                            retriever.setDataSource(cacheFile.absolutePath)
-                            title    = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)    ?: title
-                            artist   = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)   ?: artist
-                            duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
-                            retriever.release()
-                        }
-                    }
-
-                    val totalFiles = uris.size
-                    val rawRequest = cacheFile.asRequestBody("audio/*".toMediaTypeOrNull())
-                    val requestFile = ProgressRequestBody(
-                        delegate   = rawRequest,
-                        onProgress = { sent, total ->
-                            if (total > 0) {
-                                val filePct = sent.toFloat() / total
-                                val overallPct = ((index + filePct) / totalFiles * 99).toInt().coerceIn(0, 99)
-                                _mediaUploadStatus.value = MediaUploadStatus.Uploading(overallPct)
-                            }
-                        }
-                    )
-                    val body     = MultipartBody.Part.createFormData("file", cacheFile.name, requestFile)
-                    val typeBody = "audio_music".toRequestBody("text/plain".toMediaTypeOrNull())
-                    val response = apiService.uploadMedia(typeBody, body)
-                    withContext(Dispatchers.IO) { cacheFile.delete() }
-
-                    if (response.isSuccessful) {
-                        val mediaUrl = response.body()?.get("url")?.let { toAbsoluteUrl(it) }
-                        if (mediaUrl != null) {
-                            uploadedTracks += ListenTogetherTrack(
-                                url        = mediaUrl,
-                                title      = title,
-                                artist     = artist,
-                                durationMs = duration
-                            )
-                        }
-                    } else {
-                        Timber.tag("LETHE_LISTEN").e("Upload fehlgeschlagen (${index + 1}/${uris.size}): ${response.code()}")
-                    }
-                }
-
-                if (uploadedTracks.isNotEmpty()) {
-                    requestListenTogether(
-                        chatId   = chatId,
-                        track    = uploadedTracks.first(),
-                        playlist = uploadedTracks
-                    )
-                }
-            } catch (e: Exception) {
-                Timber.tag("LETHE_LISTEN").e(e, "Musik-Upload für Listen Together fehlgeschlagen")
-            } finally {
                 _mediaUploadStatus.value = MediaUploadStatus.Idle
             }
         }

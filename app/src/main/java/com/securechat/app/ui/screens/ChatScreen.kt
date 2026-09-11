@@ -1382,6 +1382,7 @@ fun ChatScreen(
     val savedListenTogetherChatId   by viewModel.savedListenTogetherChatId.collectAsState()
     var showListenTogetherPlayer by remember { mutableStateOf(true) }
     var showListenTogetherSetup by remember { mutableStateOf(false) }
+    var showListenTogetherLibrary by remember { mutableStateOf(false) }
     var showDetachedMusicPlayer by remember { mutableStateOf(false) }
 
     // Gruppen-Objekt EINMALIG auflösen statt zweifacher .find() pro Recomposition:
@@ -2188,11 +2189,6 @@ fun ChatScreen(
             }
         )
     }
-    // Dedizierter Musik-Launcher nur für Listen Together – mehrere Dateien → Playlist
-    val listenTogetherMusicLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
-        if (uris.isNotEmpty()) viewModel.uploadAndStartListenTogether(chatId, uris)
-    }
-
     // --- Chat-Export als HTML ---
     val chatExportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/html")) { uri: Uri? ->
         if (uri == null) { chatExportInProgress = false; return@rememberLauncherForActivityResult }
@@ -3334,7 +3330,7 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
                                             showListenTogetherPlayer = true
                                         }
                                         else -> {
-                                            listenTogetherMusicLauncher.launch("audio/*")
+                                            showListenTogetherLibrary = true
                                         }
                                     }
                                 }
@@ -5749,6 +5745,19 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
                 showListenTogetherSetup = false
                 if (playlist.isNotEmpty()) {
                     viewModel.saveListenTogetherPlaylist(chatId, playlist)
+                }
+            }
+        )
+    }
+    if (showListenTogetherLibrary) {
+        ListenTogetherLibraryScreen(
+            viewModel  = viewModel,
+            onDismiss  = { showListenTogetherLibrary = false },
+            onStart    = { playlist ->
+                showListenTogetherLibrary = false
+                if (playlist.isNotEmpty()) {
+                    viewModel.requestListenTogether(chatId, playlist.first(), playlist)
+                    showListenTogetherPlayer = true
                 }
             }
         )
@@ -17105,6 +17114,198 @@ fun ListenTogetherSetupScreen(
                     enabled = playlist.isNotEmpty() && !isUploading
                 ) {
                     Text("Speichern")
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ListenTogetherLibraryScreen
+// Vollbild-Overlay: zeigt die eigene Lethe-Bibliothek (Playlists + Lieblingssongs)
+// zur Auswahl für Listen Together. Antippen startet die Wiedergabe sofort bei allen.
+// ─────────────────────────────────────────────────────────────────────────────
+
+private enum class ListenTogetherLibraryTab(val label: String) {
+    PLAYLISTS("Playlisten"),
+    FAVORITES("Lieblingssongs")
+}
+
+private fun com.securechat.app.data.network.UserMusicResponse.toListenTogetherTrack(): MainViewModel.ListenTogetherTrack =
+    MainViewModel.ListenTogetherTrack(
+        url        = musicUrl,
+        title      = musicTitle?.ifBlank { null } ?: "Unbekannt",
+        artist     = artist ?: "",
+        durationMs = (playTime ?: 0) * 1000L
+    )
+
+@Composable
+fun ListenTogetherLibraryScreen(
+    viewModel: MainViewModel,
+    onDismiss: () -> Unit,
+    onStart: (playlist: List<MainViewModel.ListenTogetherTrack>) -> Unit,
+) {
+    val library by viewModel.userMusicLibrary.collectAsState()
+    val playlists by viewModel.userPlaylists.collectAsState()
+    val playlistTracks by viewModel.playlistTracks.collectAsState()
+    val favorites = library.filter { it.favorit }
+
+    var selectedTab by remember { mutableStateOf(ListenTogetherLibraryTab.PLAYLISTS) }
+    var pendingPlaylistId by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) { viewModel.loadUserMusicLibrary() }
+
+    LaunchedEffect(playlistTracks, pendingPlaylistId) {
+        val id = pendingPlaylistId ?: return@LaunchedEffect
+        val tracks = playlistTracks[id] ?: return@LaunchedEffect
+        pendingPlaylistId = null
+        if (tracks.isNotEmpty()) {
+            onStart(tracks.map { it.toListenTogetherTrack() })
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .height(56.dp)
+                    .padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Zurück")
+                }
+                Text(
+                    text = "Lethe Bibliothek",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                if (pendingPlaylistId != null) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(16.dp))
+                }
+            }
+
+            TabRow(selectedTabIndex = selectedTab.ordinal) {
+                ListenTogetherLibraryTab.entries.forEach { tab ->
+                    Tab(
+                        selected = selectedTab == tab,
+                        onClick = { selectedTab = tab },
+                        text = { Text(tab.label) }
+                    )
+                }
+            }
+
+            when (selectedTab) {
+                ListenTogetherLibraryTab.PLAYLISTS -> {
+                    if (playlists.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(
+                                "Noch keine Playlists angelegt",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            items(playlists, key = { it.playlistId }) { pl ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable(enabled = pendingPlaylistId == null) {
+                                            pendingPlaylistId = pl.playlistId
+                                            viewModel.loadPlaylistTracks(pl.playlistId)
+                                        }
+                                        .padding(horizontal = 8.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Filled.QueueMusic,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Spacer(Modifier.width(10.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(pl.playlistName, style = MaterialTheme.typography.bodyMedium)
+                                        Text(
+                                            "${pl.trackCount} Titel",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Icon(
+                                        Icons.Default.PlayCircle,
+                                        contentDescription = "Für alle abspielen",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                ListenTogetherLibraryTab.FAVORITES -> {
+                    if (favorites.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(
+                                "Keine Lieblingssongs",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            items(favorites, key = { it.id }) { track ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            // Angetippten Song zuerst spielen, Rest der Favoriten als Playlist dahinter
+                                            val ordered = listOf(track) + favorites.filter { it.id != track.id }
+                                            onStart(ordered.map { it.toListenTogetherTrack() })
+                                        }
+                                        .padding(horizontal = 8.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.Favorite,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(Modifier.width(10.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            track.musicTitle?.ifBlank { null } ?: "Unbekannt",
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                        Text(
+                                            track.artist?.ifBlank { null } ?: "Unbekannt",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Icon(
+                                        Icons.Default.PlayCircle,
+                                        contentDescription = "Für alle abspielen",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

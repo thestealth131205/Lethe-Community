@@ -24,6 +24,15 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.173",
+            title = "Gemeinsam hören überarbeitet",
+            items = listOf(
+                "\"Gemeinsam hören\" im Chat öffnet jetzt die eigene Lethe-Bibliothek (Playlisten/Lieblingssongs) statt einer Datei-Auswahl – ein Antippen startet die Wiedergabe sofort bei allen Teilnehmern",
+            ),
+            shortSummary = "\"Gemeinsam hören\" nutzt jetzt die eigene Musikbibliothek statt Dateiauswahl"
+        ),
+
+        ChangelogEntry(
             version = "10.4.172",
             title = "Gruppen-Pin-Fix",
             items = listOf(
@@ -65,19 +74,6 @@ object AppChangelog {
                 "Die Verbindungsprüfung setzt einen Durchlauf aus, wenn die letzten Prüfungen bereits erfolgreich waren",
             ),
             shortSummary = "Weniger Akkuverbrauch im Hintergrund durch optimierte Verbindungsprüfungen"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.168",
-            title = "Code-Anhänge & Chat-Verbesserungen",
-            items = listOf(
-                "Neu: Dateien lassen sich jetzt als Code-Anhang senden (eigenes Symbol im Anhang-Menü) – werden im Chat als Codeblock mit Syntax-Hervorhebung angezeigt und mit Originalnamen gespeichert",
-                "Neu: Ein Codeblock lässt sich auch direkt im Textfeld eingeben (/* dateiname.endung ... */) – wird automatisch als Code-Datei gesendet",
-                "Der Code-Betrachter hat jetzt einen Download-Button und erkennt zusätzlich C#, C++, HTML, PHP, Java, XML, JSON, YAML und Python",
-                "Tippt man auf eine zitierte Nachricht, wird die Originalnachricht beim Hinspringen kurz hervorgehoben",
-                "Circle- und normale Videos im Chat werden nach dem ersten Abspielen nicht mehr schwarz und lassen sich weiterhin abspielen",
-            ),
-            shortSummary = "Code-Anhänge im Chat, verbesserter Code-Betrachter, Zitat-Hervorhebung und Video-Wiedergabe-Fix"
         ),
 
     )
