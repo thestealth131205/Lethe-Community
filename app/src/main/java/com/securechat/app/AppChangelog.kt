@@ -24,6 +24,16 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.172",
+            title = "Gruppen-Pin-Fix",
+            items = listOf(
+                "Bis zu 3 Gruppen können jetzt gleichzeitig angepinnt werden (statt bisher 2)",
+                "Fehler behoben, durch den nach dem Löschen einer angepinnten Gruppe weiterhin keine neue Gruppe angepinnt werden konnte",
+            ),
+            shortSummary = "Bis zu 3 angepinnte Gruppen möglich, verwaiste Pins werden jetzt zuverlässig entfernt"
+        ),
+
+        ChangelogEntry(
             version = "10.4.171",
             title = "Mitglieder entfernen & Gruppen-Schlüssel-Fixes",
             items = listOf(
@@ -68,18 +78,6 @@ object AppChangelog {
                 "Circle- und normale Videos im Chat werden nach dem ersten Abspielen nicht mehr schwarz und lassen sich weiterhin abspielen",
             ),
             shortSummary = "Code-Anhänge im Chat, verbesserter Code-Betrachter, Zitat-Hervorhebung und Video-Wiedergabe-Fix"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.167",
-            title = "Anruf-Benachrichtigungen & Jump or Die verbessert",
-            items = listOf(
-                "Eingehende Anrufe werden auf der SmartWatch (WearOS) jetzt korrekt als Anruf mit Annehmen/Ablehnen angezeigt statt nur als normale Nachricht",
-                "Beim Videoanruf erscheint beim Angerufenen nicht mehr kurz nacheinander erst ein Banner und dann die Vollbildansicht – je nach Bildschirmzustand nur noch eine der beiden",
-                "Bricht der Anrufer ab, weil der Angerufene nicht erreichbar ist, hört es bei diesem jetzt sofort auf zu klingeln, statt bis zum eigenen Timeout weiterzulaufen",
-                "Jump or Die: Schwarzes Loch, Schutzschild und Blase sind jetzt 50% größer und leichter zu treffen",
-            ),
-            shortSummary = "WearOS-Anrufanzeige, Anruf-Benachrichtigung entdoppelt, zuverlässiger Anrufabbruch, größere Items in Jump or Die"
         ),
 
     )

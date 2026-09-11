@@ -3693,15 +3693,29 @@ class MainViewModel @Inject constructor(
     val pinnedContactIds: StateFlow<Set<String>> = _pinnedContactIds.asStateFlow()
 
     private fun loadPinnedItems() {
-        _pinnedGroupIds.value = pinnedPrefs.getStringSet("pinned_groups", emptySet()) ?: emptySet()
+        val storedGroupPins = pinnedPrefs.getStringSet("pinned_groups", emptySet()) ?: emptySet()
+        _pinnedGroupIds.value = storedGroupPins
         _pinnedContactIds.value = pinnedPrefs.getStringSet("pinned_contacts", emptySet()) ?: emptySet()
+        // Sicherheitsnetz: verwaiste Pins längst gelöschter Gruppen bereinigen, falls eine
+        // Gruppe je auf einem anderen Weg als leaveGroup()/handleRemovedFromGroup() aus der
+        // lokalen DB verschwunden ist – sonst blockieren sie dauerhaft das Pin-Limit.
+        if (storedGroupPins.isNotEmpty()) {
+            viewModelScope.launch(Dispatchers.IO) {
+                val existingIds = groupDao.getAllGroups().first().map { it.groupId }.toSet()
+                val validPins = storedGroupPins.intersect(existingIds)
+                if (validPins != storedGroupPins) {
+                    _pinnedGroupIds.value = validPins
+                    pinnedPrefs.edit().putStringSet("pinned_groups", validPins).apply()
+                }
+            }
+        }
     }
 
     fun toggleGroupPin(groupId: String) {
         val current = _pinnedGroupIds.value.toMutableSet()
         if (current.contains(groupId)) {
             current.remove(groupId)
-        } else if (current.size < 2) {
+        } else if (current.size < 3) {
             current.add(groupId)
         }
         _pinnedGroupIds.value = current
@@ -16945,7 +16959,7 @@ class MainViewModel @Inject constructor(
     private suspend fun handleRemovedFromGroup(groupId: String, statusMessage: String) {
         groupDao.deleteGroup(groupId)
         // Angepinnte gelöschte Gruppe entfernen – sonst blockiert die verwaiste ID dauerhaft
-        // das 2er-Pin-Limit (toggleGroupPin) für neu erstellte Gruppen.
+        // das Pin-Limit (toggleGroupPin) für neu erstellte Gruppen.
         if (groupId in _pinnedGroupIds.value) {
             val updatedPins = _pinnedGroupIds.value - groupId
             _pinnedGroupIds.value = updatedPins
