@@ -756,6 +756,13 @@
     <string name="age_verify_uploading">Verifying…</string>
     <string name="age_verify_calendar_cd">Calendar</string>
     <string name="contacts_menu_account">Account</string>
+    <string name="contacts_menu_change_phone">Change phone number</string>
+    <string name="change_phone_title">New phone number</string>
+    <string name="change_phone_desc">Enter your new phone number. We\'ll send you a confirmation code via SMS.</string>
+    <string name="change_phone_code_sent">We sent a code to %1$s. Please enter it below.</string>
+    <string name="change_phone_code_label">SMS code</string>
+    <string name="change_phone_send_code">Send code</string>
+    <string name="change_phone_confirm">Confirm</string>
     <string name="contacts_menu_invite">Invite Friends</string>
     <string name="contacts_menu_devices">Linked Devices</string>
     <string name="contacts_menu_blocked">Blocked Users</string>

@@ -8601,6 +8601,90 @@ class MainViewModel @Inject constructor(
     }
 
     /**
+     * Sendet einen OTP-Code an die neue Handynummer (Nummernwechsel eines
+     * eingeloggten Accounts). Callback meldet Erfolg/Fehler an den Dialog.
+     */
+    fun sendPhoneChangeOtp(phoneE164: String, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                val response = apiService.sendPhoneOtp(PhoneOtpRequest(phoneNumber = phoneE164))
+                if (response.isSuccessful) {
+                    onResult(true, "SMS gesendet")
+                } else {
+                    val err = response.errorBody()?.string() ?: ""
+                    val detail = try {
+                        org.json.JSONObject(err).optString("detail", "Fehler beim Senden (${response.code()})")
+                    } catch (_: Exception) { "Fehler beim Senden (${response.code()})" }
+                    onResult(false, detail)
+                }
+            } catch (e: Exception) {
+                onResult(false, e.message ?: "Netzwerkfehler")
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    /**
+     * Bestätigt den OTP-Code für die neue Handynummer. Bei Erfolg:
+     * is_phone_verified setzen, aktuellen ECDH-Schlüssel hochladen und allen
+     * Kontakten eine Handshake-Erneuerungs-Anfrage (inkl. Public Key) senden,
+     * damit sie den neuen Schlüssel erhalten.
+     */
+    fun confirmPhoneNumberChange(phoneE164: String, code: String, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                val response = apiService.confirmPhoneOtp(
+                    PhoneOtpConfirmRequest(phoneNumber = phoneE164, code = code)
+                )
+                if (response.isSuccessful && response.body()?.success == true) {
+                    val user = _currentUser.value
+                    if (user != null) {
+                        val updated = user.copy(isPhoneVerified = true)
+                        userDao.insertUser(updated)
+                        _currentUser.value = updated
+                    }
+                    withContext(Dispatchers.IO) {
+                        // Aktuellen ECDH-Schlüssel sicherstellen + hochladen
+                        try {
+                            val softPrivKey = _currentUser.value?.privateKey
+                            val softPubKey = _currentUser.value?.publicKey
+                            val ecdhPubKey = CryptoManager.ensureKeyPair(context, softPrivKey, softPubKey)
+                            val exportedSoftKey = CryptoManager.exportSoftPrivateKey()
+                            if (exportedSoftKey != null && exportedSoftKey != softPrivKey) {
+                                val refreshed = _currentUser.value?.copy(privateKey = exportedSoftKey)
+                                if (refreshed != null) {
+                                    userDao.insertUser(refreshed)
+                                    _currentUser.value = refreshed
+                                }
+                            }
+                            apiService.updateEcdhKey(EcdhKeyUpdateRequest(ecdhPubKey))
+                        } catch (e: Exception) {
+                            Timber.tag("LETHE_E2EE").w("ECDH-Upload nach Nummernwechsel: ${e.message}")
+                        }
+                        // Allen Kontakten Handshake-Erneuerung (neuer Schlüssel) senden
+                        renewAllContactHandshakesSilent()
+                    }
+                    _contactScreenMessage.value = "Nummer erfolgreich geändert"
+                    onResult(true, "Nummer erfolgreich geändert")
+                } else {
+                    val err = response.errorBody()?.string() ?: ""
+                    val detail = try {
+                        org.json.JSONObject(err).optString("detail", "Falscher oder abgelaufener Code.")
+                    } catch (_: Exception) { "Falscher oder abgelaufener Code." }
+                    onResult(false, detail)
+                }
+            } catch (e: Exception) {
+                onResult(false, e.message ?: "Netzwerkfehler")
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    /**
      * Passwort ändern. Bei Erfolg gibt der Server ein neues Token zurück —
      * alle anderen aktiven Sessions werden sofort ungültig (token_version Mechanismus).
      */
@@ -10983,6 +11067,12 @@ class MainViewModel @Inject constructor(
                     replyToSenderId = payload["reply_to_sender_id"] as? String,
                     replyToMessageId = payload["reply_to_message_id"] as? String
                 ))
+
+                // Nummernwechsel-Systemhinweis: nur anzeigen, keine Benachrichtigung/Badge
+                if (senderId == "lethe_system" && mediaType == "number_changed") {
+                    Timber.tag("LETHE_WS").d("Gruppen-Systemhinweis (number_changed) gespeichert: $groupId")
+                    return
+                }
 
                 // Termin-Nachricht: direkt laden damit die Karte sofort angezeigt wird
                 if (mediaType == "appointment" || mediaType == "appointment_proposal") {

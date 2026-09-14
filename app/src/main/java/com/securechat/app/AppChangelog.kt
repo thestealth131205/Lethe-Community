@@ -24,6 +24,17 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.174",
+            title = "Neue Handynummer & Playlist-Verschieben",
+            items = listOf(
+                "Neu: Im Kontaktlisten-Menü unter \"Account\" kann jetzt eine neue Handynummer per SMS-Code bestätigt werden – alle Kontakte erhalten automatisch eine Schlüssel-Erneuerung und im Chat erscheint ein Hinweis auf die neue Nummer",
+                "Songtexte-Viewer: Zeilen sind jetzt durch Leerzeilen besser lesbar, der komplette Text lässt sich beim Teilen bis zum Ende durchscrollen, und in der Teilen-Ansicht kann per Zwei-Finger-Geste gezoomt werden",
+                "Fehler behoben, durch den der Jam-Ansicht beim gleichzeitigen Anzeigen von Teilnehmern und Kontakten abstürzen konnte",
+            ),
+            shortSummary = "Neue Handynummer mit automatischer Schlüssel-Erneuerung, verbesserter Songtexte-Viewer"
+        ),
+
+        ChangelogEntry(
             version = "10.4.173",
             title = "Gemeinsam hören überarbeitet",
             items = listOf(
@@ -63,17 +74,6 @@ object AppChangelog {
                 "Der Hintergrund-Weichzeichner bei Videoanrufen wirkt jetzt feiner und stärker statt grob verpixelt",
             ),
             shortSummary = "Absturz-Fix bei Gruppenbildern, sparsamerer Bildeditor, feinerer Videoanruf-Weichzeichner"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.169",
-            title = "Akkuverbrauch im Hintergrund reduziert",
-            items = listOf(
-                "Der regelmäßige Geschwindigkeitstest im Hintergrund läuft jetzt nur noch halb so oft",
-                "Die Verbindungsprüfung läuft tagsüber etwas seltener und nachts (22-6 Uhr) deutlich seltener",
-                "Die Verbindungsprüfung setzt einen Durchlauf aus, wenn die letzten Prüfungen bereits erfolgreich waren",
-            ),
-            shortSummary = "Weniger Akkuverbrauch im Hintergrund durch optimierte Verbindungsprüfungen"
         ),
 
     )

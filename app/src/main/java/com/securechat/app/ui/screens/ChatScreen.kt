@@ -3809,6 +3809,24 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
                                         return@items
                                     }
 
+                                    // Nummernwechsel-Hinweis: kleine akzentfarbige Schrift, ohne Sprechblase/Hintergrund
+                                    if (msg.mediaType == "number_changed") {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 4.dp, horizontal = 24.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = msg.content ?: "",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                            )
+                                        }
+                                        return@items
+                                    }
+
                                     val isSelected = msg.localId in selectedIds
                                     val isSearchHighlight = searchQuery.isNotBlank() && msg.localId == currentSearchResultLocalId
                                     val isReplyJumpHighlight = msg.localId == replyJumpHighlightLocalId

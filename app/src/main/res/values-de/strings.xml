@@ -751,6 +751,13 @@
     <string name="age_verify_uploading">Wird überprüft…</string>
     <string name="age_verify_calendar_cd">Kalender</string>
     <string name="contacts_menu_account">Account</string>
+    <string name="contacts_menu_change_phone">Neue Handynummer angeben</string>
+    <string name="change_phone_title">Neue Handynummer</string>
+    <string name="change_phone_desc">Gib deine neue Handynummer ein. Wir senden dir einen Bestätigungscode per SMS.</string>
+    <string name="change_phone_code_sent">Wir haben einen Code an %1$s gesendet. Bitte gib ihn ein.</string>
+    <string name="change_phone_code_label">SMS-Code</string>
+    <string name="change_phone_send_code">Code senden</string>
+    <string name="change_phone_confirm">Bestätigen</string>
     <string name="contacts_menu_invite">Freunde werben</string>
     <string name="contacts_menu_devices">Verknüpfte Geräte</string>
     <string name="contacts_menu_blocked">Blockierte Nutzer</string>
