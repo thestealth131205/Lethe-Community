@@ -1574,6 +1574,15 @@
     <string name="handshake_renew_accept">Annehmen</string>
     <string name="handshake_renew_reject">Ablehnen</string>
 
+    <!-- ── GERÄTE-AUTHENTIFIZIERUNG ── -->
+    <string name="device_auth_title">Gerät bestätigen</string>
+    <string name="device_auth_text">möchte sich an deinem Konto anmelden.</string>
+    <string name="device_auth_password_hint">Kontopasswort</string>
+    <string name="device_auth_biometric_button">Mit Fingerabdruck bestätigen</string>
+    <string name="device_auth_pending_title">Mit Lethe Messenger verifizieren</string>
+    <string name="device_auth_pending_text">Bitte bestätige diese Anmeldung auf einem Gerät, auf dem die Lethe Messenger App bereits mit deinem Konto verbunden ist.</string>
+    <string name="device_auth_deny_button">Nein, das bin ich nicht</string>
+
     <!-- ── STATUS SCREEN ── -->
     <string name="status_take_photo_cd">Foto aufnehmen</string>
     <string name="status_take_video_cd">Video aufnehmen</string>

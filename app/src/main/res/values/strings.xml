@@ -1864,6 +1864,15 @@
     <string name="handshake_renew_accept">Accept</string>
     <string name="handshake_renew_reject">Decline</string>
 
+    <!-- ── DEVICE AUTH REQUEST SCREEN ── -->
+    <string name="device_auth_title">Confirm device</string>
+    <string name="device_auth_text">wants to sign in to your account.</string>
+    <string name="device_auth_password_hint">Account password</string>
+    <string name="device_auth_biometric_button">Confirm with fingerprint</string>
+    <string name="device_auth_deny_button">No, that\'s not me</string>
+    <string name="device_auth_pending_title">Verify with Lethe Messenger</string>
+    <string name="device_auth_pending_text">Please confirm this sign-in on a device where the Lethe Messenger app is already linked to your account.</string>
+
     <!-- ── CREATOR ADD ARTICLE ── -->
     <string name="creator_article_title_label">Title *</string>
     <string name="creator_article_description_label">Description</string>

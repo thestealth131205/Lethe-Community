@@ -241,10 +241,11 @@ class MainActivity : FragmentActivity() {
                     viewModel.storePendingChildInviteToken(childInviteToken)
                 }
                 // Normaler Benachrichtigungs-Deep-Link (chat_id / navigate_to)
-                val intentChatId = if (intentNavigateTo == "nearby_chat")
-                    intent.getStringExtra("match_id")
-                else
-                    intent.getStringExtra("chat_id")
+                val intentChatId = when (intentNavigateTo) {
+                    "nearby_chat" -> intent.getStringExtra("match_id")
+                    "device_auth" -> intent.getStringExtra("request_id")
+                    else -> intent.getStringExtra("chat_id")
+                }
                 viewModel.setPendingDeepLink(
                     chatId = intentChatId,
                     navigateTo = intentNavigateTo
@@ -556,6 +557,16 @@ class MainActivity : FragmentActivity() {
                             navController.navigate("content_view/$chatId") {
                                 launchSingleTop = true
                             }
+                        }
+                        return@LaunchedEffect
+                    }
+                    if (navigateTo == "device_auth") {
+                        if (chatId != null) {
+                            navController.navigate("contacts") {
+                                popUpTo("login") { inclusive = true }
+                                launchSingleTop = true
+                            }
+                            navController.navigate("device_auth/$chatId")
                         }
                         return@LaunchedEffect
                     }
@@ -1513,6 +1524,16 @@ class MainActivity : FragmentActivity() {
                                 contentId = cId,
                                 navController = navController,
                                 fontSizeMultiplier = preferences.fontSizeMultiplier
+                            )
+                        }
+
+                        composable("device_auth/{requestId}") { backStack ->
+                            val reqId = backStack.arguments?.getString("requestId") ?: return@composable
+                            DeviceAuthRequestScreen(
+                                requestId = reqId,
+                                viewModel = viewModel,
+                                activity = this@MainActivity,
+                                onNavigateBack = { navController.popBackStack() }
                             )
                         }
 
@@ -3006,10 +3027,11 @@ class MainActivity : FragmentActivity() {
         }
         // Benachrichtigungs-Deep-Link (chat_id / navigate_to) reaktiv weiterleiten
         // Bei navigate_to="nearby_chat" wird match_id als chatId weitergegeben
-        val newIntentChatId = if (newIntentNavigateTo == "nearby_chat")
-            intent.getStringExtra("match_id")
-        else
-            intent.getStringExtra("chat_id")
+        val newIntentChatId = when (newIntentNavigateTo) {
+            "nearby_chat" -> intent.getStringExtra("match_id")
+            "device_auth" -> intent.getStringExtra("request_id")
+            else -> intent.getStringExtra("chat_id")
+        }
         viewModel.setPendingDeepLink(
             chatId = newIntentChatId,
             navigateTo = newIntentNavigateTo

@@ -51,6 +51,10 @@ interface ApiService {
     @POST("login/verify-device")
     suspend fun verifyDevice(@Body request: DeviceVerifyRequest): Response<DeviceVerifyResponse>
 
+    // Neues Gerät via Lethe-Messenger-Freigabe pollen (authMethod="messenger")
+    @POST("login/device-auth/poll")
+    suspend fun pollDeviceAuth(@Body request: DeviceAuthPollRequest): Response<DeviceAuthPollResponse>
+
     // ECDH Public Key hochladen
     @PUT("users/me/ecdh-key")
     suspend fun updateEcdhKey(@Body request: EcdhKeyUpdateRequest): Response<Map<String, String>>
@@ -438,6 +442,18 @@ interface ApiService {
 
     @POST("contacts/renew-handshake/respond")
     suspend fun respondHandshakeRenew(@Body request: HandshakeRenewRespond): Response<Map<String, String>>
+
+    @GET("login/device-auth/{request_id}")
+    suspend fun getDeviceAuthRequest(@Path("request_id") requestId: String): Response<DeviceAuthRequestInfo>
+
+    @POST("login/device-auth/{request_id}/approve")
+    suspend fun approveDeviceAuthRequest(
+        @Path("request_id") requestId: String,
+        @Body request: DeviceAuthApproveRequest
+    ): Response<Map<String, String>>
+
+    @POST("login/device-auth/{request_id}/deny")
+    suspend fun denyDeviceAuthRequest(@Path("request_id") requestId: String): Response<Map<String, String>>
 
     @POST("blocks/add")
     suspend fun blockUser(@Body request: BlockUserRequest): Response<Map<String, String>>

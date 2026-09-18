@@ -111,14 +111,16 @@ data class RegistrationOtpRequest(
 data class UserLoginRequest(
     @SerializedName("fake_number") val fakeNumber: String,
     @SerializedName("password") val password: String,
-    @SerializedName("device_fingerprint") val deviceFingerprint: String = ""
+    @SerializedName("device_fingerprint") val deviceFingerprint: String = "",
+    @SerializedName("device_type") val deviceType: String = "messenger_android"
 )
 
 // Login per Telefonnummer (E.164) + Passwort
 data class PhoneLoginRequest(
     @SerializedName("phone_number") val phoneNumber: String,
     @SerializedName("password") val password: String,
-    @SerializedName("device_fingerprint") val deviceFingerprint: String = ""
+    @SerializedName("device_fingerprint") val deviceFingerprint: String = "",
+    @SerializedName("device_type") val deviceType: String = "messenger_android"
 )
 
 // ECDH Public Key hochladen nach Schlüsselgenerierung (+ Signing Key für Anti-MITM)
@@ -271,7 +273,10 @@ data class LoginResponse(
     @SerializedName("user_id") val userId: String? = null,
     // Neues Gerät
     @SerializedName("new_device") val newDevice: Boolean = false,
-    @SerializedName("session_token") val sessionToken: String? = null
+    @SerializedName("session_token") val sessionToken: String? = null,
+    // "sms" (Fallback) oder "messenger" (Freigabe per verknüpftem Lethe-Messenger-Gerät)
+    @SerializedName("auth_method") val authMethod: String? = null,
+    @SerializedName("request_id") val requestId: String? = null
 )
 
 // Anfrage zur Verifikation eines neuen Geräts (SMS-Code eingeben)
@@ -289,11 +294,27 @@ data class DeviceVerifyResponse(
     @SerializedName("key_backup") val keyBackup: String?
 )
 
-// State für neues Gerät – wird im ViewModel gehalten bis SMS-Code eingegeben
+// State für neues Gerät – wird im ViewModel gehalten bis SMS-Code eingegeben ODER
+// (authMethod="messenger") bis das verknüpfte Messenger-Gerät die Anmeldung bestätigt hat
 data class NewDeviceState(
     val sessionToken: String,
     val fakeNumber: String,
-    val password: String  // temporär gehalten um Key-Backup zu entschlüsseln
+    val password: String,  // temporär gehalten um Key-Backup zu entschlüsseln
+    val authMethod: String = "sms"
+)
+
+// Poll-Anfrage für /login/device-auth/poll (unauthentifiziert, session_token-basiert)
+data class DeviceAuthPollRequest(
+    @SerializedName("session_token") val sessionToken: String
+)
+
+// Poll-Antwort für /login/device-auth/poll (Gerät wartet auf Freigabe durch Messenger-Gerät)
+data class DeviceAuthPollResponse(
+    val status: String, // pending | approved
+    @SerializedName("access_token") val accessToken: String? = null,
+    @SerializedName("token_type") val tokenType: String? = null,
+    @SerializedName("user_id") val userId: String? = null,
+    @SerializedName("key_backup") val keyBackup: String? = null
 )
 
 data class UserStatusResponse(
@@ -603,6 +624,32 @@ data class HandshakeRenewRequest(
 data class HandshakeRenewRespond(
     @SerializedName("partner_id") val partnerId: String,
     val action: String
+)
+
+// --- Geräte-Authentifizierung per Lethe Messenger ---
+
+data class DeviceAuthRequestInfo(
+    val id: String,
+    @SerializedName("app_name") val appName: String,
+    @SerializedName("device_name") val deviceName: String?,
+    @SerializedName("ip_address") val ipAddress: String?,
+    @SerializedName("approx_location") val approxLocation: String?,
+    @SerializedName("created_at") val createdAt: String,
+    val status: String
+)
+
+data class DeviceAuthApproveRequest(
+    val password: String? = null,
+    @SerializedName("via_biometric") val viaBiometric: Boolean = false
+)
+
+data class IncomingDeviceAuthRequest(
+    @SerializedName("request_id") val requestId: String,
+    @SerializedName("app_name") val appName: String,
+    @SerializedName("device_name") val deviceName: String?,
+    @SerializedName("ip_address") val ipAddress: String?,
+    @SerializedName("approx_location") val approxLocation: String?,
+    @SerializedName("created_at") val createdAt: String
 )
 
 // --- WebSocket ---

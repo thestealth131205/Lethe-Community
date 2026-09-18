@@ -344,6 +344,13 @@ class PushPayloadHandler @Inject constructor(
                 notificationHelper.showContactRequestNotification(fromName, fromNumber, contactEntryId)
             }
 
+            "device_auth_request" -> {
+                val appName    = data["app_name"] ?: "Lethe"
+                val deviceName = data["device_name"]
+                val requestId  = data["request_id"] ?: return
+                notificationHelper.showDeviceAuthRequestNotification(appName, deviceName, requestId)
+            }
+
             "nearby_message" -> {
                 val senderName = data["sender_name"] ?: "Nearby"
                 val text       = data["text"] ?: "[Bild]"

@@ -3210,6 +3210,9 @@ class MainViewModel @Inject constructor(
     private val _incomingHandshakeRenew = MutableStateFlow<IncomingHandshakeRenew?>(null)
     val incomingHandshakeRenew: StateFlow<IncomingHandshakeRenew?> = _incomingHandshakeRenew.asStateFlow()
 
+    private val _incomingDeviceAuthRequest = MutableStateFlow<IncomingDeviceAuthRequest?>(null)
+    val incomingDeviceAuthRequest: StateFlow<IncomingDeviceAuthRequest?> = _incomingDeviceAuthRequest.asStateFlow()
+
     /** Link-Vorschau aus OG-Tags (wird beim URL-Tippen geladen). */
     private val _linkPreview = MutableStateFlow<LinkPreviewData?>(null)
     val linkPreview: StateFlow<LinkPreviewData?> = _linkPreview.asStateFlow()
@@ -7913,9 +7916,10 @@ class MainViewModel @Inject constructor(
                         _newDeviceState.value = NewDeviceState(
                             sessionToken = sessionToken,
                             fakeNumber = fakeNumber,
-                            password = password
+                            password = password,
+                            authMethod = body.authMethod ?: "sms"
                         )
-                        Timber.tag("LETHE_DEVICE").i("Neues Gerät erkannt – SMS-Verifikation erforderlich")
+                        Timber.tag("LETHE_DEVICE").i("Neues Gerät erkannt – ${body.authMethod ?: "sms"}-Verifikation erforderlich")
                     } else {
                         _statusMessage.value = "Neues Gerät erkannt, aber kein Session-Token erhalten."
                     }
@@ -7931,9 +7935,10 @@ class MainViewModel @Inject constructor(
                         _newDeviceState.value = NewDeviceState(
                             sessionToken = loginData.sessionToken,
                             fakeNumber = fakeNumber,
-                            password = password
+                            password = password,
+                            authMethod = loginData.authMethod ?: "sms"
                         )
-                        Timber.tag("LETHE_DEVICE").i("Neues Gerät erkannt (body flag) – SMS-Verifikation erforderlich")
+                        Timber.tag("LETHE_DEVICE").i("Neues Gerät erkannt (body flag) – ${loginData.authMethod ?: "sms"}-Verifikation erforderlich")
                         _isLoading.value = false
                         return@launch
                     }
@@ -8330,6 +8335,90 @@ class MainViewModel @Inject constructor(
     }
 
     /**
+     * Entschlüsselt und übernimmt ein Key-Backup nach erfolgreicher Geräte-Verifikation
+     * (SMS-Code ODER Messenger-Freigabe). Gemeinsam genutzt von [verifyNewDevice] und
+     * [pollNewDeviceMessengerAuth].
+     */
+    private suspend fun restoreKeyBackupIfPresent(keyBackupBlob: String?, password: String) {
+        if (keyBackupBlob.isNullOrBlank()) return
+        withContext(Dispatchers.IO) {
+            try {
+                val restoredPubKey = CryptoManager.decryptAndLoadKeyBackup(password, keyBackupBlob)
+                if (restoredPubKey != null) {
+                    // Korrektheits-Check: Stimmt der wiederhergestellte Key mit dem
+                    // server-bekannten Public Key überein? (Vor dem Upload prüfen.)
+                    val serverPubKey = try { apiService.getMe().body()?.publicKey } catch (_: Exception) { null }
+                    if (serverPubKey != null && serverPubKey.length > 100 && serverPubKey != restoredPubKey) {
+                        Timber.tag("LETHE_KEYS").w("Wiederhergestellter Key weicht vom Server-Key ab – Kontakte werden neu verschlüsselt")
+                        _statusMessage.value = "Hinweis: Dein wiederhergestellter Schlüssel unterscheidet sich vom zuletzt registrierten. Deine Kontakte erhalten deinen Schlüssel neu."
+                    } else {
+                        Timber.tag("LETHE_KEYS").d("Key-Backup nach Geräte-Verifikation wiederhergestellt (stimmt mit Server-Key überein)")
+                    }
+                    // Public Key auf Server aktualisieren
+                    try {
+                        apiService.updateEcdhKey(EcdhKeyUpdateRequest(restoredPubKey, notifyContacts = false))
+                    } catch (_: Exception) {}
+                    // Shared-Secret-Cache neu aufbauen
+                    CryptoManager.clearSecrets()
+                    try {
+                        val contacts = contactDao.getAllContacts().first()
+                        contacts.forEach { c ->
+                            if (c.publicKey.length > 100) {
+                                CryptoManager.deriveSharedSecret(c.userId, c.publicKey)
+                            }
+                        }
+                    } catch (_: Exception) {}
+                } else {
+                    Timber.tag("LETHE_KEYS").w("Key-Backup Entschlüsselung fehlgeschlagen (falsches Passwort?)")
+                    _statusMessage.value = "Schlüssel-Wiederherstellung fehlgeschlagen – Passwort falsch? Ältere Nachrichten bleiben evtl. unlesbar."
+                }
+            } catch (e: Exception) {
+                Timber.tag("LETHE_KEYS").e("Key-Restore fehlgeschlagen: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Pollt einmalig den Status einer Geräte-Authentifizierung per Lethe Messenger
+     * (auth_method="messenger", z.B. wenn dieses Gerät ein weiteres Smartphone mit der
+     * Messenger-App ist). Wird von der Login-UI in einer Schleife alle ~2s aufgerufen
+     * solange [newDeviceState] gesetzt und dessen authMethod=="messenger" ist.
+     * Rückgabe: "pending" | "approved" | "denied" | "expired".
+     */
+    suspend fun pollNewDeviceMessengerAuth(): String {
+        val state = _newDeviceState.value ?: return "expired"
+        return try {
+            val resp = apiService.pollDeviceAuth(DeviceAuthPollRequest(state.sessionToken))
+            when {
+                resp.isSuccessful && resp.body()?.status == "approved" -> {
+                    val body = resp.body()!!
+                    val accessToken = body.accessToken
+                    val userId = body.userId
+                    if (accessToken != null && userId != null) {
+                        _newDeviceState.value = null
+                        tokenManager.saveToken(accessToken, userId)
+                        prefsRepository.updateCredentials(state.fakeNumber, state.password, true)
+                        restoreKeyBackupIfPresent(body.keyBackup, state.password)
+                        login(state.fakeNumber, state.password, remember = true, autoLogin = false)
+                        viewModelScope.launch(Dispatchers.IO) {
+                            delay(4000)
+                            try { rotateEcdhKey { _, _ -> } } catch (_: Exception) {}
+                        }
+                    }
+                    "approved"
+                }
+                resp.isSuccessful -> "pending"
+                resp.code() == 403 -> { _newDeviceState.value = null; "denied" }
+                resp.code() == 410 -> { _newDeviceState.value = null; "expired" }
+                else -> "pending"
+            }
+        } catch (e: Exception) {
+            Timber.tag("LETHE_DEVICE_AUTH").w("pollNewDeviceMessengerAuth: ${e.message}")
+            "pending"
+        }
+    }
+
+    /**
      * Verifiziert einen SMS-Code für ein neues Gerät.
      * Wird aufgerufen wenn der Nutzer den Code aus der SMS eingibt.
      * Bei Erfolg: JWT speichern, Key-Backup wiederherstellen, dann normalen Login-Flow starten.
@@ -8358,44 +8447,7 @@ class MainViewModel @Inject constructor(
                     prefsRepository.updateCredentials(state.fakeNumber, state.password, true)
 
                     // Key-Backup wiederherstellen falls vorhanden
-                    val keyBackupBlob = body.keyBackup
-                    if (!keyBackupBlob.isNullOrBlank()) {
-                        withContext(Dispatchers.IO) {
-                            try {
-                                val restoredPubKey = CryptoManager.decryptAndLoadKeyBackup(state.password, keyBackupBlob)
-                                if (restoredPubKey != null) {
-                                    // Korrektheits-Check: Stimmt der wiederhergestellte Key mit dem
-                                    // server-bekannten Public Key überein? (Vor dem Upload prüfen.)
-                                    val serverPubKey = try { apiService.getMe().body()?.publicKey } catch (_: Exception) { null }
-                                    if (serverPubKey != null && serverPubKey.length > 100 && serverPubKey != restoredPubKey) {
-                                        Timber.tag("LETHE_KEYS").w("Wiederhergestellter Key weicht vom Server-Key ab – Kontakte werden neu verschlüsselt")
-                                        _statusMessage.value = "Hinweis: Dein wiederhergestellter Schlüssel unterscheidet sich vom zuletzt registrierten. Deine Kontakte erhalten deinen Schlüssel neu."
-                                    } else {
-                                        Timber.tag("LETHE_KEYS").d("Key-Backup nach Geräte-Verifikation wiederhergestellt (stimmt mit Server-Key überein)")
-                                    }
-                                    // Public Key auf Server aktualisieren
-                                    try {
-                                        apiService.updateEcdhKey(EcdhKeyUpdateRequest(restoredPubKey, notifyContacts = false))
-                                    } catch (_: Exception) {}
-                                    // Shared-Secret-Cache neu aufbauen
-                                    CryptoManager.clearSecrets()
-                                    try {
-                                        val contacts = contactDao.getAllContacts().first()
-                                        contacts.forEach { c ->
-                                            if (c.publicKey.length > 100) {
-                                                CryptoManager.deriveSharedSecret(c.userId, c.publicKey)
-                                            }
-                                        }
-                                    } catch (_: Exception) {}
-                                } else {
-                                    Timber.tag("LETHE_KEYS").w("Key-Backup Entschlüsselung fehlgeschlagen (falsches Passwort?)")
-                                    _statusMessage.value = "Schlüssel-Wiederherstellung fehlgeschlagen – Passwort falsch? Ältere Nachrichten bleiben evtl. unlesbar."
-                                }
-                            } catch (e: Exception) {
-                                Timber.tag("LETHE_KEYS").e("Key-Restore fehlgeschlagen: ${e.message}")
-                            }
-                        }
-                    }
+                    restoreKeyBackupIfPresent(body.keyBackup, state.password)
 
                     // Normalen Login-Flow starten (Profil laden, WebSocket, etc.)
                     // autoLogin=false damit kein endloser Rekursions-Cycle entsteht
@@ -10742,6 +10794,21 @@ class MainViewModel @Inject constructor(
                 val requesterKey = payload["requester_public_key"] as? String ?: ""
                 _incomingHandshakeRenew.value = IncomingHandshakeRenew(fromUserId, fromNumber, fromName, requesterKey)
                 Timber.tag("LETHE_E2EE").d("handshake_renew_request von: $fromName ($fromNumber)")
+            }
+
+            // Anderes Gerät (Media Player, Web Chat, weiteres Smartphone) möchte sich per Lethe Messenger authentifizieren
+            "device_auth_request" -> {
+                val payload = msg.payload as? Map<*, *> ?: return
+                val requestId = payload["request_id"] as? String ?: return
+                val appName = payload["app_name"] as? String ?: "Lethe"
+                val deviceName = payload["device_name"] as? String
+                val ipAddress = payload["ip_address"] as? String
+                val approxLocation = payload["approx_location"] as? String
+                val createdAt = payload["created_at"] as? String ?: ""
+                _incomingDeviceAuthRequest.value = IncomingDeviceAuthRequest(
+                    requestId, appName, deviceName, ipAddress, approxLocation, createdAt
+                )
+                Timber.tag("LETHE_DEVICE_AUTH").d("device_auth_request: $appName ($ipAddress)")
             }
 
             // Partner hat Handshake-Erneuerung angenommen → frische Keys ableiten
@@ -16808,6 +16875,69 @@ class MainViewModel @Inject constructor(
     }
 
     fun clearIncomingHandshakeRenew() { _incomingHandshakeRenew.value = null }
+
+    // --- GERÄTE-AUTHENTIFIZIERUNG PER LETHE MESSENGER ---
+
+    suspend fun fetchDeviceAuthRequestInfo(requestId: String): DeviceAuthRequestInfo? = withContext(Dispatchers.IO) {
+        try {
+            val resp = apiService.getDeviceAuthRequest(requestId)
+            if (resp.isSuccessful) resp.body() else null
+        } catch (e: Exception) {
+            Timber.tag("LETHE_DEVICE_AUTH").w("fetchDeviceAuthRequestInfo: ${e.message}")
+            null
+        }
+    }
+
+    fun approveDeviceAuthRequest(
+        requestId: String,
+        password: String?,
+        viaBiometric: Boolean,
+        onResult: ((Boolean, String?) -> Unit)? = null
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val resp = apiService.approveDeviceAuthRequest(
+                    requestId, DeviceAuthApproveRequest(password, viaBiometric)
+                )
+                withContext(Dispatchers.Main) {
+                    if (resp.isSuccessful) {
+                        _incomingDeviceAuthRequest.value = null
+                        _contactScreenMessage.value = "Gerät wurde bestätigt"
+                        onResult?.invoke(true, null)
+                    } else {
+                        val msg = "Bestätigung fehlgeschlagen (${resp.code()})"
+                        _contactScreenMessage.value = msg
+                        onResult?.invoke(false, msg)
+                    }
+                }
+            } catch (e: Exception) {
+                Timber.tag("LETHE_DEVICE_AUTH").w("approveDeviceAuthRequest: ${e.message}")
+                withContext(Dispatchers.Main) {
+                    _contactScreenMessage.value = "Bestätigung fehlgeschlagen"
+                    onResult?.invoke(false, "Bestätigung fehlgeschlagen")
+                }
+            }
+        }
+    }
+
+    fun denyDeviceAuthRequest(requestId: String, onResult: ((Boolean) -> Unit)? = null) {
+        viewModelScope.launch(Dispatchers.IO) {
+            var ok = true
+            try {
+                apiService.denyDeviceAuthRequest(requestId)
+            } catch (e: Exception) {
+                ok = false
+                Timber.tag("LETHE_DEVICE_AUTH").w("denyDeviceAuthRequest: ${e.message}")
+            }
+            withContext(Dispatchers.Main) {
+                _incomingDeviceAuthRequest.value = null
+                _contactScreenMessage.value = "Gerät wurde abgelehnt"
+                onResult?.invoke(ok)
+            }
+        }
+    }
+
+    fun clearIncomingDeviceAuthRequest() { _incomingDeviceAuthRequest.value = null }
 
     // --- BLOCKIERUNGEN ---
 

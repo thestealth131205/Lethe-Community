@@ -58,6 +58,9 @@ class NotificationHelper @Inject constructor(
         // Eingehende Anrufe (eigener Kanal mit Klingelton-Priorität)
         const val CHANNEL_ID_CALLS = "lethe_calls"
 
+        // Geräte-Authentifizierung (neues Gerät möchte sich per Messenger anmelden)
+        const val CHANNEL_ID_DEVICE_AUTH = "lethe_device_auth"
+
         // Kategorie: Nearby (Likes, Matches, Nachrichten)
         const val CHANNEL_ID_NEARBY = "lethe_nearby"
 
@@ -168,6 +171,15 @@ class NotificationHelper @Inject constructor(
             }
         )
 
+        // Geräte-Authentifizierung – neues Gerät möchte sich per Messenger anmelden
+        manager.createNotificationChannel(
+            NotificationChannel(CHANNEL_ID_DEVICE_AUTH, "Geräte-Authentifizierung", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Anfragen zur Anmeldung eines neuen Geräts über den Lethe Messenger"
+                enableVibration(true)
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+            }
+        )
+
         // Nearby – Likes, Matches, Nachrichten
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL_ID_NEARBY, "Nearby", NotificationManager.IMPORTANCE_HIGH).apply {
@@ -245,6 +257,34 @@ class NotificationHelper @Inject constructor(
 
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(NOTIFICATION_ID_BASE + contactEntryId.hashCode(), notification)
+    }
+
+    /**
+     * Zeigt eine Benachrichtigung, wenn sich ein anderes Gerät (Media Player, Web Chat,
+     * weiteres Smartphone) per Lethe Messenger authentifizieren möchte.
+     */
+    fun showDeviceAuthRequestNotification(appName: String, deviceName: String?, requestId: String) {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("navigate_to", "device_auth")
+            putExtra("request_id", requestId)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context, requestId.hashCode(), intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID_DEVICE_AUTH)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("Neues Gerät anmelden")
+            .setContentText("${deviceName ?: appName} möchte sich an deinem Konto anmelden.")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(NOTIFICATION_ID_BASE + requestId.hashCode(), notification)
     }
 
     /**

@@ -24,6 +24,18 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.175",
+            title = "Geräte-Authentifizierung per Lethe Messenger",
+            items = listOf(
+                "Neu: Ein neues Gerät (Media Player, Web Chat, weiteres Handy) kann sich jetzt per Freigabe auf einem bereits verknüpften Lethe-Messenger-Smartphone anmelden – Bestätigung per Passwort oder Fingerabdruck statt SMS-Code",
+                "Die Freigabe-Anfrage zeigt App, Gerät und ungefähren Standort (per IP) des anfragenden Geräts an, inkl. \"Nein, das bin ich nicht\"-Option",
+                "SMS-Verifizierung bleibt weiterhin als Fallback, falls kein Messenger-Gerät verknüpft ist",
+                "Lethe Media Player für Windows (Desktop) neu hinzugefügt",
+            ),
+            shortSummary = "Neue Geräte per Lethe Messenger freischalten statt per SMS, Windows Media Player"
+        ),
+
+        ChangelogEntry(
             version = "10.4.174",
             title = "Neue Handynummer & Playlist-Verschieben",
             items = listOf(
@@ -51,29 +63,6 @@ object AppChangelog {
                 "Fehler behoben, durch den nach dem Löschen einer angepinnten Gruppe weiterhin keine neue Gruppe angepinnt werden konnte",
             ),
             shortSummary = "Bis zu 3 angepinnte Gruppen möglich, verwaiste Pins werden jetzt zuverlässig entfernt"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.171",
-            title = "Mitglieder entfernen & Gruppen-Schlüssel-Fixes",
-            items = listOf(
-                "Neu: In der Mitgliederverwaltung einer Gruppe kann man sich jetzt selbst entfernen (Gruppe verlassen) – der Ersteller und Admins können auch andere Mitglieder entfernen",
-                "Entfernte Mitglieder sehen die Gruppe danach sofort nicht mehr in ihrer Chat-Liste",
-                "Fehler behoben, durch den sich nach dem Löschen einer angepinnten Gruppe keine neue Gruppe mehr anpinnen ließ",
-                "Fehler behoben, durch den ein Kontakt nach einer Neuanmeldung in manchen Gruppen keine Nachrichten mehr entschlüsseln konnte (\"Schlüssel nicht verfügbar\")",
-            ),
-            shortSummary = "Mitglieder aus Gruppen entfernen, Pin-Fix und Verschlüsselungs-Fix nach Neuanmeldung"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.170",
-            title = "Speicher-Absturz behoben & Videoanruf-Weichzeichner verbessert",
-            items = listOf(
-                "Absturz beim Öffnen eines Gruppenchats mit neuem Bild durch Speicherüberlauf behoben – Bild-Zwischenspeicher wird jetzt effizienter genutzt",
-                "Der Bildeditor benötigt jetzt deutlich weniger Arbeitsspeicher, ohne Qualitätsverlust",
-                "Der Hintergrund-Weichzeichner bei Videoanrufen wirkt jetzt feiner und stärker statt grob verpixelt",
-            ),
-            shortSummary = "Absturz-Fix bei Gruppenbildern, sparsamerer Bildeditor, feinerer Videoanruf-Weichzeichner"
         ),
 
     )

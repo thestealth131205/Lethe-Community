@@ -37,6 +37,7 @@ import com.securechat.app.ui.components.PhoneInputField
 import com.securechat.app.ui.components.buildE164
 import com.securechat.app.ui.utils.PhoneNumberExtractor
 import com.securechat.app.data.network.NewDeviceState
+import kotlinx.coroutines.delay
 
 /**
  * EPIC 2 – Login-/Registrierungsscreen mit:
@@ -877,7 +878,28 @@ fun LoginScreen(
     LaunchedEffect(newDeviceState != null) {
         if (newDeviceState != null) newDeviceResendKey++
     }
-    if (newDeviceState != null) {
+    // Verknüpftes Lethe-Messenger-Gerät vorhanden → statt SMS-Code schwebendes Verifizieren-Overlay,
+    // das per Polling auf die Freigabe durch das Messenger-Gerät wartet.
+    if (newDeviceState?.authMethod == "messenger") {
+        LaunchedEffect(newDeviceState) {
+            while (viewModel.newDeviceState.value != null) {
+                val result = viewModel.pollNewDeviceMessengerAuth()
+                if (result != "pending") break
+                delay(2000)
+            }
+        }
+        AlertDialog(
+            onDismissRequest = { },
+            properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = false),
+            icon = { CircularProgressIndicator(modifier = Modifier.size(32.dp)) },
+            title = { Text(stringResource(R.string.device_auth_pending_title), fontWeight = FontWeight.Bold) },
+            text = { Text(stringResource(R.string.device_auth_pending_text), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissNewDeviceVerification() }) { Text("Abbrechen") }
+            }
+        )
+    } else if (newDeviceState != null) {
         AlertDialog(
             onDismissRequest = { },
             properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = false),
