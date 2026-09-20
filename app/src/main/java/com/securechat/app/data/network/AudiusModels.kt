@@ -129,7 +129,8 @@ data class LetheMusicTrack(
     @SerializedName("uploader_id")        val uploaderId: String? = null,
     @SerializedName("year")               val year: String? = null,
     @SerializedName("producer")           val producer: String? = null,
-    @SerializedName("preview_offset_sec") val previewOffsetSec: Int = 0
+    @SerializedName("preview_offset_sec") val previewOffsetSec: Int = 0,
+    @SerializedName("is_pre_release")     val isPreRelease: Boolean = false
 ) {
     val durationFormatted: String
         get() {

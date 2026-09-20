@@ -4,6 +4,7 @@ import android.media.MediaMetadataRetriever
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -39,6 +40,7 @@ fun MusicAddEditScreen(
     var producer by remember { mutableStateOf("") }
     var durationSeconds by remember { mutableStateOf(0) }
     var previewOffsetSec by remember { mutableStateOf("0") }
+    var isPreRelease by remember { mutableStateOf(false) }
     var selectedUri by remember { mutableStateOf<Uri?>(null) }
     var isLoading by remember { mutableStateOf(isEditMode) }
     var isSaving by remember { mutableStateOf(false) }
@@ -58,6 +60,7 @@ fun MusicAddEditScreen(
                     producer = track.producer ?: ""
                     durationSeconds = track.durationSeconds
                     previewOffsetSec = track.previewOffsetSec.toString()
+                    isPreRelease = track.isPreRelease
                 } else {
                     statusMessage = "Fehler: ${error ?: "Track nicht gefunden"}"
                 }
@@ -237,6 +240,23 @@ fun MusicAddEditScreen(
                 supportingText = { Text("Ab diesem Zeitpunkt beginnt die Vorschau in Status & Sparks") }
             )
 
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { isPreRelease = !isPreRelease },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(checked = isPreRelease, onCheckedChange = { isPreRelease = it })
+                Column {
+                    Text("Unveröffentlicht (Pre-Release)", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Nur Nutzer mit Pre-Release-Zugriff sehen diesen Titel in der Bibliothek",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+            }
+
             statusMessage?.let { msg ->
                 Text(
                     text = msg,
@@ -259,7 +279,8 @@ fun MusicAddEditScreen(
                             year = year.takeIf { it.isNotBlank() },
                             lyrics = lyrics.takeIf { it.isNotBlank() },
                             producer = producer.takeIf { it.isNotBlank() },
-                            previewOffsetSec = offset
+                            previewOffsetSec = offset,
+                            isPreRelease = isPreRelease
                         ) { _, error ->
                             isSaving = false
                             if (error == null) onNavigateBack()
@@ -279,7 +300,8 @@ fun MusicAddEditScreen(
                             year = year.takeIf { it.isNotBlank() },
                             lyrics = lyrics.takeIf { it.isNotBlank() },
                             producer = producer.takeIf { it.isNotBlank() },
-                            previewOffsetSec = offset
+                            previewOffsetSec = offset,
+                            isPreRelease = isPreRelease
                         ) { _, error ->
                             isSaving = false
                             if (error == null) onNavigateBack()

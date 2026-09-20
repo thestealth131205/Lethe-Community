@@ -24,6 +24,33 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.177",
+            title = "Pre-Release-Musik, lokale Kopierfunktion & Desktop-Jam",
+            items = listOf(
+                "Neu: Admins können Kontakten per Langdruck in der Kontaktliste Zugriff auf unveröffentlichte (Pre-Release) Musik freischalten",
+                "Musik-Upload/-Bearbeitung hat jetzt eine \"Unveröffentlicht\"-Option – solche Titel sind nur für freigeschaltete Nutzer sichtbar (mit PRE-Kennzeichen)",
+                "Lokale Musik lässt sich jetzt direkt zwischen Smartphone und Windows Media Player kopieren",
+                "Lethe Media Player für Windows: Gemeinsam hören (Jam) und Chromecast werden jetzt unterstützt",
+                "Künstler-Herz (Fan werden) funktioniert jetzt zuverlässig, auch für Audius-Künstler ohne bisherige Tracks in der Bibliothek",
+            ),
+            shortSummary = "Pre-Release-Musik für ausgewählte Kontakte, lokale Musik-Kopierfunktion, Jam & Cast im Windows-Player"
+        ),
+
+        ChangelogEntry(
+            version = "10.4.176",
+            title = "Windows Media Player & Künstler-Verbesserungen",
+            items = listOf(
+                "Windows Media Player: MSI-Installer erkennt jetzt Updates zuverlässig statt eine Zweitinstallation anzulegen",
+                "Webseite bietet den Windows Media Player jetzt als Installer (MSI) und portable Version (EXE) zum Download an",
+                "Push-Benachrichtigung auf dem Smartphone, wenn eine Geräte-Authentifizierung (z.B. Windows/Web/neues Handy) im Hintergrund angefordert wird",
+                "Künstler-Fan-Button (Herz für Neuerscheinungs-Benachrichtigungen) funktioniert jetzt auch bei Audius-Künstlern",
+                "Künstler-Scanner findet jetzt auch Tracks auf Audius und verknüpft sie automatisch mit dem Künstler",
+                "Zurück-Button der Künstler-Ansicht wird nicht mehr von der Statusleiste verdeckt",
+            ),
+            shortSummary = "Windows Media Player Update-Fix, Downloads auf der Webseite, Künstler-Fan-Button für Audius"
+        ),
+
+        ChangelogEntry(
             version = "10.4.175",
             title = "Geräte-Authentifizierung per Lethe Messenger",
             items = listOf(
@@ -44,25 +71,6 @@ object AppChangelog {
                 "Fehler behoben, durch den der Jam-Ansicht beim gleichzeitigen Anzeigen von Teilnehmern und Kontakten abstürzen konnte",
             ),
             shortSummary = "Neue Handynummer mit automatischer Schlüssel-Erneuerung, verbesserter Songtexte-Viewer"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.173",
-            title = "Gemeinsam hören überarbeitet",
-            items = listOf(
-                "\"Gemeinsam hören\" im Chat öffnet jetzt die eigene Lethe-Bibliothek (Playlisten/Lieblingssongs) statt einer Datei-Auswahl – ein Antippen startet die Wiedergabe sofort bei allen Teilnehmern",
-            ),
-            shortSummary = "\"Gemeinsam hören\" nutzt jetzt die eigene Musikbibliothek statt Dateiauswahl"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.172",
-            title = "Gruppen-Pin-Fix",
-            items = listOf(
-                "Bis zu 3 Gruppen können jetzt gleichzeitig angepinnt werden (statt bisher 2)",
-                "Fehler behoben, durch den nach dem Löschen einer angepinnten Gruppe weiterhin keine neue Gruppe angepinnt werden konnte",
-            ),
-            shortSummary = "Bis zu 3 angepinnte Gruppen möglich, verwaiste Pins werden jetzt zuverlässig entfernt"
         ),
 
     )

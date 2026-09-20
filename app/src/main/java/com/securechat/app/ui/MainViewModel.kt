@@ -7084,6 +7084,7 @@ class MainViewModel @Inject constructor(
         lyrics: String? = null,
         producer: String? = null,
         previewOffsetSec: Int = 0,
+        isPreRelease: Boolean = false,
         onResult: (MusicResponse?, String?) -> Unit
     ) {
         viewModelScope.launch {
@@ -7117,7 +7118,8 @@ class MainViewModel @Inject constructor(
                         year = year?.takeIf { it.isNotBlank() }?.toPlain(),
                         lyrics = lyrics?.takeIf { it.isNotBlank() }?.toPlain(),
                         producer = producer?.takeIf { it.isNotBlank() }?.toPlain(),
-                        previewOffsetSec = previewOffsetSec.toString().toPlain()
+                        previewOffsetSec = previewOffsetSec.toString().toPlain(),
+                        isPreRelease = isPreRelease.toString().toPlain()
                     )
                 }
                 if (response.isSuccessful) {
@@ -7140,6 +7142,7 @@ class MainViewModel @Inject constructor(
         lyrics: String?,
         producer: String?,
         previewOffsetSec: Int,
+        isPreRelease: Boolean? = null,
         onResult: (MusicResponse?, String?) -> Unit
     ) {
         viewModelScope.launch {
@@ -7150,7 +7153,8 @@ class MainViewModel @Inject constructor(
                     year = year?.takeIf { it.isNotBlank() },
                     lyrics = lyrics?.takeIf { it.isNotBlank() },
                     producer = producer?.takeIf { it.isNotBlank() },
-                    previewOffsetSec = previewOffsetSec
+                    previewOffsetSec = previewOffsetSec,
+                    isPreRelease = isPreRelease
                 )
                 val response = withContext(Dispatchers.IO) { apiService.updateMusicTrack(trackId, request) }
                 if (response.isSuccessful) {
@@ -10808,6 +10812,14 @@ class MainViewModel @Inject constructor(
                 _incomingDeviceAuthRequest.value = IncomingDeviceAuthRequest(
                     requestId, appName, deviceName, ipAddress, approxLocation, createdAt
                 )
+                // Server verzichtet auf FCM-Push, sobald die WS-Zustellung klappt (persistenter
+                // Foreground-Service liefert auch bei Hintergrund-App zu) – ohne offene UI, die
+                // _incomingDeviceAuthRequest beobachtet, sähe der Nutzer dann aber nie etwas.
+                // Deshalb hier zusätzlich eine System-Benachrichtigung posten, sobald die App
+                // nicht im Vordergrund ist (analog zum eingehenden-Anruf-Pfad).
+                if (!_isAppInForeground.value) {
+                    notificationHelper.showDeviceAuthRequestNotification(appName, deviceName, requestId)
+                }
                 Timber.tag("LETHE_DEVICE_AUTH").d("device_auth_request: $appName ($ipAddress)")
             }
 
@@ -16855,6 +16867,34 @@ class MainViewModel @Inject constructor(
                 }
                 withContext(Dispatchers.Main) {
                     _contactScreenMessage.value = "Handshake lokal erneuert"
+                }
+            }
+        }
+    }
+
+    /**
+     * Admin-Aktion: Schaltet den Pre-Release-Musikzugriff für diesen Kontakt um (Long-Press in der
+     * Kontaktliste). Nur Admins sehen die Aktion; der Server prüft is_admin zusätzlich ab.
+     */
+    fun togglePreReleaseAccess(userId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val resp = apiService.adminTogglePreReleaseAccess(userId)
+                withContext(Dispatchers.Main) {
+                    if (resp.isSuccessful) {
+                        val enabled = (resp.body()?.get("has_pre_release_access") as? Boolean) == true
+                        _contactScreenMessage.value = if (enabled) {
+                            "Pre-Release-Zugriff aktiviert"
+                        } else {
+                            "Pre-Release-Zugriff deaktiviert"
+                        }
+                    } else {
+                        _contactScreenMessage.value = "Aktion fehlgeschlagen (${resp.code()})"
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    _contactScreenMessage.value = "Aktion fehlgeschlagen: ${e.message}"
                 }
             }
         }

@@ -725,6 +725,7 @@
     <string name="contacts_unpin">Losmaken</string>
     <string name="contacts_rename">Naam wijzigen</string>
     <string name="contacts_renew_handshake">Handshake vernieuwen</string>
+    <string name="contacts_toggle_pre_release">Pre-release muziektoegang wisselen</string>
     <string name="contacts_display_name_label">Weergavenaam</string>
     <string name="contacts_share_greeting_card">Wenskaart delen</string>
     <string name="contacts_no_groups">Geen groepen</string>

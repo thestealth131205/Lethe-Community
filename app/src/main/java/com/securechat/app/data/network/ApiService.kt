@@ -277,6 +277,9 @@ interface ApiService {
     @POST("admin/users/{userId}/remove-moderator")
     suspend fun adminRemoveModerator(@Path("userId") userId: String): Response<Map<String, String>>
 
+    @POST("admin/users/{userId}/pre-release-toggle")
+    suspend fun adminTogglePreReleaseAccess(@Path("userId") userId: String): Response<Map<String, Any>>
+
     @POST("admin/users/create")
     suspend fun adminCreateUser(@Body body: AdminCreateUserRequest): Response<Map<String, Any>>
 
@@ -912,7 +915,8 @@ interface ApiService {
         @Part("year") year: RequestBody? = null,
         @Part("lyrics") lyrics: RequestBody? = null,
         @Part("producer") producer: RequestBody? = null,
-        @Part("preview_offset_sec") previewOffsetSec: RequestBody? = null
+        @Part("preview_offset_sec") previewOffsetSec: RequestBody? = null,
+        @Part("is_pre_release") isPreRelease: RequestBody? = null
     ): Response<MusicResponse>
 
     @PUT("music/{musicId}")

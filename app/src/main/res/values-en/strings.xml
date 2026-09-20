@@ -730,6 +730,7 @@
     <string name="contacts_unpin">Unpin</string>
     <string name="contacts_rename">Change name</string>
     <string name="contacts_renew_handshake">Renew handshake</string>
+    <string name="contacts_toggle_pre_release">Toggle pre-release music access</string>
     <string name="contacts_display_name_label">Display name</string>
     <string name="contacts_share_greeting_card">Share greeting card</string>
     <string name="contacts_no_groups">No groups yet</string>

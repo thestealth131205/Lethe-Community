@@ -797,6 +797,7 @@
     <string name="contacts_unpin">Entpinnen</string>
     <string name="contacts_rename">Namen ändern</string>
     <string name="contacts_renew_handshake">Handshake erneuern</string>
+    <string name="contacts_toggle_pre_release">Pre-Release-Musikzugriff umschalten</string>
     <string name="contacts_display_name_label">Anzeigename</string>
     <string name="contacts_share_greeting_card">Glückwunschkarte teilen</string>
     <string name="contacts_no_groups">Keine Gruppen vorhanden</string>

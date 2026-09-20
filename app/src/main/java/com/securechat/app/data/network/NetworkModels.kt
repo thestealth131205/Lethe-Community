@@ -1231,7 +1231,8 @@ data class MusicResponse(
     val lyrics: String? = null,
     val year: String? = null,
     val producer: String? = null,
-    @SerializedName("preview_offset_sec") val previewOffsetSec: Int = 0
+    @SerializedName("preview_offset_sec") val previewOffsetSec: Int = 0,
+    @SerializedName("is_pre_release") val isPreRelease: Boolean = false
 )
 
 data class MusicUpdateRequest(
@@ -1240,7 +1241,8 @@ data class MusicUpdateRequest(
     val year: String? = null,
     val lyrics: String? = null,
     val producer: String? = null,
-    @SerializedName("preview_offset_sec") val previewOffsetSec: Int? = null
+    @SerializedName("preview_offset_sec") val previewOffsetSec: Int? = null,
+    @SerializedName("is_pre_release") val isPreRelease: Boolean? = null
 )
 
 data class SaveApiTrackRequest(

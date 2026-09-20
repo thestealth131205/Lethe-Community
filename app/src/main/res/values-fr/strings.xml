@@ -729,6 +729,7 @@
     <string name="contacts_unpin">Désépingler</string>
     <string name="contacts_rename">Changer le nom</string>
     <string name="contacts_renew_handshake">Renouveler le handshake</string>
+    <string name="contacts_toggle_pre_release">Basculer l\'accès musique en avant-première</string>
     <string name="contacts_display_name_label">Nom d\'affichage</string>
     <string name="contacts_share_greeting_card">Partager la carte de vœux</string>
     <string name="contacts_no_groups">Aucun groupe</string>

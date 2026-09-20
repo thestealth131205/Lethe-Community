@@ -725,6 +725,7 @@
     <string name="contacts_unpin">Rimuovi da in cima</string>
     <string name="contacts_rename">Cambia nome</string>
     <string name="contacts_renew_handshake">Rinnova handshake</string>
+    <string name="contacts_toggle_pre_release">Attiva/disattiva accesso musica in anteprima</string>
     <string name="contacts_display_name_label">Nome visualizzato</string>
     <string name="contacts_share_greeting_card">Condividi biglietto d\'auguri</string>
     <string name="contacts_no_groups">Nessun gruppo</string>

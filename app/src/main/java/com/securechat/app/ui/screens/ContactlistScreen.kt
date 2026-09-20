@@ -1819,6 +1819,17 @@ fun ContactlistScreen(
                     ) {
                         Text(stringResource(com.securechat.app.R.string.contacts_renew_handshake))
                     }
+                    if (currentUser?.isAdmin == true) {
+                        TextButton(
+                            onClick = {
+                                viewModel.togglePreReleaseAccess(contact.userId)
+                                longPressContact = null
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(stringResource(com.securechat.app.R.string.contacts_toggle_pre_release))
+                        }
+                    }
                     run {
                         val prefs by viewModel.userPrefs.collectAsState()
                         if (prefs.p2pInternetEnabled) {
