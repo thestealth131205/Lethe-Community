@@ -667,6 +667,67 @@ object CryptoManager {
         }
     }
 
+    /** Ephemeres ECDH-P384-Schlüsselpaar nur für die laufende Requester-Sync-Session (kein Keystore, nicht persistiert). */
+    private var ephemeralSyncKeyPair: java.security.KeyPair? = null
+
+    /**
+     * Erzeugt ein ephemeres ECDH-P384-Schlüsselpaar für ein NEUES Android-Gerät, das per
+     * Live-Key-Sync die UMK/Partner-UMKs/Gruppen-Keys von einem bereits eingerichteten
+     * Geschwister-Gerät abrufen will (Android als Requester, analog zum web_session_pub
+     * des WebChats). Wird per WS als "web_session_pub" im key_sync_request mitgeschickt.
+     *
+     * @return SPKI/Base64 des ephemeren Public Keys, oder null bei Fehler.
+     */
+    fun generateEphemeralSyncKeyPair(): String? {
+        return try {
+            val kpg = KeyPairGenerator.getInstance(KEY_ALGO)
+            kpg.initialize(ECGenParameterSpec(EC_CURVE))
+            val kp = kpg.generateKeyPair()
+            ephemeralSyncKeyPair = kp
+            Base64.encodeToString(kp.public.encoded, Base64.NO_WRAP)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /** Verwirft das ephemere Sync-Schlüsselpaar (z.B. nach Timeout, bevor eine Antwort einträfe). */
+    fun clearEphemeralSyncKeyPair() {
+        ephemeralSyncKeyPair = null
+    }
+
+    /**
+     * Entschlüsselt den von einem Geschwister-Gerät per encryptKeySyncPayload() erstellten
+     * Payload. Requester-Gegenstück dazu: leitet dasselbe temporäre Secret via
+     * ECDH(eigener ephemerer Privatschlüssel, android_pub des Responders) ab.
+     * Muss NACH generateEphemeralSyncKeyPair() aufgerufen werden (nutzt dessen Privatschlüssel).
+     *
+     * @return JSON-String mit android_pub/umk/groups/partner_umks, oder null bei Fehler.
+     */
+    fun decryptKeySyncPayload(responderAndroidPub64: String, encryptedPayload: String): String? {
+        return try {
+            val ephemeralPriv = ephemeralSyncKeyPair?.private ?: return null
+            val partnerKeyBytes = Base64.decode(responderAndroidPub64, Base64.NO_WRAP)
+            val kf = KeyFactory.getInstance(KEY_ALGO)
+            val partnerKey = kf.generatePublic(X509EncodedKeySpec(partnerKeyBytes))
+
+            val ka = KeyAgreement.getInstance("ECDH")
+            ka.init(ephemeralPriv)
+            ka.doPhase(partnerKey, true)
+            val rawSecret = ka.generateSecret()
+
+            val tempSecret = Mac.getInstance("HmacSHA256").apply {
+                init(SecretKeySpec(rawSecret, "HmacSHA256"))
+            }.doFinal("LETHE_KEY_SYNC_V1".toByteArray(Charsets.UTF_8))
+
+            decryptWithSecret(tempSecret, encryptedPayload)
+        } catch (e: Exception) {
+            android.util.Log.e("CryptoManager", "decryptKeySyncPayload failed: ${e.message}")
+            null
+        } finally {
+            ephemeralSyncKeyPair = null
+        }
+    }
+
     // ──────────────────────────────────────────────────────────────────────────
     // KEY-BACKUP: PBKDF2 + AES-256-GCM (Server-seitiger verschlüsselter Backup)
     // ──────────────────────────────────────────────────────────────────────────

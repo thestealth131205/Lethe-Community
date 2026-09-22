@@ -29,6 +29,7 @@ import com.journeyapps.barcodescanner.ScanOptions
 import androidx.compose.ui.res.stringResource
 import com.securechat.app.R
 import com.securechat.app.data.network.DeviceListItem
+import com.securechat.app.data.network.KnownDeviceItem
 import com.securechat.app.data.network.LinkedDevice
 import com.securechat.app.ui.MainViewModel
 import com.securechat.app.ui.theme.topBarTitleColor
@@ -44,6 +45,7 @@ fun DevicesScreen(
 ) {
     val devices by viewModel.linkedDevices.collectAsState()
     val enrolledDevices by viewModel.enrolledDevices.collectAsState()
+    val knownDevices by viewModel.knownDevices.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
     val context = LocalContext.current
 
@@ -57,6 +59,7 @@ fun DevicesScreen(
     LaunchedEffect(Unit) {
         viewModel.loadLinkedDevices()
         viewModel.loadEnrolledDevices()
+        viewModel.loadKnownDevices()
     }
 
     Scaffold(
@@ -193,7 +196,7 @@ fun DevicesScreen(
             }
 
             // Geräteliste
-            if (devices.isEmpty() && enrolledDevices.isEmpty()) {
+            if (devices.isEmpty() && enrolledDevices.isEmpty() && knownDevices.isEmpty()) {
                 DevicesEmptyState()
             } else {
                 LazyColumn(
@@ -201,6 +204,26 @@ fun DevicesScreen(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    // Mit dem Account verbundene Geräte (App-übergreifend, inkl. Host-Gerät)
+                    if (knownDevices.isNotEmpty()) {
+                        item {
+                            Text(
+                                "Verbundene Geräte (${knownDevices.size})",
+                                modifier = Modifier.padding(vertical = 4.dp),
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        items(knownDevices, key = { "known_${it.id}" }) { device ->
+                            KnownDeviceItemCard(
+                                device = device,
+                                onRemove = { viewModel.removeKnownDevice(device.id) }
+                            )
+                        }
+                        item { Spacer(Modifier.height(8.dp)) }
+                    }
+
                     // Web-Linked Devices (QR-Code)
                     if (devices.isNotEmpty()) {
                         item {
@@ -398,6 +421,111 @@ fun EnrolledDeviceItem(device: DeviceListItem, onRemove: () -> Unit) {
                     buildString {
                         append("Registriert: ${formatDeviceDate(device.createdAt)}")
                         device.lastUsed?.let { append(" · Zuletzt: ${formatDeviceDate(it)}") }
+                    },
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            IconButton(onClick = { showConfirm = true }) {
+                Icon(
+                    Icons.Default.LinkOff,
+                    contentDescription = stringResource(R.string.devices_disconnect_button),
+                    tint = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun KnownDeviceItemCard(device: KnownDeviceItem, onRemove: () -> Unit) {
+    var showConfirm by remember { mutableStateOf(false) }
+
+    if (showConfirm) {
+        AlertDialog(
+            onDismissRequest = { showConfirm = false },
+            title = { Text(stringResource(R.string.devices_disconnect_dialog)) },
+            text = { Text(stringResource(R.string.devices_disconnect_text, device.appName)) },
+            confirmButton = {
+                Button(
+                    onClick = { showConfirm = false; onRemove() },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text(stringResource(R.string.devices_disconnect_confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirm = false }) { Text(stringResource(R.string.devices_disconnect_cancel)) }
+            }
+        )
+    }
+
+    Card(
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (device.isHost)
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+            else MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(2.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MaterialTheme.colorScheme.tertiaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                val icon = when (device.deviceType) {
+                    "messenger_android", "mediaplayer_android" -> Icons.Default.PhoneAndroid
+                    "mediaplayer_desktop" -> Icons.Default.Computer
+                    "web_chat" -> Icons.Default.Language
+                    else -> Icons.Default.Devices
+                }
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.tertiary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        device.appName,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 15.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (device.isHost) {
+                        Spacer(Modifier.width(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(MaterialTheme.colorScheme.primary)
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                "Host-Gerät",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    buildString {
+                        append("Verbunden: ${formatDeviceDate(device.firstSeen)}")
+                        device.lastSeen?.let { append(" · Zuletzt: ${formatDeviceDate(it)}") }
                     },
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant

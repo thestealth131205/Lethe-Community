@@ -24,6 +24,17 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.178",
+            title = "Echtes Multi-Device-E2EE & Geräteverwaltung",
+            items = listOf(
+                "Neu: Ein zweites Messenger-Handy kann jetzt live über das erste verknüpfte Gerät die Verschlüsselungs-Schlüssel übernehmen – beide Geräte können danach alle Chats lesen, ohne dass sich der Schlüssel des Erstgeräts ändert",
+                "\"Neue Handynummer angeben\" ist jetzt im 3-Punkte-Menü unter \"Account\" zu finden (statt direkt im Hauptmenü)",
+                "Neu: Übersicht \"Verbundene Geräte\" unter Geräte – zeigt alle mit dem Account verknüpften Geräte inkl. Kennzeichnung des ursprünglichen Host-Geräts, mit Löschen-Button pro Gerät",
+            ),
+            shortSummary = "Echte Multi-Device-Ende-zu-Ende-Verschlüsselung, Geräteübersicht mit Host-Kennzeichnung"
+        ),
+
+        ChangelogEntry(
             version = "10.4.177",
             title = "Pre-Release-Musik, lokale Kopierfunktion & Desktop-Jam",
             items = listOf(
@@ -60,17 +71,6 @@ object AppChangelog {
                 "Lethe Media Player für Windows (Desktop) neu hinzugefügt",
             ),
             shortSummary = "Neue Geräte per Lethe Messenger freischalten statt per SMS, Windows Media Player"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.174",
-            title = "Neue Handynummer & Playlist-Verschieben",
-            items = listOf(
-                "Neu: Im Kontaktlisten-Menü unter \"Account\" kann jetzt eine neue Handynummer per SMS-Code bestätigt werden – alle Kontakte erhalten automatisch eine Schlüssel-Erneuerung und im Chat erscheint ein Hinweis auf die neue Nummer",
-                "Songtexte-Viewer: Zeilen sind jetzt durch Leerzeilen besser lesbar, der komplette Text lässt sich beim Teilen bis zum Ende durchscrollen, und in der Teilen-Ansicht kann per Zwei-Finger-Geste gezoomt werden",
-                "Fehler behoben, durch den der Jam-Ansicht beim gleichzeitigen Anzeigen von Teilnehmern und Kontakten abstürzen konnte",
-            ),
-            shortSummary = "Neue Handynummer mit automatischer Schlüssel-Erneuerung, verbesserter Songtexte-Viewer"
         ),
 
     )

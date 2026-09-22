@@ -184,6 +184,19 @@ data class DeviceListResponse(
     @SerializedName("devices") val devices: List<DeviceListItem>
 )
 
+data class KnownDeviceItem(
+    @SerializedName("id") val id: String,
+    @SerializedName("device_type") val deviceType: String,
+    @SerializedName("app_name") val appName: String,
+    @SerializedName("first_seen") val firstSeen: String? = null,
+    @SerializedName("last_seen") val lastSeen: String? = null,
+    @SerializedName("is_host") val isHost: Boolean = false
+)
+
+data class KnownDeviceListResponse(
+    @SerializedName("devices") val devices: List<KnownDeviceItem>
+)
+
 data class PartnerUmkResponse(
     @SerializedName("partner_id") val partnerId: String,
     @SerializedName("encrypted_umk") val encryptedUmk: String?,

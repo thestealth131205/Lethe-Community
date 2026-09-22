@@ -1912,6 +1912,7 @@ class MainActivity : FragmentActivity() {
                             val adminPanelPasswordMessage by viewModel.adminPanelPasswordMessage.collectAsState()
                             LaunchedEffect(Unit) { viewModel.loadMyDatingProfile() }
                             AccountScreen(
+                                viewModel = viewModel,
                                 onNavigateBack = { navController.popBackStack() },
                                 userName = currentUser?.name ?: "",
                                 fakeNumber = currentUser?.fakeNumber ?: "",

@@ -38,6 +38,7 @@ import coil.compose.AsyncImage
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 import com.securechat.app.R
+import com.securechat.app.ui.MainViewModel
 import com.securechat.app.ui.theme.topBarTitleColor
 
 /** Generiert eine QR-Code-Bitmap aus einem String. */
@@ -59,6 +60,7 @@ private fun generateQrBitmap(content: String, size: Int = 512): Bitmap? {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AccountScreen(
+    viewModel: MainViewModel,
     onNavigateBack: () -> Unit,
     userName: String = "",
     fakeNumber: String = "",
@@ -108,6 +110,7 @@ fun AccountScreen(
     var showYoutubeDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showAdminPanelPasswordDialog by remember { mutableStateOf(false) }
+    var showChangePhoneDialog by remember { mutableStateOf(false) }
     var copiedNumber by remember { mutableStateOf(false) }
     var verificationMessage by remember { mutableStateOf<String?>(null) }
     var verificationLoading by remember { mutableStateOf(false) }
@@ -504,6 +507,33 @@ fun AccountScreen(
                             else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
                     }
+                }
+
+                HorizontalDivider()
+
+                // Neue Handynummer angeben
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showChangePhoneDialog = true }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.PhoneAndroid, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        text = stringResource(R.string.contacts_menu_change_phone),
+                        fontSize = 15.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                    )
                 }
 
                 if (letheId != null) {
@@ -1012,6 +1042,11 @@ fun AccountScreen(
                 }
             }
         )
+    }
+
+    // Handynummer-ändern-Dialog
+    if (showChangePhoneDialog) {
+        ChangePhoneNumberDialog(viewModel, onDismiss = { showChangePhoneDialog = false })
     }
 
     // Link-Dialog

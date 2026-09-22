@@ -8402,11 +8402,21 @@ class MainViewModel @Inject constructor(
                         _newDeviceState.value = null
                         tokenManager.saveToken(accessToken, userId)
                         prefsRepository.updateCredentials(state.fakeNumber, state.password, true)
-                        restoreKeyBackupIfPresent(body.keyBackup, state.password)
                         login(state.fakeNumber, state.password, remember = true, autoLogin = false)
                         viewModelScope.launch(Dispatchers.IO) {
-                            delay(4000)
-                            try { rotateEcdhKey { _, _ -> } } catch (_: Exception) {}
+                            // Erst Live-Key-Sync von einem Geschwister-Gerät versuchen (echte
+                            // Multi-Device-E2EE – der Identitäts-Key des anderen Geräts bleibt
+                            // dabei unverändert). Nur wenn kein Geschwister-Gerät online ist,
+                            // Fallback auf das klassische Key-Backup-Restore + Key-Rotation.
+                            delay(1500) // WS-Verbindung nach login() aufbauen lassen
+                            val synced = try { requestLiveKeySyncFromSibling(userId) } catch (_: Exception) { false }
+                            if (!synced) {
+                                restoreKeyBackupIfPresent(body.keyBackup, state.password)
+                                delay(2500)
+                                try { rotateEcdhKey { _, _ -> } } catch (_: Exception) {}
+                            } else {
+                                Timber.tag("LETHE_KEY_SYNC").i("Geräte-Auth: Live-Key-Sync erfolgreich – Key-Backup-Restore/Key-Rotation übersprungen")
+                            }
                         }
                     }
                     "approved"
@@ -8450,21 +8460,28 @@ class MainViewModel @Inject constructor(
                     tokenManager.saveToken(body.accessToken, body.userId)
                     prefsRepository.updateCredentials(state.fakeNumber, state.password, true)
 
-                    // Key-Backup wiederherstellen falls vorhanden
-                    restoreKeyBackupIfPresent(body.keyBackup, state.password)
-
                     // Normalen Login-Flow starten (Profil laden, WebSocket, etc.)
                     // autoLogin=false damit kein endloser Rekursions-Cycle entsteht
                     login(state.fakeNumber, state.password, remember = true, autoLogin = false)
 
-                    // Nach dem Login: Key-Rotation damit alle Kontakte den neuen Key kennen
+                    // Erst Live-Key-Sync von einem Geschwister-Gerät versuchen (echte
+                    // Multi-Device-E2EE, Identitäts-Key des anderen Geräts bleibt unverändert).
+                    // Nur wenn kein Geschwister-Gerät online ist: klassisches Key-Backup-Restore
+                    // + Key-Rotation (damit alle Kontakte den neuen Key kennen).
                     viewModelScope.launch(Dispatchers.IO) {
-                        delay(4000) // Warte bis Login-Flow abgeschlossen
-                        try {
-                            rotateEcdhKey { success, msg ->
-                                Timber.tag("LETHE_KEYS").d("Key-Rotation nach Geräte-Verifikation: $success – $msg")
-                            }
-                        } catch (_: Exception) {}
+                        delay(1500) // WS-Verbindung nach login() aufbauen lassen
+                        val synced = try { requestLiveKeySyncFromSibling(body.userId) } catch (_: Exception) { false }
+                        if (!synced) {
+                            restoreKeyBackupIfPresent(body.keyBackup, state.password)
+                            delay(2500)
+                            try {
+                                rotateEcdhKey { success, msg ->
+                                    Timber.tag("LETHE_KEYS").d("Key-Rotation nach Geräte-Verifikation: $success – $msg")
+                                }
+                            } catch (_: Exception) {}
+                        } else {
+                            Timber.tag("LETHE_KEY_SYNC").i("Geräte-Verifikation: Live-Key-Sync erfolgreich – Key-Backup-Restore/Key-Rotation übersprungen")
+                        }
                     }
 
                 } else {
@@ -10234,6 +10251,14 @@ class MainViewModel @Inject constructor(
                                 CryptoManager.forceRederiveWebSharedSecret(senderId, relayedWebKey)
                             }
                             try {
+                                // Sekundärgeräte-Absicherung: fehlt für DIESEN Kontakt sowohl v3- als
+                                // auch v2-Schlüssel (z.B. Kontakt erst NACH dem initialen Geräte-Sync
+                                // hinzugekommen), einmalig (rate-limited) versuchen die fehlenden
+                                // Partner-UMKs per Live-Key-Sync von einem Geschwister-Gerät nachzuladen –
+                                // BEVOR die Nachricht als unentschlüsselbar gilt und so gespeichert wird.
+                                if (rawContentBlob.startsWith("v3:") && !CryptoManager.hasConversationKey(senderId)) {
+                                    tryAutoKeyResyncIfMissing(senderId)
+                                }
                                 CryptoManager.decryptUniversal(senderId, rawContentBlob)
                             } catch (decEx: Exception) {
                                 Timber.tag("LETHE_E2EE").w("WS-Entschlüsselung fehlgeschlagen: ${decEx.message}")
@@ -12268,6 +12293,32 @@ class MainViewModel @Inject constructor(
                     } catch (e: Exception) {
                         Timber.tag("LETHE_KEY_SYNC").e("key_sync_response Fehler: ${e.message}")
                     }
+                }
+            }
+
+            // Antwort auf einen SELBST gesendeten key_sync_request (Android als Requester –
+            // z.B. ein neues Geschwister-Gerät nach Geräte-Auth per Lethe Messenger). Der
+            // Server broadcastet key_sync_response generisch an ALLE anderen Verbindungen
+            // desselben Accounts (auch an WebChat-Tabs), daher hier nur reagieren wenn wir
+            // selbst gerade einen Sync erwarten (pendingKeySyncDeferred gesetzt).
+            "key_sync_response" -> {
+                val deferred = pendingKeySyncDeferred
+                if (deferred == null || deferred.isCompleted) return
+                val payload = msg.payload as? Map<*, *>
+                val encryptedSyncKey = payload?.get("encrypted_sync_key") as? String
+                val androidPub = payload?.get("android_pub") as? String
+                if (encryptedSyncKey.isNullOrBlank() || androidPub.isNullOrBlank()) {
+                    deferred.complete(false)
+                    return
+                }
+                viewModelScope.launch(Dispatchers.IO) {
+                    val ok = try {
+                        applyLiveKeySyncPayload(androidPub, encryptedSyncKey)
+                    } catch (e: Exception) {
+                        Timber.tag("LETHE_KEY_SYNC").e("key_sync_response Verarbeitung fehlgeschlagen: ${e.message}")
+                        false
+                    }
+                    deferred.complete(ok)
                 }
             }
 
@@ -15973,10 +16024,153 @@ class MainViewModel @Inject constructor(
     }
 
     // ──────────────────────────────────────────────────────────────────────────
+    // KNOWN DEVICES (App-übergreifende Geräte-Registry, inkl. Host-Kennzeichnung)
+    // ──────────────────────────────────────────────────────────────────────────
+
+    private val _knownDevices = MutableStateFlow<List<com.securechat.app.data.network.KnownDeviceItem>>(emptyList())
+    val knownDevices: StateFlow<List<com.securechat.app.data.network.KnownDeviceItem>> = _knownDevices.asStateFlow()
+
+    fun loadKnownDevices() {
+        viewModelScope.launch {
+            try {
+                val resp = apiService.getKnownDevices()
+                if (resp.isSuccessful) {
+                    _knownDevices.value = resp.body()?.devices ?: emptyList()
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Fehler beim Laden der bekannten Geräte")
+            }
+        }
+    }
+
+    fun removeKnownDevice(deviceId: String) {
+        viewModelScope.launch {
+            try {
+                val resp = apiService.removeKnownDevice(deviceId)
+                if (resp.isSuccessful) {
+                    _knownDevices.value = _knownDevices.value.filter { it.id != deviceId }
+                } else {
+                    _statusMessage.value = "Gerät konnte nicht entfernt werden."
+                }
+            } catch (e: Exception) {
+                _statusMessage.value = "Verbindungsfehler."
+            }
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
     // UMK – Initialisierung & Persistenz
     // ──────────────────────────────────────────────────────────────────────────
 
     private val UMK_PREF_KEY = "lethe_umk_raw_b64"
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Live-Key-Sync (Android ↔ Android): echte Multi-Device-E2EE OHNE dass sich
+    // der ECDH-Identitäts-Key eines bestehenden Geräts ändert. Nutzt denselben
+    // Kanal wie der WebChat-Key-Sync (key_sync_request/key_sync_response), nur
+    // dass hier Android selbst der Requester ist (z.B. ein neues Geschwister-
+    // Gerät nach Geräte-Auth per Lethe Messenger).
+    // ──────────────────────────────────────────────────────────────────────────
+
+    private var pendingKeySyncDeferred: kotlinx.coroutines.CompletableDeferred<Boolean>? = null
+    private var lastAutoKeySyncAttemptAt = 0L
+
+    /**
+     * Fordert per Live-Key-Sync UMK, Partner-UMKs und Gruppen-Sender-Keys von einem
+     * bereits eingerichteten Geschwister-Gerät (gleicher Account, andere aktive
+     * WebSocket-Verbindung) an – der eigene ECDH-Identitäts-Key wird dabei NICHT
+     * angefasst, das Geschwister-Gerät bleibt zu 100% unverändert.
+     *
+     * @return true wenn ein Geschwister-Gerät geantwortet und der Import geklappt hat,
+     *         false bei Timeout (kein anderes Gerät online) oder Fehler.
+     */
+    private suspend fun requestLiveKeySyncFromSibling(userId: String, timeoutMs: Long = 5000L): Boolean {
+        val ephemeralPub = CryptoManager.generateEphemeralSyncKeyPair() ?: return false
+        val deferred = kotlinx.coroutines.CompletableDeferred<Boolean>()
+        pendingKeySyncDeferred = deferred
+        return try {
+            webSocketManager.sendRaw(mapOf(
+                "type" to "key_sync_request",
+                "receiver_id" to userId,
+                "payload" to mapOf(
+                    "web_session_pub" to ephemeralPub,
+                    "requester_type" to "messenger_android"
+                )
+            ))
+            kotlinx.coroutines.withTimeoutOrNull(timeoutMs) { deferred.await() } ?: false
+        } catch (e: Exception) {
+            Timber.tag("LETHE_KEY_SYNC").w("requestLiveKeySyncFromSibling fehlgeschlagen: ${e.message}")
+            false
+        } finally {
+            pendingKeySyncDeferred = null
+            CryptoManager.clearEphemeralSyncKeyPair()
+        }
+    }
+
+    /**
+     * Best-Effort-Absicherung für Sekundärgeräte: Fehlt für einen Kontakt sowohl der
+     * v3-Conversation-Key als auch das v2-Legacy-Secret (z.B. weil der Kontakt ERST NACH
+     * dem initialen Geräte-Sync hinzugekommen ist), wird einmalig (rate-limited, max. alle
+     * 30s) versucht die fehlenden Partner-UMKs per Live-Key-Sync von einem Geschwister-Gerät
+     * nachzuladen, bevor die Nachricht als unentschlüsselbar gilt.
+     */
+    private suspend fun tryAutoKeyResyncIfMissing(contactId: String) {
+        if (CryptoManager.hasPartnerUmk(contactId) || CryptoManager.hasSharedSecret(contactId)) return
+        val userId = _currentUser.value?.userId ?: return
+        val now = System.currentTimeMillis()
+        if (now - lastAutoKeySyncAttemptAt < 30_000L) return
+        lastAutoKeySyncAttemptAt = now
+        val synced = try { requestLiveKeySyncFromSibling(userId, timeoutMs = 3000L) } catch (_: Exception) { false }
+        if (synced) {
+            Timber.tag("LETHE_KEY_SYNC").i("Auto-Re-Sync: fehlende Partner-UMKs für $contactId von Geschwister-Gerät nachgeladen")
+        }
+    }
+
+    /**
+     * Entschlüsselt und übernimmt den von einem Geschwister-Gerät per key_sync_response
+     * gelieferten Payload (UMK, Partner-UMKs, Gruppen-Sender-Keys).
+     */
+    private suspend fun applyLiveKeySyncPayload(responderAndroidPub: String, encryptedSyncKey: String): Boolean {
+        val json = CryptoManager.decryptKeySyncPayload(responderAndroidPub, encryptedSyncKey) ?: return false
+        return try {
+            val root = com.google.gson.JsonParser().parse(json).asJsonObject
+
+            root.get("umk")?.takeIf { it.isJsonPrimitive }?.asString?.let { umkB64 ->
+                CryptoManager.importUmkFromBase64(umkB64)
+            }
+
+            root.get("partner_umks")?.takeIf { it.isJsonObject }?.asJsonObject?.let { obj ->
+                val map = mutableMapOf<String, String>()
+                for ((pid, el) in obj.entrySet()) {
+                    if (el.isJsonPrimitive) map[pid] = el.asString
+                }
+                if (map.isNotEmpty()) CryptoManager.importPartnerUmks(map)
+            }
+
+            root.get("groups")?.takeIf { it.isJsonObject }?.asJsonObject?.let { groupsObj ->
+                for ((groupId, ownersEl) in groupsObj.entrySet()) {
+                    if (!ownersEl.isJsonObject) continue
+                    for ((ownerId, keyEl) in ownersEl.asJsonObject.entrySet()) {
+                        if (!keyEl.isJsonPrimitive) continue
+                        try {
+                            groupSenderKeyDao.insertKey(
+                                GroupSenderKeyEntity(groupId = groupId, ownerId = ownerId, keyBase64 = keyEl.asString)
+                            )
+                        } catch (_: Exception) {}
+                    }
+                }
+            }
+
+            saveUmkToPrefs()
+            saveConversationKeysToPrefs()
+            savePartnerUmksToPrefs()
+            Timber.tag("LETHE_KEY_SYNC").i("Live-Key-Sync von Geschwister-Gerät übernommen (UMK/Partner-UMKs/Gruppen-Keys)")
+            true
+        } catch (e: Exception) {
+            Timber.tag("LETHE_KEY_SYNC").e("applyLiveKeySyncPayload fehlgeschlagen: ${e.message}")
+            false
+        }
+    }
 
     private fun initUmkInBackground(password: String) {
         viewModelScope.launch(Dispatchers.IO) {

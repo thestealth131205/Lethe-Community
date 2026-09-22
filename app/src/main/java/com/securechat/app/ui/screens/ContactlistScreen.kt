@@ -185,7 +185,6 @@ fun ContactlistScreen(
     var showDeleteAccountFinal by remember { mutableStateOf(false) }
     var isDeletingAccount by remember { mutableStateOf(false) }
     var deleteAccountError by remember { mutableStateOf<String?>(null) }
-    var showChangePhoneDialog by remember { mutableStateOf(false) }
 
     // Badge-Zähler zurücksetzen wenn dieser Screen sichtbar wird
     DisposableEffect(Unit) {
@@ -366,14 +365,6 @@ fun ContactlistScreen(
                 backPressedOnce = false
             }
         }
-    }
-
-    // ─── Neue Handynummer angeben ─────────────────────────────────────────────
-    if (showChangePhoneDialog) {
-        ChangePhoneNumberDialog(
-            viewModel = viewModel,
-            onDismiss = { showChangePhoneDialog = false }
-        )
     }
 
     // ─── Account-Löschen: Erster Bestätigungsdialog ───────────────────────────
@@ -638,11 +629,6 @@ fun ContactlistScreen(
                                         m.background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f))
                                     else m
                                 }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(com.securechat.app.R.string.contacts_menu_change_phone)) },
-                            onClick = { showMenu = false; showChangePhoneDialog = true },
-                            leadingIcon = { Icon(Icons.Default.PhoneAndroid, contentDescription = null) }
                         )
                         DropdownMenuItem(
                             text = { Text(stringResource(com.securechat.app.R.string.contacts_menu_app_settings)) },

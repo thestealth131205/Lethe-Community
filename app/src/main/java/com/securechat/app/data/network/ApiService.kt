@@ -97,6 +97,14 @@ interface ApiService {
     @GET("keys/partner-umk/{partner_id}")
     suspend fun getPartnerUmk(@Path("partner_id") partnerId: String): Response<PartnerUmkResponse>
 
+    // Alle mit dem Account verbundenen Geräte (known_devices, App-übergreifend)
+    @GET("devices/known")
+    suspend fun getKnownDevices(): Response<KnownDeviceListResponse>
+
+    // Bekanntes Gerät entfernen
+    @DELETE("devices/known/{device_id}")
+    suspend fun removeKnownDevice(@Path("device_id") deviceId: String): Response<Map<String, String>>
+
     // Re-Encryption: alte v2-Nachrichten mit neuem v3-Key re-encrypten
     @POST("keys/reencrypt")
     suspend fun reencryptMessages(@Body request: ReencryptRequest): Response<ReencryptResponse>
