@@ -17762,6 +17762,7 @@ class MainViewModel @Inject constructor(
     /** Leitet Nachrichten an einen anderen Kontakt oder eine Gruppe weiter. */
     fun forwardMessages(messages: List<com.securechat.app.data.local.MessageEntity>, targetId: String) = viewModelScope.launch {
         val me = _currentUser.value ?: return@launch
+        val isGroup = isGroupChat(targetId)
         messages.forEach { msg ->
             val clientId = UUID.randomUUID().toString()
             val entity = com.securechat.app.data.local.MessageEntity(
@@ -17776,12 +17777,23 @@ class MainViewModel @Inject constructor(
                 deliveryStatus = 0
             )
             messageDao.insertMessage(entity)
-            webSocketManager.sendMessage("message", targetId, buildMap {
-                put("content_blob", msg.content ?: "")
-                put("media_type", msg.mediaType)
-                if (msg.mediaUrl != null) put("media_url", msg.mediaUrl)
-                put("client_message_id", clientId)
-            })
+            if (isGroup) {
+                webSocketManager.sendMessage("group_message", targetId, buildMap {
+                    put("content_blob", msg.content ?: "")
+                    put("media_type", msg.mediaType)
+                    if (msg.mediaUrl != null) put("media_url", msg.mediaUrl)
+                    put("group_id", targetId)
+                    put("client_message_id", clientId)
+                    put("sender_timestamp", System.currentTimeMillis())
+                })
+            } else {
+                webSocketManager.sendMessage("message", targetId, buildMap {
+                    put("content_blob", msg.content ?: "")
+                    put("media_type", msg.mediaType)
+                    if (msg.mediaUrl != null) put("media_url", msg.mediaUrl)
+                    put("client_message_id", clientId)
+                })
+            }
         }
     }
 
@@ -17801,12 +17813,23 @@ class MainViewModel @Inject constructor(
             deliveryStatus = 0
         )
         messageDao.insertMessage(entity)
-        webSocketManager.sendMessage("message", targetId, buildMap {
-            put("content_blob", "")
-            put("media_type", mediaType)
-            put("media_url", mediaUrl)
-            put("client_message_id", clientId)
-        })
+        if (isGroupChat(targetId)) {
+            webSocketManager.sendMessage("group_message", targetId, mapOf(
+                "content_blob" to "",
+                "media_type" to mediaType,
+                "media_url" to mediaUrl,
+                "group_id" to targetId,
+                "client_message_id" to clientId,
+                "sender_timestamp" to System.currentTimeMillis()
+            ))
+        } else {
+            webSocketManager.sendMessage("message", targetId, mapOf(
+                "content_blob" to "",
+                "media_type" to mediaType,
+                "media_url" to mediaUrl,
+                "client_message_id" to clientId
+            ))
+        }
     }
 
     // --- ADMIN ---

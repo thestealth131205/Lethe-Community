@@ -24,6 +24,16 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.180",
+            title = "Anruf-Absturz behoben & Weiterleiten an Gruppen repariert",
+            items = listOf(
+                "Absturz beim Empfang eines Anrufs behoben, wenn die Vollbild-Berechtigung fehlte (z.B. bei bestimmten Geräteherstellern)",
+                "Weiterleiten von Nachrichten/Bildern aus einem 1:1-Chat an eine Gruppe funktioniert jetzt zuverlässig – kam zuvor nie bei den Gruppenmitgliedern an",
+            ),
+            shortSummary = "Anruf-Absturz behoben, Weiterleiten an Gruppen funktioniert jetzt zuverlässig"
+        ),
+
+        ChangelogEntry(
             version = "10.4.179",
             title = "Multi-Device: automatische Nachentschlüsselung",
             items = listOf(
@@ -55,20 +65,6 @@ object AppChangelog {
                 "Künstler-Herz (Fan werden) funktioniert jetzt zuverlässig, auch für Audius-Künstler ohne bisherige Tracks in der Bibliothek",
             ),
             shortSummary = "Pre-Release-Musik für ausgewählte Kontakte, lokale Musik-Kopierfunktion, Jam & Cast im Windows-Player"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.176",
-            title = "Windows Media Player & Künstler-Verbesserungen",
-            items = listOf(
-                "Windows Media Player: MSI-Installer erkennt jetzt Updates zuverlässig statt eine Zweitinstallation anzulegen",
-                "Webseite bietet den Windows Media Player jetzt als Installer (MSI) und portable Version (EXE) zum Download an",
-                "Push-Benachrichtigung auf dem Smartphone, wenn eine Geräte-Authentifizierung (z.B. Windows/Web/neues Handy) im Hintergrund angefordert wird",
-                "Künstler-Fan-Button (Herz für Neuerscheinungs-Benachrichtigungen) funktioniert jetzt auch bei Audius-Künstlern",
-                "Künstler-Scanner findet jetzt auch Tracks auf Audius und verknüpft sie automatisch mit dem Künstler",
-                "Zurück-Button der Künstler-Ansicht wird nicht mehr von der Statusleiste verdeckt",
-            ),
-            shortSummary = "Windows Media Player Update-Fix, Downloads auf der Webseite, Künstler-Fan-Button für Audius"
         ),
 
     )

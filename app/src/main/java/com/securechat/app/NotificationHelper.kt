@@ -675,29 +675,41 @@ class NotificationHelper @Inject constructor(
             .setImportant(true)
             .build()
 
-        val callStyle = NotificationCompat.CallStyle.forIncomingCall(
-            caller,
-            declinePendingIntent,
-            acceptPendingIntent
-        )
-
         val builder = NotificationCompat.Builder(context, CHANNEL_ID_CALLS)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_CALL)
-            .setStyle(callStyle)
             .setAutoCancel(false)
             .setOngoing(true)  // Nicht swipe-away-bar während der Klingelphase
 
         if (canUseFullScreen) {
+            // CallStyle ist auf Android 14+ NUR zulässig, wenn ein FullScreenIntent gesetzt ist
+            // (oder ein Foreground-Service läuft) – sonst wirft notify() eine IllegalArgumentException.
+            val callStyle = NotificationCompat.CallStyle.forIncomingCall(
+                caller,
+                declinePendingIntent,
+                acceptPendingIntent
+            )
+            builder.setStyle(callStyle)
             builder.setFullScreenIntent(fullScreenPendingIntent, true)
         } else {
+            // Fehlt die FullScreenIntent-Berechtigung (vom Nutzer verweigert), fällt CallStyle
+            // auf Android 14+ nicht mehr zurück, sondern crasht die App – deshalb hier eine
+            // klassische Benachrichtigung mit Annehmen/Ablehnen-Buttons statt CallStyle.
             builder.setContentIntent(fullScreenPendingIntent)
+            builder.addAction(0, context.getString(R.string.video_call_decline), declinePendingIntent)
+            builder.addAction(0, context.getString(R.string.video_call_accept), acceptPendingIntent)
         }
 
-        manager.notify(9001, builder.build())
+        try {
+            manager.notify(9001, builder.build())
+        } catch (e: Exception) {
+            // Letzte Sicherheitsnetz gegen Systemrestriktionen, die sich nicht vorab prüfen lassen
+            // (z. B. Battery-Optimierung/OEM-Policies) – Anruf soll nie die App crashen lassen.
+            android.util.Log.e("NotificationHelper", "showIncomingCallNotification fehlgeschlagen", e)
+        }
     }
 
     /**

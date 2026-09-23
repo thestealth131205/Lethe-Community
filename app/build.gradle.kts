@@ -17,8 +17,8 @@ android {
         applicationId = "com.Lethe.app"
         minSdk = 26
         targetSdk = 36 // Geändert von 35 auf 36
-        versionCode = 100579
-        versionName = "10.4.179"
+        versionCode = 100580
+        versionName = "10.4.180"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
