@@ -24,6 +24,16 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.179",
+            title = "Multi-Device: automatische Nachentschlüsselung",
+            items = listOf(
+                "Beim Verbindungsaufbau wird jetzt proaktiv geprüft, ob Schlüssel von einem anderen angemeldeten Gerät nachgeladen werden müssen – nicht erst wenn eine einzelne Nachricht fehlschlägt",
+                "Nachrichten, die zuvor als \"Schlüssel nicht verfügbar\" gespeichert wurden, werden beim erneuten Öffnen des Chats automatisch nachentschlüsselt, sobald das Gerät den passenden Schlüssel erhalten hat",
+            ),
+            shortSummary = "Multi-Device: verpasste Nachrichten werden automatisch nachentschlüsselt"
+        ),
+
+        ChangelogEntry(
             version = "10.4.178",
             title = "Echtes Multi-Device-E2EE & Geräteverwaltung",
             items = listOf(
@@ -59,18 +69,6 @@ object AppChangelog {
                 "Zurück-Button der Künstler-Ansicht wird nicht mehr von der Statusleiste verdeckt",
             ),
             shortSummary = "Windows Media Player Update-Fix, Downloads auf der Webseite, Künstler-Fan-Button für Audius"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.175",
-            title = "Geräte-Authentifizierung per Lethe Messenger",
-            items = listOf(
-                "Neu: Ein neues Gerät (Media Player, Web Chat, weiteres Handy) kann sich jetzt per Freigabe auf einem bereits verknüpften Lethe-Messenger-Smartphone anmelden – Bestätigung per Passwort oder Fingerabdruck statt SMS-Code",
-                "Die Freigabe-Anfrage zeigt App, Gerät und ungefähren Standort (per IP) des anfragenden Geräts an, inkl. \"Nein, das bin ich nicht\"-Option",
-                "SMS-Verifizierung bleibt weiterhin als Fallback, falls kein Messenger-Gerät verknüpft ist",
-                "Lethe Media Player für Windows (Desktop) neu hinzugefügt",
-            ),
-            shortSummary = "Neue Geräte per Lethe Messenger freischalten statt per SMS, Windows Media Player"
         ),
 
     )

@@ -9583,6 +9583,7 @@ class MainViewModel @Inject constructor(
     private fun connectWebSocketAndListen() {
         val userId = _currentUser.value?.userId ?: return
         webSocketManager.connect(userId)
+        maybePerformStartupKeySync(userId)
 
         if (isListeningToWebSocket) return
         isListeningToWebSocket = true
@@ -13065,10 +13066,81 @@ class MainViewModel @Inject constructor(
                 if (syncedStatus > local.deliveryStatus) {
                     messageDao.updateDeliveryStatus(local.localId, syncedStatus)
                 }
+
+                // Nachentschlüsselung nachholen: dieser Pfad läuft bei JEDEM Chat-Öffnen/Reconnect
+                // ohne neue Nachrichten – bisher wurde eine früher als "Schlüssel nicht verfügbar"
+                // gespeicherte Nachricht hier NIE erneut versucht (nur beim seltenen Pfad mit
+                // tatsächlich neuen/fehlenden Nachrichten in doLoadMessagesFromServer). Multi-Device-
+                // Szenario: Gerät A war beim Empfang offline für den Key-Sync, hat die Nachricht
+                // dauerhaft unentschlüsselt lokal abgelegt (Chiffretext liegt aber weiterhin auf dem
+                // Server) – sobald A später den richtigen Schlüssel besitzt (z.B. via Live-Key-Sync),
+                // wird hier beim nächsten Öffnen des Chats automatisch nachentschlüsselt.
+                val retried = retryDecryptStoredMessage(server, local.content, myId)
+                if (retried != null) {
+                    messageDao.editMessageByServerId(serverId, retried)
+                    Timber.tag("LETHE_E2EE").i("Nachentschlüsselung (Status-Sync) erfolgreich für $serverId")
+                }
             }
         } catch (e: Exception) {
             Timber.tag("Chat").d("Status-Sync fehlgeschlagen: ${e.message}")
         }
+    }
+
+    /**
+     * Versucht eine lokal als unentschlüsselbar gespeicherte Text-Nachricht (Chiffretext v2:/v3:
+     * oder eine der "[🔐 …]"-Fehlermeldungen) mit dem AKTUELLEN Schlüsselstand erneut zu
+     * entschlüsseln – z.B. nachdem ein Live-Key-Sync von einem Geschwister-Gerät fehlende
+     * Partner-UMKs/Shared-Secrets nachgeliefert hat. Der Server behält den originalen
+     * content_blob dauerhaft, daher ist eine Nachentschlüsselung jederzeit möglich, solange
+     * dieses Gerät irgendwann den passenden Schlüssel erhält. Gibt den neuen Klartext zurück,
+     * oder null wenn kein Retry nötig war/es weiterhin fehlschlägt.
+     */
+    private suspend fun retryDecryptStoredMessage(item: MessageItemResponse, existingContent: String?, myId: String): String? {
+        val needsRetry = existingContent != null && (
+            existingContent.startsWith("v2:") ||
+            existingContent.startsWith("v3:") ||
+            existingContent.startsWith("[🔐") ||
+            existingContent.startsWith("🔐") ||
+            existingContent.startsWith("⚠️") ||
+            existingContent.startsWith("\uD83D\uDD10")  // 🔐 Unicode-Variante
+        )
+        if (item.mediaType != "text" || !needsRetry) return null
+        val rawBlob = item.contentBlob ?: existingContent ?: ""
+        val chatPartner = if (item.senderId == myId) item.receiverId else item.senderId
+
+        // v3 (UMK): direkt mit decryptUniversal
+        if (rawBlob.startsWith("v3:")) {
+            val retried = try { CryptoManager.decryptUniversal(chatPartner, rawBlob) } catch (_: Exception) { null }
+            return if (retried != null && !retried.startsWith("v3:") && !retried.startsWith("[🔐") &&
+                !retried.startsWith("⚠️")) retried else null
+        }
+
+        // Legacy v2: ECDH-basiert
+        if (!item.senderWebPub.isNullOrBlank()) {
+            CryptoManager.forceRederiveWebSharedSecret(item.senderId, item.senderWebPub!!)
+        }
+        if (!CryptoManager.hasSharedSecret(chatPartner)) {
+            val contact = contactDao.getContactById(chatPartner)
+            if (contact != null && contact.publicKey.length > 100) {
+                CryptoManager.deriveSharedSecret(chatPartner, contact.publicKey)
+            }
+        }
+        // Versuch 1: Für eigene Nachrichten mit selfContentBlob (eigener Schlüssel)
+        val selfBlob = item.selfContentBlob
+        val retriedSelf = if (item.senderId == myId && !selfBlob.isNullOrBlank()) {
+            try { CryptoManager.decryptBestEffort(myId, selfBlob) } catch (_: Exception) { null }
+        } else null
+        val retried = if (retriedSelf != null &&
+            !retriedSelf.startsWith("v2:") && !retriedSelf.startsWith("[🔐") &&
+            !retriedSelf.startsWith("⚠️") && !retriedSelf.startsWith("🔐")
+        ) {
+            retriedSelf
+        } else {
+            try { CryptoManager.decryptUniversal(chatPartner, rawBlob) } catch (_: Exception) { null }
+        }
+        return if (retried != null && !retried.startsWith("v2:") && !retried.startsWith("[🔐") &&
+            !retried.startsWith("⚠️") && !retried.startsWith("🔐")
+        ) retried else null
     }
 
     /**
@@ -13158,61 +13230,10 @@ class MainViewModel @Inject constructor(
                         }
                         // Entschlüsselung nachholen: falls beim WS-Empfang Schlüssel noch nicht verfügbar waren,
                         // kann entweder der Chiffretext (v2:...) oder eine der Fehlermeldungen gespeichert sein.
-                        // Alle bekannten Fehler-Präfixe prüfen um lückenlose Nachentschlüsselung zu gewährleisten.
-                        val existingContent = existingById.content
-                        val needsRetry = existingContent != null && (
-                            existingContent.startsWith("v2:") ||
-                            existingContent.startsWith("v3:") ||
-                            existingContent.startsWith("[🔐") ||
-                            existingContent.startsWith("🔐") ||
-                            existingContent.startsWith("⚠️") ||
-                            existingContent.startsWith("\uD83D\uDD10")  // 🔐 Unicode-Variante
-                        )
-                        if (item.mediaType == "text" && needsRetry) {
-                            val rawBlob = item.contentBlob ?: existingById.content ?: ""
-                            val chatPartner = when {
-                                item.senderId == myId -> item.receiverId
-                                else -> item.senderId
-                            }
-                            // v3 (UMK): direkt mit decryptUniversal
-                            if (rawBlob.startsWith("v3:")) {
-                                val retried = try { CryptoManager.decryptUniversal(chatPartner, rawBlob) } catch (_: Exception) { null }
-                                if (retried != null && !retried.startsWith("v3:") && !retried.startsWith("[🔐") &&
-                                    !retried.startsWith("⚠️")) {
-                                    messageDao.editMessageByServerId(item.id, retried)
-                                    Timber.tag("LETHE_E2EE").i("Nachentschlüsselung (v3) erfolgreich für ${item.id}")
-                                }
-                            } else {
-                                // Legacy v2: ECDH-basiert
-                                if (!item.senderWebPub.isNullOrBlank()) {
-                                    CryptoManager.forceRederiveWebSharedSecret(item.senderId, item.senderWebPub!!)
-                                }
-                                if (!CryptoManager.hasSharedSecret(chatPartner)) {
-                                    val contact = contactDao.getContactById(chatPartner)
-                                    if (contact != null && contact.publicKey.length > 100) {
-                                        CryptoManager.deriveSharedSecret(chatPartner, contact.publicKey)
-                                    }
-                                }
-                                // Versuch 1: Für eigene Nachrichten mit selfContentBlob (eigener Schlüssel)
-                                val selfBlob = item.selfContentBlob
-                                val retriedSelf = if (item.senderId == myId && !selfBlob.isNullOrBlank()) {
-                                    try { CryptoManager.decryptBestEffort(myId, selfBlob) } catch (_: Exception) { null }
-                                } else null
-                                val retried = if (retriedSelf != null &&
-                                    !retriedSelf.startsWith("v2:") && !retriedSelf.startsWith("[🔐") &&
-                                    !retriedSelf.startsWith("⚠️") && !retriedSelf.startsWith("🔐")
-                                ) {
-                                    retriedSelf
-                                } else {
-                                    try { CryptoManager.decryptUniversal(chatPartner, rawBlob) } catch (_: Exception) { null }
-                                }
-                                if (retried != null && !retried.startsWith("v2:") && !retried.startsWith("[🔐") &&
-                                    !retried.startsWith("⚠️") && !retried.startsWith("🔐")
-                                ) {
-                                    messageDao.editMessageByServerId(item.id, retried)
-                                    Timber.tag("LETHE_E2EE").i("Nachentschlüsselung erfolgreich für ${item.id}")
-                                }
-                            }
+                        val retried = retryDecryptStoredMessage(item, existingById.content, myId)
+                        if (retried != null) {
+                            messageDao.editMessageByServerId(item.id, retried)
+                            Timber.tag("LETHE_E2EE").i("Nachentschlüsselung erfolgreich für ${item.id}")
                         }
                         // deliveryStatus vom Server synchronisieren (z.B. nach Neuinstallation)
                         val syncedStatus = if (item.senderId == myId) {
@@ -16104,6 +16125,36 @@ class MainViewModel @Inject constructor(
         } finally {
             pendingKeySyncDeferred = null
             CryptoManager.clearEphemeralSyncKeyPair()
+        }
+    }
+
+    /**
+     * Proaktiver Voll-Sync bei jedem WS-Connect: holt (rate-limited, max. 1x alle 6h) per
+     * Live-Key-Sync ALLE Partner-UMKs + Gruppen-Keys eines Geschwister-Geräts nach – nicht nur
+     * für einen einzelnen Kontakt wie [tryAutoKeyResyncIfMissing]. Schließt die Lücke, wenn ein
+     * bereits länger eingerichtetes Gerät (z.B. weil ein NEUES Geschwister-Gerät zwischenzeitlich
+     * per Geräte-Auth beigetreten ist und dabei den ECDH-Identity-Key des Accounts rotiert hat)
+     * für einzelne Kontakte weder v3- noch v2-Schlüssel besitzt/matcht, ohne dass dafür erst eine
+     * einzelne fehlgeschlagene Nachricht abgewartet werden muss. Läuft komplett im Hintergrund,
+     * schlägt bei fehlendem/nicht erreichbarem Geschwister-Gerät (z.B. Single-Device-Nutzer)
+     * lautlos fehl (Timeout).
+     */
+    private fun maybePerformStartupKeySync(userId: String) {
+        val prefs = context.getSharedPreferences("lethe_key_sync", android.content.Context.MODE_PRIVATE)
+        val last = prefs.getLong("last_full_sync_at", 0L)
+        val now = System.currentTimeMillis()
+        if (now - last < 6 * 60 * 60 * 1000L) return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                delay(1500L) // WS-Verbindung + evtl. gleichzeitig verbindendes Geschwister-Gerät stabilisieren lassen
+                val synced = requestLiveKeySyncFromSibling(userId, timeoutMs = 4000L)
+                if (synced) {
+                    prefs.edit().putLong("last_full_sync_at", now).apply()
+                    Timber.tag("LETHE_KEY_SYNC").i("Start-Key-Sync erfolgreich – Partner-UMKs/Gruppen-Keys von Geschwister-Gerät aktualisiert")
+                }
+            } catch (e: Exception) {
+                Timber.tag("LETHE_KEY_SYNC").w("maybePerformStartupKeySync fehlgeschlagen: ${e.message}")
+            }
         }
     }
 
