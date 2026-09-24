@@ -17,8 +17,8 @@ android {
         applicationId = "com.Lethe.app"
         minSdk = 26
         targetSdk = 36 // Geändert von 35 auf 36
-        versionCode = 100580
-        versionName = "10.4.180"
+        versionCode = 310061
+        versionName = "10.4.182"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -303,11 +303,17 @@ if (gradle.startParameter.taskRequests.toString().contains("Playstore", ignoreCa
 
 // Eindeutiger versionCode je ABI-Split-APK (nur foss-Flavor, siehe splits{} oben).
 // Ohne das hätten alle Split-APKs denselben versionCode wie die Universal-APK, was
-// F-Droid/Package-Manager nicht mehr sauber unterscheiden könnte. Standard-Android-Muster:
-// (ABI-Offset * 1_000_000) + eigentlicher versionCode – bei aktuell 6-stelligen
-// versionCodes (~100xxx) bleibt das Ergebnis klar unter dem Int-Maximum.
+// F-Droid/Package-Manager nicht mehr sauber unterscheiden könnte.
+//
+// F-Droid-konformes Schema (verlangt vom fdroiddata-Reviewer, siehe
+// https://f-droid.org/docs/Submitting_to_F-Droid_Quick_Start_Guide/#setup-abi-split):
+// Die ABI-Kennziffer MUSS an der NIEDRIGSTEN Stelle stehen → (baseVersionCode * 10) + abiCode,
+// mit Reihenfolge armeabi-v7a < arm64-v8a < x86 < x86_64 (1 < 2 < 3 < 4), damit ein Gerät
+// automatisch die höchste kompatible Variante erhält und der eigentliche versionCode beim
+// Hochzählen die ABI-Ordnung nie durchbricht. (Vorher stand die ABI fälschlich an der
+// höchsten Stelle: abiOffset * 1_000_000 + baseVersionCode.)
 androidComponents {
-    val abiCodes = mapOf("armeabi-v7a" to 1, "arm64-v8a" to 2, "x86_64" to 3)
+    val abiCodes = mapOf("armeabi-v7a" to 1, "arm64-v8a" to 2, "x86" to 3, "x86_64" to 4)
     onVariants { variant ->
         if (variant.flavorName == "foss") {
             variant.outputs.forEach { output ->
@@ -317,7 +323,7 @@ androidComponents {
                 val abiOffset = abiCodes[abi]
                 if (abiOffset != null) {
                     val baseVersionCode = output.versionCode.orNull ?: 0
-                    output.versionCode.set(abiOffset * 1_000_000 + baseVersionCode)
+                    output.versionCode.set(baseVersionCode * 10 + abiOffset)
                 }
             }
         }

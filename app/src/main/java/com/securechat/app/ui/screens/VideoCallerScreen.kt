@@ -79,6 +79,8 @@ import androidx.compose.material.icons.filled.StopCircle
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.automirrored.filled.ScreenShare
 import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -114,6 +116,7 @@ import com.securechat.app.R
 import com.securechat.app.data.local.ContactEntity
 import com.securechat.app.data.network.GroupMemberInfo
 import com.securechat.app.data.webrtc.VirtualBackgroundMode
+import com.securechat.app.data.webrtc.ZoomCapturerObserver
 import com.securechat.app.ui.CallParticipant
 import com.securechat.app.ui.MainViewModel
 import kotlinx.coroutines.delay
@@ -906,7 +909,10 @@ fun ActiveVideoCallScreen(
     remoteEmoji: CallEmoji? = null,
     isRecording: Boolean = false,
     partnerRecording: Boolean = false,
-    onToggleRecording: () -> Unit = {}
+    onToggleRecording: () -> Unit = {},
+    zoomFactor: Float = 1f,
+    onZoomIn: () -> Unit = {},
+    onZoomOut: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -1044,6 +1050,49 @@ fun ActiveVideoCallScreen(
                     Text(mainName, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Medium)
                     Spacer(Modifier.height(8.dp))
                     Text(stringResource(R.string.video_call_connecting), color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp)
+                }
+            }
+        }
+
+        // ── 4.1a' Zoom +/- Buttons (nur wenn eigenes Bild getauscht groß angezeigt wird) ──
+        // Erlaubt digitalen Zoom des eigenen Kamera-Streams (wirkt sich auch auf das an den
+        // Partner gesendete Bild aus), z.B. um ein Detail in Nahaufnahme zu zeigen.
+        if (mainParticipantId == "local") {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .statusBarsPadding()
+                    .padding(start = 12.dp, top = 8.dp)
+                    .background(Color.Black.copy(alpha = 0.45f), shape = RoundedCornerShape(20.dp))
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.15f))
+                        .clickable(enabled = zoomFactor > ZoomCapturerObserver.MIN_ZOOM + 0.01f) { onZoomOut() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Remove, contentDescription = "Verkleinern", tint = Color.White, modifier = Modifier.size(18.dp))
+                }
+                Text(
+                    text = "${zoomFactor.roundToInt()}x".let { if (zoomFactor % 1f == 0f) it else String.format("%.1fx", zoomFactor) },
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                )
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.15f))
+                        .clickable(enabled = zoomFactor < ZoomCapturerObserver.MAX_ZOOM - 0.01f) { onZoomIn() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Vergrößern", tint = Color.White, modifier = Modifier.size(18.dp))
                 }
             }
         }
@@ -1703,6 +1752,7 @@ fun VideoCallScreen(
     val eglCtx            by viewModel.webRtcEglBaseContext.collectAsState()
     val callStatusMessage by viewModel.callStatusMessage.collectAsState()
     val isFrontCamera          by viewModel.isUsingFrontCamera.collectAsState()
+    val callZoomFactor        by viewModel.callZoomFactor.collectAsState()
     val virtualBackgroundMode by viewModel.virtualBackgroundMode.collectAsState()
     val selectedBackgroundId by viewModel.selectedBackgroundId.collectAsState()
 
@@ -1847,6 +1897,9 @@ fun VideoCallScreen(
             isRecording            = isCallRecording,
             partnerRecording       = partnerRecording,
             onToggleRecording      = { viewModel.toggleCallRecording() },
+            zoomFactor             = callZoomFactor,
+            onZoomIn               = { viewModel.zoomCallIn() },
+            onZoomOut              = { viewModel.zoomCallOut() },
             onToggleMute           = { viewModel.toggleCallMute() },
             onSwitchCamera         = { viewModel.switchCallCamera() },
             onToggleScreenShare    = onToggleScreenShare,

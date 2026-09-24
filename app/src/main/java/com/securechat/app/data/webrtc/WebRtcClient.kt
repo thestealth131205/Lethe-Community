@@ -154,6 +154,9 @@ class WebRtcClient(
     /** Kapselt den CapturerObserver und verarbeitet Frames für den Hintergrundunschärfe-Effekt. */
     private var blurObserver: BackgroundBlurCapturerObserver? = null
 
+    /** Kapselt den CapturerObserver für digitalen Zoom des eigenen Kamera-Streams. */
+    private var zoomObserver: ZoomCapturerObserver? = null
+
     // ICE-Kandidaten die vor setRemoteDescription ankommen → puffern
     private val pendingCandidates = mutableListOf<IceCandidate>()
     private var remoteDescSet = false
@@ -209,6 +212,14 @@ class WebRtcClient(
         Timber.tag(TAG).w("ICE FAILED Toleranz (8s) abgelaufen – Verbindung gilt als gescheitert")
         _callState.value = CallState.ICE_FAILED
     }
+
+    // Media-Watchdog: ICE kann "CONNECTED" melden (STUN-Binding erfolgreich), obwohl anschließend
+    // NIE echte RTP-Pakete ankommen – klassisch bei symmetrischem NAT/restriktiver Firewall ohne
+    // funktionierendes TURN-Relay (z.B. weil der TURN-Credentials-Abruf beim Callstart fehlschlug
+    // oder der TURN-Server kurzzeitig nicht erreichbar war). Ohne diese Prüfung bleibt der Anruf für
+    // den Nutzer für immer scheinbar "verbunden" mit schwarzem Bild und Stille auf beiden Seiten.
+    private var mediaWatchdogRestarted = false
+    private val mediaWatchdogCheckRunnable = Runnable { checkMediaFlowing() }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Public StateFlows consumed by the UI
@@ -353,10 +364,14 @@ class WebRtcClient(
             videoSource = f.createVideoSource(videoCapturer!!.isScreencast)
             surfaceHelper = SurfaceTextureHelper.create("VideoCaptureThread", eglBase.eglBaseContext)
 
-            // BlurObserver zwischen Capturer und VideoSource schalten
+            // BlurObserver + ZoomObserver zwischen Capturer und VideoSource schalten:
+            // Capturer → Zoom → Blur → VideoSource (Reihenfolge egal, beide sind reine Passthrough-
+            // Wrapper solange ihr jeweiliger Effekt inaktiv ist).
             val blur = BackgroundBlurCapturerObserver(videoSource!!.capturerObserver, segmentationProvider)
             blurObserver = blur
-            videoCapturer!!.initialize(surfaceHelper, context, blur)
+            val zoom = ZoomCapturerObserver(blur)
+            zoomObserver = zoom
+            videoCapturer!!.initialize(surfaceHelper, context, zoom)
             videoCapturer!!.startCapture(1280, 720, 30)  // max 720p @ 30 fps
             isCapturing = true
 
@@ -466,6 +481,12 @@ class WebRtcClient(
                     // Reconnect nach DISCONNECTED/FAILED → beide Timer abbrechen
                     mainHandler.removeCallbacks(iceDisconnectRunnable)
                     mainHandler.removeCallbacks(iceFailedRunnable)
+                    if (!wasConnected) {
+                        // Erstverbindung: Media-Watchdog starten (prüft ob wirklich RTP-Daten ankommen).
+                        mediaWatchdogRestarted = false
+                        mainHandler.removeCallbacks(mediaWatchdogCheckRunnable)
+                        mainHandler.postDelayed(mediaWatchdogCheckRunnable, 5_000)
+                    }
                     wasConnected = true
                     _callState.value = CallState.CONNECTED
                     // Audiobitrate nach erfolgreichem Verbindungsaufbau erhöhen
@@ -495,6 +516,7 @@ class WebRtcClient(
                 PeerConnection.IceConnectionState.CLOSED -> {
                     mainHandler.removeCallbacks(iceDisconnectRunnable)
                     mainHandler.removeCallbacks(iceFailedRunnable)
+                    mainHandler.removeCallbacks(mediaWatchdogCheckRunnable)
                     _callState.value = CallState.ICE_FAILED
                 }
 
@@ -912,8 +934,48 @@ class WebRtcClient(
         Timber.tag(TAG).d("Video resumed (wasCapturing=${!isCapturing})")
     }
 
+    /**
+     * Prüft per WebRTC-Statistik ob nach ICE-CONNECTED tatsächlich RTP-Daten ankommen.
+     * 0 empfangene Bytes trotz "verbunden" → klassisches Symptom für ein fehlendes TURN-Relay
+     * (symmetrisches NAT/restriktive Firewall). Erster Fund → ICE-Restart erzwingen (löst über
+     * die bestehende Renegotiations-Logik automatisch ein neues Offer/Answer mit frischen
+     * ICE-Credentials aus). Hilft das nach weiteren 8s immer noch nicht → Anruf endgültig als
+     * gescheitert markieren, statt den Nutzer für immer vor schwarzem Bild + Stille sitzen zu lassen.
+     */
+    private fun checkMediaFlowing() {
+        val pc = peerConnection ?: return
+        if (_callState.value != CallState.CONNECTED) return
+        pc.getStats { report ->
+            var bytesReceived = 0L
+            report.statsMap.values.forEach { stat ->
+                if (stat.type == "inbound-rtp") {
+                    (stat.members["bytesReceived"] as? Number)?.let { bytesReceived += it.toLong() }
+                }
+            }
+            mainHandler.post {
+                if (_callState.value != CallState.CONNECTED) return@post
+                if (bytesReceived > 0L) {
+                    Timber.tag(TAG).d("Media-Watchdog: $bytesReceived Bytes empfangen – Medienfluss ok")
+                    return@post
+                }
+                if (!mediaWatchdogRestarted) {
+                    mediaWatchdogRestarted = true
+                    Timber.tag(TAG).w("Media-Watchdog: verbunden aber 0 Bytes empfangen – erzwinge ICE-Restart")
+                    try { peerConnection?.restartIce() } catch (e: Exception) {
+                        Timber.tag(TAG).e("ICE-Restart fehlgeschlagen: ${e.message}")
+                    }
+                    mainHandler.postDelayed(mediaWatchdogCheckRunnable, 8_000)
+                } else {
+                    Timber.tag(TAG).e("Media-Watchdog: auch nach ICE-Restart kein Medienfluss – Anruf gescheitert")
+                    _callState.value = CallState.ICE_FAILED
+                }
+            }
+        }
+    }
+
     /** Tear down the PeerConnection but keep local tracks alive for display. */
     fun endCall() {
+        mainHandler.removeCallbacks(mediaWatchdogCheckRunnable)
         _callState.value = CallState.ENDED
         peerConnection?.dispose()
         peerConnection = null
@@ -960,6 +1022,7 @@ class WebRtcClient(
 
         blurObserver?.dispose()
         blurObserver = null
+        zoomObserver = null
         videoCapturer?.stopCapture()
         videoCapturer?.dispose()
         surfaceHelper?.dispose()
@@ -1021,6 +1084,18 @@ class WebRtcClient(
         val result = videoSender.setParameters(params)
         Timber.tag(TAG).d("setVideoQuality setParameters result: $result")
     }
+
+    /**
+     * Setzt den digitalen Zoom-Faktor des eigenen Kamera-Streams (1.0 = kein Zoom, bis zu
+     * [ZoomCapturerObserver.MAX_ZOOM]). Wirkt sich auch auf das an den Partner gesendete Bild aus.
+     * No-op bei Sekundärclients (Gruppenanruf, geteilter Track ohne eigenes Capture) oder Sprachanrufen.
+     */
+    fun setLocalZoom(factor: Float) {
+        zoomObserver?.zoomFactor?.set(factor.coerceIn(ZoomCapturerObserver.MIN_ZOOM, ZoomCapturerObserver.MAX_ZOOM))
+    }
+
+    /** Aktueller Zoom-Faktor des eigenen Kamera-Streams (für UI-Anzeige). */
+    fun getLocalZoom(): Float = zoomObserver?.zoomFactor?.get() ?: ZoomCapturerObserver.MIN_ZOOM
 
     /** Schaltet zwischen Hörer (Earpiece) und Freisprecher um – nur sinnvoll für Sprachanrufe. */
     fun toggleSpeakerphone() {

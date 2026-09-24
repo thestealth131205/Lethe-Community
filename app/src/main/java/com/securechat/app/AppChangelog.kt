@@ -24,6 +24,26 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.182",
+            title = "Videoanruf-Fixes, Zoom im Videoanruf & Geräte-Sicherheitslücke geschlossen",
+            items = listOf(
+                "Videoanruf: Ursache für gelegentlich schwarzes Bild ohne Ton nach Annahme behoben – die Verbindung wird jetzt laufend überwacht und bei fehlendem Bild-/Tonfluss automatisch neu aufgebaut",
+                "Neu: Im Videoanruf das eigene kleine Kamerabild antippen, um es groß anzuzeigen – dabei erscheinen oben links +/- Zoom-Buttons, um dem Gesprächspartner ein Detail näher zu zeigen",
+                "Sicherheitslücke geschlossen: Wurde ein verknüpftes Gerät aus der Geräteübersicht entfernt, konnte man sich auf genau diesem Gerät ohne erneute Verifizierung wieder anmelden – jetzt ist bei jedem entfernten Gerät eine erneute Verifizierung (per SMS oder Freigabe über ein anderes Gerät) nötig, damit auch die Schlüssel sauber neu ausgetauscht werden",
+            ),
+            shortSummary = "Videoanruf-Bildaussetzer behoben, neuer Zoom im Anruf, Geräte-Sicherheitslücke geschlossen"
+        ),
+
+        ChangelogEntry(
+            version = "10.4.181",
+            title = "Verbesserte Kompatibilität für die F-Droid-Verteilung",
+            items = listOf(
+                "Interne Anpassung der App-Versionskennung, damit Updates über F-Droid (freie App-Quelle) zuverlässig für alle Geräte-Architekturen angeboten werden",
+            ),
+            shortSummary = "Interne Verbesserung für zuverlässige Updates über F-Droid"
+        ),
+
+        ChangelogEntry(
             version = "10.4.180",
             title = "Anruf-Absturz behoben & Weiterleiten an Gruppen repariert",
             items = listOf(
@@ -41,30 +61,6 @@ object AppChangelog {
                 "Nachrichten, die zuvor als \"Schlüssel nicht verfügbar\" gespeichert wurden, werden beim erneuten Öffnen des Chats automatisch nachentschlüsselt, sobald das Gerät den passenden Schlüssel erhalten hat",
             ),
             shortSummary = "Multi-Device: verpasste Nachrichten werden automatisch nachentschlüsselt"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.178",
-            title = "Echtes Multi-Device-E2EE & Geräteverwaltung",
-            items = listOf(
-                "Neu: Ein zweites Messenger-Handy kann jetzt live über das erste verknüpfte Gerät die Verschlüsselungs-Schlüssel übernehmen – beide Geräte können danach alle Chats lesen, ohne dass sich der Schlüssel des Erstgeräts ändert",
-                "\"Neue Handynummer angeben\" ist jetzt im 3-Punkte-Menü unter \"Account\" zu finden (statt direkt im Hauptmenü)",
-                "Neu: Übersicht \"Verbundene Geräte\" unter Geräte – zeigt alle mit dem Account verknüpften Geräte inkl. Kennzeichnung des ursprünglichen Host-Geräts, mit Löschen-Button pro Gerät",
-            ),
-            shortSummary = "Echte Multi-Device-Ende-zu-Ende-Verschlüsselung, Geräteübersicht mit Host-Kennzeichnung"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.177",
-            title = "Pre-Release-Musik, lokale Kopierfunktion & Desktop-Jam",
-            items = listOf(
-                "Neu: Admins können Kontakten per Langdruck in der Kontaktliste Zugriff auf unveröffentlichte (Pre-Release) Musik freischalten",
-                "Musik-Upload/-Bearbeitung hat jetzt eine \"Unveröffentlicht\"-Option – solche Titel sind nur für freigeschaltete Nutzer sichtbar (mit PRE-Kennzeichen)",
-                "Lokale Musik lässt sich jetzt direkt zwischen Smartphone und Windows Media Player kopieren",
-                "Lethe Media Player für Windows: Gemeinsam hören (Jam) und Chromecast werden jetzt unterstützt",
-                "Künstler-Herz (Fan werden) funktioniert jetzt zuverlässig, auch für Audius-Künstler ohne bisherige Tracks in der Bibliothek",
-            ),
-            shortSummary = "Pre-Release-Musik für ausgewählte Kontakte, lokale Musik-Kopierfunktion, Jam & Cast im Windows-Player"
         ),
 
     )

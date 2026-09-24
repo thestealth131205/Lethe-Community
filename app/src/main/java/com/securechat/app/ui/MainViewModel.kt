@@ -1378,6 +1378,24 @@ class MainViewModel @Inject constructor(
 
     fun setCallVideoQuality(isHighDefinition: Boolean) = webRtcClient?.setVideoQuality(isHighDefinition)
 
+    // Digitaler Zoom des eigenen Kamera-Streams (nur relevant wenn das eigene Bild als
+    // Haupt-/Vollbild angezeigt wird, siehe VideoCallerScreen PIP-Tausch).
+    private val _callZoomFactor = MutableStateFlow(com.securechat.app.data.webrtc.ZoomCapturerObserver.MIN_ZOOM)
+    val callZoomFactor: StateFlow<Float> = _callZoomFactor.asStateFlow()
+
+    private fun setCallZoom(factor: Float) {
+        val clamped = factor.coerceIn(
+            com.securechat.app.data.webrtc.ZoomCapturerObserver.MIN_ZOOM,
+            com.securechat.app.data.webrtc.ZoomCapturerObserver.MAX_ZOOM
+        )
+        webRtcClient?.setLocalZoom(clamped)
+        _callZoomFactor.value = clamped
+    }
+
+    fun zoomCallIn() = setCallZoom(_callZoomFactor.value + com.securechat.app.data.webrtc.ZoomCapturerObserver.ZOOM_STEP)
+
+    fun zoomCallOut() = setCallZoom(_callZoomFactor.value - com.securechat.app.data.webrtc.ZoomCapturerObserver.ZOOM_STEP)
+
     /** Kein virtueller Hintergrund (Originalkamera). */
     fun setVirtualBackgroundNone() {
         webRtcClient?.setVirtualBackground(com.securechat.app.data.webrtc.VirtualBackgroundMode.NONE)
@@ -1751,12 +1769,20 @@ class MainViewModel @Inject constructor(
         // TURN-Credentials serverseitig abrufen (Secret bleibt auf dem Server)
         var turnUsername = ""
         var turnPassword = ""
-        try {
-            val resp = apiService.getTurnCredentials()
-            if (resp.isSuccessful) {
-                resp.body()?.let { turnUsername = it.username; turnPassword = it.password }
-            }
-        } catch (_: Exception) { /* Fallback: nur STUN */ }
+        // Bis zu 2 Versuche: ohne TURN-Relay scheitert der Anruf bei symmetrischem NAT/restriktiver
+        // Firewall oft am "verbunden, aber schwarzes Bild + Stille"-Symptom (ICE findet zwar einen
+        // STUN-Pfad, aber es fließen keine RTP-Daten). Ein einzelner fehlgeschlagener Abruf sollte
+        // den Anruf deshalb nicht sofort auf reines STUN zurückfallen lassen.
+        for (attempt in 1..2) {
+            try {
+                val resp = apiService.getTurnCredentials()
+                if (resp.isSuccessful) {
+                    resp.body()?.let { turnUsername = it.username; turnPassword = it.password }
+                }
+            } catch (_: Exception) { /* nächster Versuch bzw. Fallback: nur STUN */ }
+            if (turnUsername.isNotEmpty() || attempt == 2) break
+            delay(400L)
+        }
         val prefs = _userPrefs.value
         return com.securechat.app.data.webrtc.WebRtcClient(
             context  = context,
@@ -2136,6 +2162,7 @@ class MainViewModel @Inject constructor(
         _callIsMuted.value             = false
         _isSpeakerphoneOn.value        = false
         _isUsingFrontCamera.value      = true
+        _callZoomFactor.value          = com.securechat.app.data.webrtc.ZoomCapturerObserver.MIN_ZOOM
         _virtualBackgroundMode.value   = com.securechat.app.data.webrtc.VirtualBackgroundMode.NONE
         _selectedBackgroundId.value    = null
         _activeCallType.value      = "VIDEO"  // Für den nächsten Anruf zurücksetzen
