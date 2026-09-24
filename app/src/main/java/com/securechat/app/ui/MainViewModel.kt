@@ -2262,6 +2262,15 @@ class MainViewModel @Inject constructor(
     private val _newDeviceState = MutableStateFlow<NewDeviceState?>(null)
     val newDeviceState: StateFlow<NewDeviceState?> = _newDeviceState.asStateFlow()
 
+    /** Fehlermeldung aus [requestNewDeviceSmsFallback], die INNERHALB des Geräte-Verifizierungs-Dialogs
+     * angezeigt wird (der Dialog verdeckt die normale statusMessage-Card im Hintergrund). */
+    private val _newDeviceFallbackError = MutableStateFlow<String?>(null)
+    val newDeviceFallbackError: StateFlow<String?> = _newDeviceFallbackError.asStateFlow()
+
+    /** true während [requestNewDeviceSmsFallback] läuft, für einen Ladeindikator im Dialog. */
+    private val _newDeviceFallbackLoading = MutableStateFlow(false)
+    val newDeviceFallbackLoading: StateFlow<Boolean> = _newDeviceFallbackLoading.asStateFlow()
+
     /** Upload-Fortschritt aktiver Video-Uploads: clientMessageId → 0f..100f (Upload%) oder 101f (Transkodierung läuft) */
     private val _videoUploadProgress = MutableStateFlow<Map<String, Float>>(emptyMap())
     val videoUploadProgress: StateFlow<Map<String, Float>> = _videoUploadProgress.asStateFlow()
@@ -8048,6 +8057,13 @@ class MainViewModel @Inject constructor(
                     )
                     if (!willSwitchProfile) {
                         userDao.insertUser(newUser)
+                        // P2P-Einstellung vom Server übernehmen: Der lokale Toggle ist profilspezifisch
+                        // (eigene DataStore-Datei pro Fake-Nummer) und geht bei Neuinstallation/neuem
+                        // Gerät verloren – ohne diesen Abgleich bleibt die "P2P-Ampel" im Chat dauerhaft
+                        // unsichtbar, obwohl der Account P2P eigentlich aktiviert hat.
+                        if (profile != null) {
+                            prefsRepository.setP2pInternetEnabled(profile.p2pInternetEnabled)
+                        }
                     }
                     _currentUser.value = newUser
                     ProfileManager.saveAccountToRegistry(
@@ -8460,6 +8476,44 @@ class MainViewModel @Inject constructor(
     }
 
     /**
+     * "Andere Optionen" im Messenger-Freigabe-Dialog: erzwingt SMS-Code-Verifikation statt
+     * auf die Freigabe per Lethe Messenger zu warten. Fordert eine neue SMS-Session an und
+     * wechselt [newDeviceState] auf authMethod="sms", woraufhin die UI automatisch den
+     * SMS-Code-Dialog anzeigt.
+     */
+    fun requestNewDeviceSmsFallback() {
+        val state = _newDeviceState.value ?: return
+        _newDeviceFallbackError.value = null
+        _newDeviceFallbackLoading.value = true
+        viewModelScope.launch {
+            try {
+                val fingerprint = withContext(Dispatchers.IO) {
+                    try { DeviceIdentifier.getFingerprint(context) } catch (_: Exception) { "" }
+                }
+                val response = apiService.requestNewDeviceSmsFallback(
+                    UserLoginRequest(fakeNumber = state.fakeNumber, password = state.password, deviceFingerprint = fingerprint)
+                )
+                val body = response.body()
+                val sessionToken = body?.sessionToken
+                if (response.isSuccessful && !sessionToken.isNullOrBlank()) {
+                    _newDeviceState.value = state.copy(sessionToken = sessionToken, authMethod = "sms")
+                } else {
+                    val err = response.errorBody()?.string() ?: ""
+                    val detail = try {
+                        org.json.JSONObject(err).optString("detail", "SMS konnte nicht angefordert werden.")
+                    } catch (_: Exception) { "SMS konnte nicht angefordert werden." }
+                    _newDeviceFallbackError.value = detail
+                }
+            } catch (e: Exception) {
+                Timber.tag("LETHE_DEVICE").e("requestNewDeviceSmsFallback Fehler: ${e.message}")
+                _newDeviceFallbackError.value = "Fehler: ${e.message}"
+            } finally {
+                _newDeviceFallbackLoading.value = false
+            }
+        }
+    }
+
+    /**
      * Verifiziert einen SMS-Code für ein neues Gerät.
      * Wird aufgerufen wenn der Nutzer den Code aus der SMS eingibt.
      * Bei Erfolg: JWT speichern, Key-Backup wiederherstellen, dann normalen Login-Flow starten.
@@ -8529,6 +8583,7 @@ class MainViewModel @Inject constructor(
      */
     fun dismissNewDeviceVerification() {
         _newDeviceState.value = null
+        _newDeviceFallbackError.value = null
     }
 
     /**

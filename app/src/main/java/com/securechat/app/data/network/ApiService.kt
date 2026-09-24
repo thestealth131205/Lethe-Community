@@ -55,6 +55,10 @@ interface ApiService {
     @POST("login/device-auth/poll")
     suspend fun pollDeviceAuth(@Body request: DeviceAuthPollRequest): Response<DeviceAuthPollResponse>
 
+    // Wechselt von Messenger-Freigabe auf SMS-Code ("Andere Optionen")
+    @POST("login/new-device/fallback-sms")
+    suspend fun requestNewDeviceSmsFallback(@Body request: UserLoginRequest): Response<LoginResponse>
+
     // ECDH Public Key hochladen
     @PUT("users/me/ecdh-key")
     suspend fun updateEcdhKey(@Body request: EcdhKeyUpdateRequest): Response<Map<String, String>>

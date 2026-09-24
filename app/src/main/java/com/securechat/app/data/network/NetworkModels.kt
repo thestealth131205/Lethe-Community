@@ -371,7 +371,8 @@ data class UserResponse(
     @SerializedName("is_phone_verified") val isPhoneVerified: Boolean = false,
     @SerializedName("lethe_id") val letheId: String? = null,
     @SerializedName("admin_added") val adminAdded: Boolean = false,
-    @SerializedName("is_verified") val isVerified: Boolean = false
+    @SerializedName("is_verified") val isVerified: Boolean = false,
+    @SerializedName("p2p_internet_enabled") val p2pInternetEnabled: Boolean = false
 )
 
 // Bot-Suche (öffentlich, kein Token nötig)

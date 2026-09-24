@@ -24,6 +24,16 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.183",
+            title = "Geräte-Verifizierung: SMS-Alternative & P2P-Status-Fix",
+            items = listOf(
+                "Neu: Im Freigabe-Dialog für ein neues Gerät gibt es jetzt unten den Button \"Andere Optionen\", um statt der Freigabe über ein anderes Gerät stattdessen einen SMS-Code anzufordern",
+                "Fehler behoben: Der P2P-Verbindungsstatus (Ampel neben dem Kontaktnamen) verschwand nach einer Neuanmeldung oder Geräte-Verifizierung, obwohl P2P für den Account aktiviert war – die Einstellung wird jetzt korrekt vom Server übernommen",
+            ),
+            shortSummary = "Neue SMS-Alternative bei Geräte-Verifizierung, P2P-Status-Anzeige repariert"
+        ),
+
+        ChangelogEntry(
             version = "10.4.182",
             title = "Videoanruf-Fixes, Zoom im Videoanruf & Geräte-Sicherheitslücke geschlossen",
             items = listOf(
@@ -51,16 +61,6 @@ object AppChangelog {
                 "Weiterleiten von Nachrichten/Bildern aus einem 1:1-Chat an eine Gruppe funktioniert jetzt zuverlässig – kam zuvor nie bei den Gruppenmitgliedern an",
             ),
             shortSummary = "Anruf-Absturz behoben, Weiterleiten an Gruppen funktioniert jetzt zuverlässig"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.179",
-            title = "Multi-Device: automatische Nachentschlüsselung",
-            items = listOf(
-                "Beim Verbindungsaufbau wird jetzt proaktiv geprüft, ob Schlüssel von einem anderen angemeldeten Gerät nachgeladen werden müssen – nicht erst wenn eine einzelne Nachricht fehlschlägt",
-                "Nachrichten, die zuvor als \"Schlüssel nicht verfügbar\" gespeichert wurden, werden beim erneuten Öffnen des Chats automatisch nachentschlüsselt, sobald das Gerät den passenden Schlüssel erhalten hat",
-            ),
-            shortSummary = "Multi-Device: verpasste Nachrichten werden automatisch nachentschlüsselt"
         ),
 
     )

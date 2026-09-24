@@ -881,6 +881,8 @@ fun LoginScreen(
     // Verknüpftes Lethe-Messenger-Gerät vorhanden → statt SMS-Code schwebendes Verifizieren-Overlay,
     // das per Polling auf die Freigabe durch das Messenger-Gerät wartet.
     if (newDeviceState?.authMethod == "messenger") {
+        val fallbackError by viewModel.newDeviceFallbackError.collectAsState()
+        val fallbackLoading by viewModel.newDeviceFallbackLoading.collectAsState()
         LaunchedEffect(newDeviceState) {
             while (viewModel.newDeviceState.value != null) {
                 val result = viewModel.pollNewDeviceMessengerAuth()
@@ -893,10 +895,29 @@ fun LoginScreen(
             properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = false),
             icon = { CircularProgressIndicator(modifier = Modifier.size(32.dp)) },
             title = { Text(stringResource(R.string.device_auth_pending_title), fontWeight = FontWeight.Bold) },
-            text = { Text(stringResource(R.string.device_auth_pending_text), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(stringResource(R.string.device_auth_pending_text), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    fallbackError?.let { err ->
+                        Text(err, fontSize = 13.sp, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            },
             confirmButton = {},
             dismissButton = {
-                TextButton(onClick = { viewModel.dismissNewDeviceVerification() }) { Text("Abbrechen") }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    TextButton(onClick = { viewModel.dismissNewDeviceVerification() }) { Text("Abbrechen") }
+                    TextButton(
+                        onClick = { viewModel.requestNewDeviceSmsFallback() },
+                        enabled = !fallbackLoading
+                    ) {
+                        if (fallbackLoading) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        } else {
+                            Text("Andere Optionen")
+                        }
+                    }
+                }
             }
         )
     } else if (newDeviceState != null) {
