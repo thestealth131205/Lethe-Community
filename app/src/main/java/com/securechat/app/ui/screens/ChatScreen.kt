@@ -2563,7 +2563,7 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
         }
             .distinctUntilChanged()
             .collect { reachedTop ->
-                if (reachedTop && viewModel.hasMoreMessages(chatId)) {
+                if (reachedTop) {
                     viewModel.loadOlderMessages(chatId)
                 }
             }

@@ -50,6 +50,17 @@ interface MessageDao {
     @Query("SELECT * FROM (SELECT * FROM messages WHERE chatId = :chatId ORDER BY timestamp DESC LIMIT :limit) ORDER BY timestamp ASC")
     fun getMessagesForChat(chatId: String, limit: Int): Flow<List<MessageEntity>>
 
+    /**
+     * Zeitfenster-Variante: zeigt nur Nachrichten ab [cutoff] (plus immer die letzten [minCount],
+     * damit ein ruhiger Chat nicht leer wirkt), höchstens [limit] Stück. Ältere Nachrichten
+     * werden erst beim Hochscrollen nachgeladen (cutoff wird dann zurückgesetzt).
+     */
+    @Query("SELECT * FROM (SELECT * FROM messages WHERE chatId = :chatId AND (timestamp >= :cutoff OR localId IN (SELECT localId FROM messages WHERE chatId = :chatId ORDER BY timestamp DESC LIMIT :minCount)) ORDER BY timestamp DESC LIMIT :limit) ORDER BY timestamp ASC")
+    fun getMessagesForChatSince(chatId: String, cutoff: Long, minCount: Int, limit: Int): Flow<List<MessageEntity>>
+
+    @Query("SELECT COUNT(*) FROM messages WHERE chatId = :chatId AND timestamp < :cutoff")
+    suspend fun countOlderThan(chatId: String, cutoff: Long): Int
+
     @Query("SELECT * FROM messages WHERE messageId = :messageId LIMIT 1")
     suspend fun getMessageById(messageId: String): MessageEntity?
 

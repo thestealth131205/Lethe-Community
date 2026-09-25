@@ -2194,6 +2194,13 @@ class MainViewModel @Inject constructor(
     private fun getDisplayLimitFlow(chatId: String): MutableStateFlow<Int> =
         _chatDisplayLimits.getOrPut(chatId) { MutableStateFlow(300) }
 
+    /** Anzeige-Zeitfenster pro Chat: nur Nachrichten der letzten 3 Tage, älteres erst beim Hochscrollen. */
+    private val _chatDisplayCutoffs = HashMap<String, MutableStateFlow<Long>>()
+    private val CHAT_WINDOW_MS = 3L * 24 * 60 * 60 * 1000
+
+    private fun getDisplayCutoffFlow(chatId: String): MutableStateFlow<Long> =
+        _chatDisplayCutoffs.getOrPut(chatId) { MutableStateFlow(System.currentTimeMillis() - CHAT_WINDOW_MS) }
+
     /** Welche Chats laden gerade ältere Nachrichten nach (für Lade-Indikator in der UI). */
     private val _isLoadingOlderMessages = MutableStateFlow<Set<String>>(emptySet())
     val isLoadingOlderMessages: StateFlow<Set<String>> = _isLoadingOlderMessages.asStateFlow()
@@ -12622,10 +12629,10 @@ class MainViewModel @Inject constructor(
     // --- CHAT & STATUS ---
 
     fun getMessagesForChat(chatId: String): Flow<List<MessageEntity>> {
-        return getDisplayLimitFlow(chatId)
-            .flatMapLatest { limit ->
-                // Room lädt nur die neuesten `limit` Zeilen – nie alle Nachrichten auf einmal.
-                messageDao.getMessagesForChat(chatId, limit)
+        return kotlinx.coroutines.flow.combine(getDisplayLimitFlow(chatId), getDisplayCutoffFlow(chatId)) { limit, cutoff -> limit to cutoff }
+            .flatMapLatest { (limit, cutoff) ->
+                // Room lädt nur Nachrichten der letzten 3 Tage (min. 30) und max. `limit` Zeilen.
+                messageDao.getMessagesForChatSince(chatId, cutoff, 30, limit)
             }
             .distinctUntilChanged()
     }
@@ -13235,6 +13242,20 @@ class MainViewModel @Inject constructor(
      * Chat wird nicht doppelt gestartet.
      */
     fun loadOlderMessages(contactId: String) {
+        // Zuerst lokal: liegen noch Nachrichten außerhalb des 3-Tage-Fensters in Room, Fenster erweitern.
+        val cutoffFlow = getDisplayCutoffFlow(contactId)
+        viewModelScope.launch {
+            val hiddenLocal = withContext(Dispatchers.IO) { messageDao.countOlderThan(contactId, cutoffFlow.value) }
+            if (hiddenLocal > 0) {
+                cutoffFlow.update { it - CHAT_WINDOW_MS }
+                getDisplayLimitFlow(contactId).update { it + 50 }
+            } else {
+                loadOlderMessagesFromServer(contactId)
+            }
+        }
+    }
+
+    private fun loadOlderMessagesFromServer(contactId: String) {
         if (_hasMoreMessages[contactId] != true) return
         if (_oldestServerMessageId[contactId] == null) return
 
@@ -13261,6 +13282,7 @@ class MainViewModel @Inject constructor(
                     doLoadMessagesFromServer(contactId, limit = 50, beforeId = oldestId)
                 }
                 getDisplayLimitFlow(contactId).update { it + 50 }
+                getDisplayCutoffFlow(contactId).value = 0L // frisch vom Server geladene Nachrichten sofort anzeigen
                 Timber.tag("Chat").d("loadOlderMessages($contactId) Batch (50) geladen")
             } finally {
                 loadMessagesMutex.withLock { loadMessagesInProgress.remove(contactId) }
@@ -13531,6 +13553,7 @@ class MainViewModel @Inject constructor(
         _activeChatIsGroup.value = isGroup
         // Display-Limit auf 300 zurücksetzen (neuer Chat-Besuch startet frisch)
         getDisplayLimitFlow(contactId).value = 300
+        getDisplayCutoffFlow(contactId).value = System.currentTimeMillis() - CHAT_WINDOW_MS
 
         // v3: fehlt ein Conversation Key (Partner war beim Login offline), Exchange jetzt erneut anstoßen
         if (!isGroup) ensureConversationKeyForChat(contactId)

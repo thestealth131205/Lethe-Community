@@ -24,6 +24,18 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.184",
+            title = "Schnelleres Chat-Laden & Weiterleiten an Gruppen",
+            items = listOf(
+                "Lange Chats laden schneller und stabiler: Es werden zunächst nur Nachrichten der letzten 3 Tage angezeigt, ältere erscheinen beim Hochscrollen",
+                "Fehler behoben: Weitergeleitete Bilder und Medien kamen in Gruppen nicht bei den Mitgliedern an",
+                "Fehler behoben: Absturz bei eingehendem Anruf auf Geräten mit eingeschränkten Vollbild-Benachrichtigungen",
+                "Media Player: Landscape-Ansicht mit allen Bedienelementen und Mini-Player in Detailansichten",
+            ),
+            shortSummary = "Chat lädt schneller, Weiterleiten an Gruppen repariert"
+        ),
+
+        ChangelogEntry(
             version = "10.4.183",
             title = "Geräte-Verifizierung: SMS-Alternative & P2P-Status-Fix",
             items = listOf(
@@ -51,16 +63,6 @@ object AppChangelog {
                 "Interne Anpassung der App-Versionskennung, damit Updates über F-Droid (freie App-Quelle) zuverlässig für alle Geräte-Architekturen angeboten werden",
             ),
             shortSummary = "Interne Verbesserung für zuverlässige Updates über F-Droid"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.180",
-            title = "Anruf-Absturz behoben & Weiterleiten an Gruppen repariert",
-            items = listOf(
-                "Absturz beim Empfang eines Anrufs behoben, wenn die Vollbild-Berechtigung fehlte (z.B. bei bestimmten Geräteherstellern)",
-                "Weiterleiten von Nachrichten/Bildern aus einem 1:1-Chat an eine Gruppe funktioniert jetzt zuverlässig – kam zuvor nie bei den Gruppenmitgliedern an",
-            ),
-            shortSummary = "Anruf-Absturz behoben, Weiterleiten an Gruppen funktioniert jetzt zuverlässig"
         ),
 
     )
