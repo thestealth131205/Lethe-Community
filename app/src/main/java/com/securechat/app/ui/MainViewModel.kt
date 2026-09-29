@@ -7937,6 +7937,7 @@ class MainViewModel @Inject constructor(
      * AKTUALISIERT: Speichert jetzt auch das Token im TokenManager.
      */
     fun login(fakeNumber: String, password: String, remember: Boolean = false, autoLogin: Boolean = false) {
+        val password = password.trim()
         viewModelScope.launch {
             _isLoading.value = true
             try {
@@ -8239,7 +8240,11 @@ class MainViewModel @Inject constructor(
                     // UMK (User Master Key): nach Login mit Passwort laden/generieren.
                     initUmkInBackground(password)
                 } else {
-                    _statusMessage.value = "Login fehlgeschlagen. Bitte Daten prüfen."
+                    val err = response.errorBody()?.string() ?: ""
+                    val detail = try {
+                        org.json.JSONObject(err).optString("detail", "").ifBlank { null }
+                    } catch (_: Exception) { null }
+                    _statusMessage.value = detail ?: "Login fehlgeschlagen (${response.code()}). Bitte Daten prüfen."
                 }
             } catch (e: Exception) {
                 _statusMessage.value = "Serverfehler: ${e.message}"

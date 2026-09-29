@@ -24,6 +24,16 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.185",
+            title = "Klarere Fehlermeldung beim Login & Admin-Passwortänderung",
+            items = listOf(
+                "Fehler behoben: Beim Login erschien bei jedem Fehlschlag nur \"Login fehlgeschlagen\" ohne Grund – jetzt wird die tatsächliche Ursache vom Server angezeigt (z.B. falsches Passwort, unbekannte Nummer)",
+                "Fehler behoben: Ein im Backend-Bereich neu gesetztes Nutzer-Passwort mit unsichtbaren Leerzeichen am Rand führte beim Login zu einem Fehlschlag – Passwörter werden jetzt vor dem Login-Versuch bereinigt",
+            ),
+            shortSummary = "Klarere Fehlermeldungen beim Login, Passwort-Bugfix"
+        ),
+
+        ChangelogEntry(
             version = "10.4.184",
             title = "Schnelleres Chat-Laden & Weiterleiten an Gruppen",
             items = listOf(
@@ -54,15 +64,6 @@ object AppChangelog {
                 "Sicherheitslücke geschlossen: Wurde ein verknüpftes Gerät aus der Geräteübersicht entfernt, konnte man sich auf genau diesem Gerät ohne erneute Verifizierung wieder anmelden – jetzt ist bei jedem entfernten Gerät eine erneute Verifizierung (per SMS oder Freigabe über ein anderes Gerät) nötig, damit auch die Schlüssel sauber neu ausgetauscht werden",
             ),
             shortSummary = "Videoanruf-Bildaussetzer behoben, neuer Zoom im Anruf, Geräte-Sicherheitslücke geschlossen"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.181",
-            title = "Verbesserte Kompatibilität für die F-Droid-Verteilung",
-            items = listOf(
-                "Interne Anpassung der App-Versionskennung, damit Updates über F-Droid (freie App-Quelle) zuverlässig für alle Geräte-Architekturen angeboten werden",
-            ),
-            shortSummary = "Interne Verbesserung für zuverlässige Updates über F-Droid"
         ),
 
     )
