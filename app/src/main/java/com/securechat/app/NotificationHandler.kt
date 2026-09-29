@@ -98,10 +98,25 @@ class NotificationHandler : Service() {
         }
     }
 
-    /** 50s tagsüber, 2min nachts (22–6 Uhr) – reduziert Funk-/Wakeup-Last in der Nachtruhe. */
+    private var cachedHour = -1
+    private var cachedHourAt = 0L
+
+    /**
+     * 50s tagsüber, 2min nachts (22–6 Uhr) – reduziert Funk-/Wakeup-Last in der Nachtruhe.
+     *
+     * `Calendar.getInstance()` klont bei jedem Aufruf intern die komplette ZoneInfo
+     * (Transitions-Array, teils mehrere KB) – bei einem Dauer-Loop alle 50s/2min über
+     * die gesamte App-Laufzeit summiert sich das spürbar und war an einem OOM beteiligt
+     * (NotificationHandler.kt:103, 29.09.2026). Ergebnis wird deshalb 5 Minuten gecacht,
+     * die Stundengrenze muss nicht sekundengenau sein.
+     */
     private fun currentPingIntervalConnected(): Long {
-        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-        return if (hour >= 22 || hour < 6) PING_INTERVAL_CONNECTED_NIGHT else PING_INTERVAL_CONNECTED_DAY
+        val now = System.currentTimeMillis()
+        if (cachedHour < 0 || now - cachedHourAt > 5 * 60_000L) {
+            cachedHour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+            cachedHourAt = now
+        }
+        return if (cachedHour >= 22 || cachedHour < 6) PING_INTERVAL_CONNECTED_NIGHT else PING_INTERVAL_CONNECTED_DAY
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

@@ -24,6 +24,15 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.186",
+            title = "Absturz durch Speichermangel im Dauer-Hintergrunddienst behoben",
+            items = listOf(
+                "Fehler behoben: Der Nachrichtendienst berechnete für die Tag/Nacht-Pingfrequenz bei jedem Ping erneut die aktuelle Uhrzeit inkl. kompletter Zeitzonendaten – über viele Stunden Laufzeit konnte das zu einem Speichermangel-Absturz führen. Der Wert wird jetzt 5 Minuten zwischengespeichert",
+            ),
+            shortSummary = "Stabilitäts-Fix gegen seltenen Speicher-Absturz im Hintergrunddienst"
+        ),
+
+        ChangelogEntry(
             version = "10.4.185",
             title = "Klarere Fehlermeldung beim Login & Admin-Passwortänderung",
             items = listOf(
@@ -53,17 +62,6 @@ object AppChangelog {
                 "Fehler behoben: Der P2P-Verbindungsstatus (Ampel neben dem Kontaktnamen) verschwand nach einer Neuanmeldung oder Geräte-Verifizierung, obwohl P2P für den Account aktiviert war – die Einstellung wird jetzt korrekt vom Server übernommen",
             ),
             shortSummary = "Neue SMS-Alternative bei Geräte-Verifizierung, P2P-Status-Anzeige repariert"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.182",
-            title = "Videoanruf-Fixes, Zoom im Videoanruf & Geräte-Sicherheitslücke geschlossen",
-            items = listOf(
-                "Videoanruf: Ursache für gelegentlich schwarzes Bild ohne Ton nach Annahme behoben – die Verbindung wird jetzt laufend überwacht und bei fehlendem Bild-/Tonfluss automatisch neu aufgebaut",
-                "Neu: Im Videoanruf das eigene kleine Kamerabild antippen, um es groß anzuzeigen – dabei erscheinen oben links +/- Zoom-Buttons, um dem Gesprächspartner ein Detail näher zu zeigen",
-                "Sicherheitslücke geschlossen: Wurde ein verknüpftes Gerät aus der Geräteübersicht entfernt, konnte man sich auf genau diesem Gerät ohne erneute Verifizierung wieder anmelden – jetzt ist bei jedem entfernten Gerät eine erneute Verifizierung (per SMS oder Freigabe über ein anderes Gerät) nötig, damit auch die Schlüssel sauber neu ausgetauscht werden",
-            ),
-            shortSummary = "Videoanruf-Bildaussetzer behoben, neuer Zoom im Anruf, Geräte-Sicherheitslücke geschlossen"
         ),
 
     )
