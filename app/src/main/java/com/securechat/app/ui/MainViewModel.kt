@@ -2187,12 +2187,22 @@ class MainViewModel @Inject constructor(
     /** Ob noch ältere Nachrichten auf dem Server vorhanden sind (pro Chat). */
     private val _hasMoreMessages = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
 
-    /** Display-Limit pro Chat als StateFlow – startet bei 300, wächst um 5 beim Nachladen. */
+    /** Display-Limit pro Chat als StateFlow – startet bei 300 (weniger bei medienreichen Chats), wächst um 50 beim Nachladen. */
     private val _chatDisplayLimits = HashMap<String, MutableStateFlow<Int>>()
+    private val DEFAULT_CHAT_DISPLAY_LIMIT = 300
+    // Medienreiche Chats (viele Bilder/Videos/Sticker im Fenster) starten mit einem kleineren
+    // Limit – jede zusätzliche Bubble ist dort ein potenzielles Bitmap-Decode, nicht nur Text.
+    private val MEDIA_HEAVY_CHAT_DISPLAY_LIMIT = 80
+    private val MEDIA_HEAVY_THRESHOLD = 25
+    // Hard-Deckel gegen unbegrenztes Wachstum, falls innerhalb eines Chat-Besuchs sehr oft
+    // hochgescrollt wird (jeder Batch +50) – verhindert, dass ein langer Scroll-Marathon in
+    // einem sehr aktiven Gruppenchat den Heap durch immer mehr Zeilen/Medien sprengt.
+    // Chat schließen+neu öffnen setzt das Limit wieder auf den Default zurück.
+    private val MAX_CHAT_DISPLAY_LIMIT = 600
 
-    /** Gibt den Display-Limit-Flow für einen Chat zurück (lazy initialisiert mit 300). */
+    /** Gibt den Display-Limit-Flow für einen Chat zurück (lazy initialisiert mit dem Default). */
     private fun getDisplayLimitFlow(chatId: String): MutableStateFlow<Int> =
-        _chatDisplayLimits.getOrPut(chatId) { MutableStateFlow(300) }
+        _chatDisplayLimits.getOrPut(chatId) { MutableStateFlow(DEFAULT_CHAT_DISPLAY_LIMIT) }
 
     /** Anzeige-Zeitfenster pro Chat: nur Nachrichten der letzten 3 Tage, älteres erst beim Hochscrollen. */
     private val _chatDisplayCutoffs = HashMap<String, MutableStateFlow<Long>>()
@@ -13253,7 +13263,7 @@ class MainViewModel @Inject constructor(
             val hiddenLocal = withContext(Dispatchers.IO) { messageDao.countOlderThan(contactId, cutoffFlow.value) }
             if (hiddenLocal > 0) {
                 cutoffFlow.update { it - CHAT_WINDOW_MS }
-                getDisplayLimitFlow(contactId).update { it + 50 }
+                getDisplayLimitFlow(contactId).update { (it + 50).coerceAtMost(MAX_CHAT_DISPLAY_LIMIT) }
             } else {
                 loadOlderMessagesFromServer(contactId)
             }
@@ -13286,8 +13296,12 @@ class MainViewModel @Inject constructor(
                 } else {
                     doLoadMessagesFromServer(contactId, limit = 50, beforeId = oldestId)
                 }
-                getDisplayLimitFlow(contactId).update { it + 50 }
-                getDisplayCutoffFlow(contactId).value = 0L // frisch vom Server geladene Nachrichten sofort anzeigen
+                getDisplayLimitFlow(contactId).update { (it + 50).coerceAtMost(MAX_CHAT_DISPLAY_LIMIT) }
+                // Fenster um eine Fensterbreite zurückschieben statt komplett zu deaktivieren (cutoff=0) –
+                // sonst verliert der Chat für den Rest des Besuchs jeden Schutz vor unbegrenztem Wachstum,
+                // sobald einmal vom Server nachgeladen wurde (das `limit` bleibt zwar weiterhin die harte
+                // Zeilen-Obergrenze, aber das Zeitfenster soll die ursprüngliche Schutzwirkung behalten).
+                getDisplayCutoffFlow(contactId).update { it - CHAT_WINDOW_MS }
                 Timber.tag("Chat").d("loadOlderMessages($contactId) Batch (50) geladen")
             } finally {
                 loadMessagesMutex.withLock { loadMessagesInProgress.remove(contactId) }
@@ -13556,9 +13570,19 @@ class MainViewModel @Inject constructor(
     fun onChatOpened(contactId: String, isGroup: Boolean = false) {
         _activeChatId.value = contactId
         _activeChatIsGroup.value = isGroup
-        // Display-Limit auf 300 zurücksetzen (neuer Chat-Besuch startet frisch)
-        getDisplayLimitFlow(contactId).value = 300
-        getDisplayCutoffFlow(contactId).value = System.currentTimeMillis() - CHAT_WINDOW_MS
+        // Display-Limit zurücksetzen (neuer Chat-Besuch startet frisch) – Startwert hängt von der
+        // Medien-Dichte der letzten 3 Tage ab, damit sehr bild-/videolastige Chats (z.B. aktive
+        // Gruppen) nicht sofort hunderte Medien-Bubbles gleichzeitig ins Fenster laden.
+        val cutoffNow = System.currentTimeMillis() - CHAT_WINDOW_MS
+        getDisplayLimitFlow(contactId).value = DEFAULT_CHAT_DISPLAY_LIMIT
+        getDisplayCutoffFlow(contactId).value = cutoffNow
+        viewModelScope.launch(Dispatchers.IO) {
+            val mediaCount = runCatching { messageDao.countMediaSince(contactId, cutoffNow) }.getOrDefault(0)
+            if (mediaCount > MEDIA_HEAVY_THRESHOLD) {
+                getDisplayLimitFlow(contactId).value = MEDIA_HEAVY_CHAT_DISPLAY_LIMIT
+                Timber.tag("Chat").d("onChatOpened($contactId): $mediaCount Medien in 3 Tagen → Anzeige-Limit auf $MEDIA_HEAVY_CHAT_DISPLAY_LIMIT reduziert")
+            }
+        }
 
         // v3: fehlt ein Conversation Key (Partner war beim Login offline), Exchange jetzt erneut anstoßen
         if (!isGroup) ensureConversationKeyForChat(contactId)

@@ -61,6 +61,10 @@ interface MessageDao {
     @Query("SELECT COUNT(*) FROM messages WHERE chatId = :chatId AND timestamp < :cutoff")
     suspend fun countOlderThan(chatId: String, cutoff: Long): Int
 
+    /** Zählt Bild-/Video-/Sticker-Nachrichten seit [cutoff] – steuert das adaptive Anzeige-Limit. */
+    @Query("SELECT COUNT(*) FROM messages WHERE chatId = :chatId AND timestamp >= :cutoff AND mediaType != 'text'")
+    suspend fun countMediaSince(chatId: String, cutoff: Long): Int
+
     @Query("SELECT * FROM messages WHERE messageId = :messageId LIMIT 1")
     suspend fun getMessageById(messageId: String): MessageEntity?
 

@@ -1,6 +1,8 @@
 package com.securechat.app.ui.screens
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -38,6 +40,8 @@ import com.securechat.app.ui.components.buildE164
 import com.securechat.app.ui.utils.PhoneNumberExtractor
 import com.securechat.app.data.network.NewDeviceState
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 
 /**
  * EPIC 2 – Login-/Registrierungsscreen mit:
@@ -110,6 +114,27 @@ fun LoginScreen(
 
     // Localized success strings for navigation trigger comparison
     val loginSuccessMsg = stringResource(R.string.vm_login_success)
+
+    // ── Saisonales Event (Halloween/Xmas/...) – gleicher Mechanismus wie ContactlistScreen ──
+    val eventAnimation by viewModel.contactListAnimation.collectAsState()
+    LaunchedEffect(Unit) {
+        viewModel.loadAnimationState()
+    }
+
+    // ── Halloween: gruseliges Blitzen (abdunkeln/aufhellen) – identisch zur Kontaktliste ──
+    val halloweenFlickerAlpha = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        val animation = snapshotFlow { eventAnimation }.filter { it != "none" }.first()
+        if (animation == "halloween") {
+            halloweenFlickerAlpha.animateTo(0.78f, tween(80))
+            halloweenFlickerAlpha.animateTo(0.05f, tween(110))
+            halloweenFlickerAlpha.animateTo(0.6f, tween(70))
+            halloweenFlickerAlpha.animateTo(0f, tween(240))
+            delay(160)
+            halloweenFlickerAlpha.animateTo(0.45f, tween(60))
+            halloweenFlickerAlpha.animateTo(0f, tween(280))
+        }
+    }
 
     // Beim ersten Start: Zugangsdaten aus DataStore laden
     LaunchedEffect(prefs) {
@@ -364,6 +389,18 @@ fun LoginScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
+            // Halloween-Deko: Kürbisköpfe + klapperndes Skelett über dem App-Icon
+            if (eventAnimation == "halloween") {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    PumpkinHeadsDecoration(heightDp = 40.dp)
+                    SkeletonDecoration(heightDp = 46.dp)
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+
             // App-Icon
             Surface(
                 modifier = Modifier.size(100.dp),
@@ -868,6 +905,15 @@ fun LoginScreen(
                     }
                 }
             }
+        }
+
+        // ── Halloween: gruseliges Blitzen-Overlay (abdunkeln/aufhellen) ───────
+        if (halloweenFlickerAlpha.value > 0f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = halloweenFlickerAlpha.value))
+            )
         }
     }
 

@@ -12,7 +12,9 @@ import android.widget.Toast
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -62,6 +64,7 @@ import com.securechat.app.ui.MainViewModel
 import com.securechat.app.ui.theme.topBarTitleColor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -317,6 +320,22 @@ fun ContactlistScreen(
         viewModel.loadAnimationState()
     }
 
+    // ── Halloween: gruseliges Blitzen (abdunkeln/aufhellen) bei jedem Öffnen ───
+    // Läuft bei jedem Composition-Eintritt von ContactlistScreen (App-Start + jede Rückkehr hierher).
+    val halloweenFlickerAlpha = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        val animation = snapshotFlow { eventAnimation }.filter { it != "none" }.first()
+        if (animation == "halloween") {
+            halloweenFlickerAlpha.animateTo(0.78f, tween(80))
+            halloweenFlickerAlpha.animateTo(0.05f, tween(110))
+            halloweenFlickerAlpha.animateTo(0.6f, tween(70))
+            halloweenFlickerAlpha.animateTo(0f, tween(240))
+            delay(160)
+            halloweenFlickerAlpha.animateTo(0.45f, tween(60))
+            halloweenFlickerAlpha.animateTo(0f, tween(280))
+        }
+    }
+
     // Polling: Auto-Navigate wenn Spiel startet
     LaunchedEffect(sknChBg?.gameId) {
         val gameId = sknChBg?.gameId ?: return@LaunchedEffect
@@ -508,6 +527,16 @@ fun ContactlistScreen(
                                 }
                                 if (eventAnimation == "xmas") {
                                     XmasReindeerDecoration(
+                                        heightDp = 40.dp,
+                                        modifier = Modifier.align(Alignment.Bottom)
+                                    )
+                                    SnowflakesDecoration(
+                                        heightDp = 40.dp,
+                                        modifier = Modifier.align(Alignment.Bottom)
+                                    )
+                                }
+                                if (eventAnimation == "halloween") {
+                                    PumpkinHeadsDecoration(
                                         heightDp = 40.dp,
                                         modifier = Modifier.align(Alignment.Bottom)
                                     )
@@ -1962,6 +1991,15 @@ fun ContactlistScreen(
         else -> {}
     }
 
+    // ── Halloween: gruseliges Blitzen-Overlay (abdunkeln/aufhellen) ───────────
+    if (halloweenFlickerAlpha.value > 0f) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = halloweenFlickerAlpha.value))
+        )
+    }
+
     // ── Saisonale Grußkarte (5x Tippen auf Animation) ─────────────────────────
     val greetingUsername = currentUser?.name?.takeIf { it.isNotBlank() }
         ?: currentUser?.fakeNumber ?: ""
@@ -1984,6 +2022,7 @@ fun ContactlistScreen(
                 }
             )
             "xmas" -> XmasGreetingDialog(onDismiss = { showGreetingOverlay = false })
+            "halloween" -> HalloweenGreetingDialog(onDismiss = { showGreetingOverlay = false })
         }
     }
 
@@ -3270,6 +3309,46 @@ private fun XmasGreetingDialog(onDismiss: () -> Unit) {
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB71C1C))
                 ) {
                     Text(stringResource(com.securechat.app.R.string.contacts_greeting_christmas_btn), color = Color.White)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HalloweenGreetingDialog(onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF212121))
+        ) {
+            Column(
+                modifier = Modifier.padding(28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("🎃👻🦇", fontSize = 34.sp)
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    "Fröhliches Halloween!",
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFFF6D00)
+                    ),
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Lass dich von den Kürbissen nicht erschrecken –\nSüßes oder Saures! 🍬",
+                    style = MaterialTheme.typography.bodyLarge.copy(color = Color(0xFFE0E0E0)),
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(20.dp))
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6D00))
+                ) {
+                    Text("Schließen", color = Color.White)
                 }
             }
         }

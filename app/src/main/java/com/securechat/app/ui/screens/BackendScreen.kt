@@ -1729,7 +1729,9 @@ private fun EventsTab(
             val animOptions = listOf(
                 Triple("none", "Keine", Icons.Default.Block),
                 Triple("easter", "Ostern 🐰", Icons.Default.Egg),
-                Triple("may", "Tanz 💃", Icons.Default.MusicNote)
+                Triple("may", "Tanz 💃", Icons.Default.MusicNote),
+                Triple("halloween", "Halloween 🎃", Icons.Default.DarkMode),
+                Triple("xmas", "Weihnachten 🎅❄️", Icons.Default.CardGiftcard)
             )
             animOptions.forEachIndexed { index, (value, label, icon) ->
                 if (index > 0) HorizontalDivider()

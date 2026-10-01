@@ -24,6 +24,29 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.188",
+            title = "Halloween-Event & Weihnachts-Vorbereitung",
+            items = listOf(
+                "Neues Halloween-Event: wackelnde Kürbisköpfe und ein klapperndes Skelett in der Kontaktliste und auf dem Login-Bildschirm, dazu ein kurzes gruseliges Abdunkeln/Aufhellen beim Öffnen",
+                "Weihnachts-Event erweitert: zusätzlich sanft fallende Schneeflocken neben Weihnachtsmann und Rentier",
+                "Admin-Bereich: Halloween und Weihnachten können jetzt direkt über die Event-Auswahl aktiviert werden",
+            ),
+            shortSummary = "Halloween-Event mit Kürbissen & Skelett, Weihnachten erweitert"
+        ),
+
+        ChangelogEntry(
+            version = "10.4.187",
+            title = "Chat-Speicherverbrauch reduziert & Media-Player-Verbesserungen",
+            items = listOf(
+                "Fehler behoben: Sehr aktive Gruppenchats mit vielen Bildern/Videos konnten die App durch Speichermangel zum Absturz bringen – das Zeitfenster für geladene Nachrichten wird jetzt nicht mehr versehentlich komplett deaktiviert und medienreiche Chats starten mit einer kleineren Anzeigemenge",
+                "Verwaiste, inaktive Gruppen ohne Mitglieder werden bereinigt",
+                "Media Player: Songtexte-Button erscheint jetzt auch nach längerer Nichtnutzung zuverlässig beim letzten Titel",
+                "Media Player (Windows): Lethe-Playlisten, Titel-Detailansicht und Playlist-Hinzufügen-Button ergänzt",
+            ),
+            shortSummary = "Weniger Abstürze in aktiven Gruppenchats, Media-Player-Fixes"
+        ),
+
+        ChangelogEntry(
             version = "10.4.186",
             title = "Absturz durch Speichermangel im Dauer-Hintergrunddienst behoben",
             items = listOf(
@@ -40,28 +63,6 @@ object AppChangelog {
                 "Fehler behoben: Ein im Backend-Bereich neu gesetztes Nutzer-Passwort mit unsichtbaren Leerzeichen am Rand führte beim Login zu einem Fehlschlag – Passwörter werden jetzt vor dem Login-Versuch bereinigt",
             ),
             shortSummary = "Klarere Fehlermeldungen beim Login, Passwort-Bugfix"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.184",
-            title = "Schnelleres Chat-Laden & Weiterleiten an Gruppen",
-            items = listOf(
-                "Lange Chats laden schneller und stabiler: Es werden zunächst nur Nachrichten der letzten 3 Tage angezeigt, ältere erscheinen beim Hochscrollen",
-                "Fehler behoben: Weitergeleitete Bilder und Medien kamen in Gruppen nicht bei den Mitgliedern an",
-                "Fehler behoben: Absturz bei eingehendem Anruf auf Geräten mit eingeschränkten Vollbild-Benachrichtigungen",
-                "Media Player: Landscape-Ansicht mit allen Bedienelementen und Mini-Player in Detailansichten",
-            ),
-            shortSummary = "Chat lädt schneller, Weiterleiten an Gruppen repariert"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.183",
-            title = "Geräte-Verifizierung: SMS-Alternative & P2P-Status-Fix",
-            items = listOf(
-                "Neu: Im Freigabe-Dialog für ein neues Gerät gibt es jetzt unten den Button \"Andere Optionen\", um statt der Freigabe über ein anderes Gerät stattdessen einen SMS-Code anzufordern",
-                "Fehler behoben: Der P2P-Verbindungsstatus (Ampel neben dem Kontaktnamen) verschwand nach einer Neuanmeldung oder Geräte-Verifizierung, obwohl P2P für den Account aktiviert war – die Einstellung wird jetzt korrekt vom Server übernommen",
-            ),
-            shortSummary = "Neue SMS-Alternative bei Geräte-Verifizierung, P2P-Status-Anzeige repariert"
         ),
 
     )

@@ -1,6 +1,7 @@
 package com.securechat.app.ui.screens
 
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -42,6 +43,12 @@ private val XmasGreen     = Color(0xFF2E7D32)
 private val XmasWhite     = Color(0xFFF5F5F5)
 private val ReindeerBrown = Color(0xFF795548)
 private val RudolphRed    = Color(0xFFE53935)
+private val PumpkinOrange     = Color(0xFFFF6D00)
+private val PumpkinOrangeDark = Color(0xFFBF360C)
+private val PumpkinStem       = Color(0xFF558B2F)
+private val PumpkinGlow       = Color(0xFFFFF59D)
+private val BoneWhite         = Color(0xFFF5F0E0)
+private val BoneShadow        = Color(0xFFC9BFA0)
 
 // ─── Öffentliches Composable ────────────────────────────────────────────────
 
@@ -125,10 +132,11 @@ fun ContactListMascotAnimation(
         translate(left = offsetX, top = offsetY) {
             rotate(degrees = rotation, pivot = Offset(size.width / 2f, size.height * 0.6f)) {
                 when (animationType) {
-                    "easter" -> drawEasterMascot(earWiggle)
-                    "may"    -> drawMayMascot()
-                    "xmas"   -> drawSantaMascot()
-                    else     -> drawBaseMascot()
+                    "easter"    -> drawEasterMascot(earWiggle)
+                    "may"       -> drawMayMascot()
+                    "xmas"      -> drawSantaMascot()
+                    "halloween" -> drawPumpkinHeadMascot()
+                    else        -> drawBaseMascot()
                 }
             }
         }
@@ -506,4 +514,302 @@ private fun DrawScope.drawReindeerFigure() {
     drawCircle(RudolphRed, radius = w * 0.07f, center = Offset(w * 0.92f, h * 0.25f))
     // Glanz auf der Nase
     drawCircle(Color.White.copy(alpha = 0.45f), radius = w * 0.025f, center = Offset(w * 0.90f, h * 0.23f))
+}
+
+// ─── Halloween: Kürbis-Maskottchen ──────────────────────────────────────────
+
+private fun DrawScope.drawPumpkinHeadMascot() {
+    val w = size.width
+    val h = size.height
+    // Basis-Roboter (Körper, Arme, Beine) ohne Kopf-Deko überdecken
+    drawBaseMascot()
+    // Kürbiskopf überdeckt den Roboterkopf vollständig
+    drawJackOLantern(
+        topLeft = Offset(w * 0.5f - w * 0.3f, h * 0.0f),
+        w = w * 0.6f,
+        h = h * 0.44f,
+        glow = 0.85f
+    )
+}
+
+/**
+ * Zeichnet einen Jack-o'-Lantern (Kürbiskopf) mit leuchtenden Dreiecksaugen und Grinsemund.
+ */
+private fun DrawScope.drawJackOLantern(topLeft: Offset, w: Float, h: Float, glow: Float) {
+    val cx = topLeft.x + w / 2f
+    val cy = topLeft.y + h / 2f
+
+    // Stiel
+    drawRoundRect(
+        color = PumpkinStem,
+        topLeft = Offset(cx - w * 0.08f, topLeft.y - h * 0.16f),
+        size = Size(w * 0.16f, h * 0.2f),
+        cornerRadius = CornerRadius(3f)
+    )
+
+    // Kürbis-Körper
+    drawOval(PumpkinOrangeDark, topLeft = topLeft, size = Size(w, h))
+    drawOval(PumpkinOrange, topLeft = Offset(topLeft.x + w * 0.05f, topLeft.y + h * 0.02f), size = Size(w * 0.9f, h * 0.96f))
+
+    // Rillen-Linien
+    for (frac in listOf(0.26f, 0.5f, 0.74f)) {
+        drawLine(
+            PumpkinOrangeDark.copy(alpha = 0.55f),
+            Offset(topLeft.x + w * frac, topLeft.y + h * 0.06f),
+            Offset(topLeft.x + w * frac, topLeft.y + h * 0.94f),
+            strokeWidth = 1.5f
+        )
+    }
+
+    // Leuchtender Innen-Schein
+    drawOval(
+        PumpkinGlow.copy(alpha = 0.22f * glow),
+        topLeft = Offset(topLeft.x + w * 0.12f, topLeft.y + h * 0.12f),
+        size = Size(w * 0.76f, h * 0.76f)
+    )
+
+    val glowColor = PumpkinGlow.copy(alpha = (0.5f + 0.5f * glow).coerceIn(0f, 1f))
+
+    // Dreiecksaugen
+    fun triEye(x: Float) {
+        val eyePath = Path().apply {
+            moveTo(x, cy - h * 0.1f)
+            lineTo(x - w * 0.1f, cy + h * 0.06f)
+            lineTo(x + w * 0.1f, cy + h * 0.06f)
+            close()
+        }
+        drawPath(eyePath, glowColor)
+    }
+    triEye(cx - w * 0.2f)
+    triEye(cx + w * 0.2f)
+
+    // Zickzack-Grinsemund
+    val mouthPath = Path().apply {
+        moveTo(cx - w * 0.28f, cy + h * 0.2f)
+        lineTo(cx - w * 0.16f, cy + h * 0.32f)
+        lineTo(cx - w * 0.06f, cy + h * 0.22f)
+        lineTo(cx + w * 0.06f, cy + h * 0.32f)
+        lineTo(cx + w * 0.16f, cy + h * 0.22f)
+        lineTo(cx + w * 0.28f, cy + h * 0.32f)
+        lineTo(cx + w * 0.28f, cy + h * 0.2f)
+        close()
+    }
+    drawPath(mouthPath, glowColor)
+}
+
+// ─── Halloween: zwei schwebende Kürbisköpfe (Topbar-Deko) ───────────────────
+
+/**
+ * Zwei wackelnde, leuchtende Kürbisköpfe für die TopBar – inkl. leichtem
+ * "Flacker"-Glow in den Augen, passend zum gruseligen Blitzen beim Öffnen.
+ */
+@Composable
+fun PumpkinHeadsDecoration(
+    modifier: Modifier = Modifier,
+    heightDp: Dp = 40.dp
+) {
+    val transition = rememberInfiniteTransition(label = "pumpkins")
+    val bob1 by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = -8f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 560, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "bob1"
+    )
+    val bob2 by transition.animateFloat(
+        initialValue = -5f,
+        targetValue = 5f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 460, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "bob2"
+    )
+    val flicker by transition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "flicker"
+    )
+
+    val widthDp = heightDp * 1.5f
+    val canvasHeightDp = heightDp * 1.3f
+    Canvas(modifier = modifier.size(width = widthDp, height = canvasHeightDp)) {
+        val pumpkinW = size.width * 0.46f
+        val pumpkinH = size.height * 0.56f
+        translate(top = bob1) {
+            drawJackOLantern(
+                topLeft = Offset(0f, size.height - pumpkinH),
+                w = pumpkinW,
+                h = pumpkinH,
+                glow = flicker
+            )
+        }
+        translate(left = size.width - pumpkinW * 0.84f, top = bob2) {
+            drawJackOLantern(
+                topLeft = Offset(0f, size.height - pumpkinH * 0.8f),
+                w = pumpkinW * 0.8f,
+                h = pumpkinH * 0.8f,
+                glow = 1.3f - flicker
+            )
+        }
+    }
+}
+
+// ─── Halloween: wackelndes Skelett (Deko) ───────────────────────────────────
+
+/**
+ * Ein klapperndes Skelett (Schädel mit auf/zu klappendem Unterkiefer + Brustkorb),
+ * passend neben die Kürbisköpfe für den gruseligen Halloween-Look.
+ */
+@Composable
+fun SkeletonDecoration(
+    modifier: Modifier = Modifier,
+    heightDp: Dp = 44.dp
+) {
+    val transition = rememberInfiniteTransition(label = "skeleton")
+    val rattle by transition.animateFloat(
+        initialValue = -5f,
+        targetValue = 5f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 170, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "rattle"
+    )
+    val jawDrop by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 520, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "jawDrop"
+    )
+    val widthDp = heightDp * 0.85f
+    Canvas(modifier = modifier.size(width = widthDp, height = heightDp)) {
+        rotate(degrees = rattle, pivot = Offset(size.width / 2f, size.height * 0.95f)) {
+            drawSkeletonFigure(jawDrop)
+        }
+    }
+}
+
+private fun DrawScope.drawSkeletonFigure(jawDrop: Float) {
+    val w = size.width
+    val h = size.height
+    val cx = w / 2f
+
+    // Brustkorb
+    drawRoundRect(
+        color = BoneWhite,
+        topLeft = Offset(cx - w * 0.24f, h * 0.52f),
+        size = Size(w * 0.48f, h * 0.30f),
+        cornerRadius = CornerRadius(w * 0.06f)
+    )
+    for (frac in listOf(0.58f, 0.68f, 0.78f)) {
+        drawLine(
+            BoneShadow,
+            Offset(cx - w * 0.20f, h * frac),
+            Offset(cx + w * 0.20f, h * frac),
+            strokeWidth = 2.5f
+        )
+    }
+    // Wirbelsäulen-Rest
+    drawRoundRect(
+        color = BoneWhite,
+        topLeft = Offset(cx - w * 0.05f, h * 0.82f),
+        size = Size(w * 0.10f, h * 0.14f),
+        cornerRadius = CornerRadius(3f)
+    )
+
+    // Schädel
+    drawCircle(BoneWhite, radius = w * 0.27f, center = Offset(cx, h * 0.30f))
+
+    // Unterkiefer (klappt sanft auf und zu)
+    val jawOffset = h * 0.07f * jawDrop
+    drawRoundRect(
+        color = BoneWhite,
+        topLeft = Offset(cx - w * 0.15f, h * 0.42f + jawOffset),
+        size = Size(w * 0.30f, h * 0.10f),
+        cornerRadius = CornerRadius(w * 0.05f)
+    )
+    // Zähne
+    for (i in -2..2) {
+        drawLine(
+            BoneShadow,
+            Offset(cx + i * w * 0.045f, h * 0.43f + jawOffset),
+            Offset(cx + i * w * 0.045f, h * 0.43f + jawOffset + h * 0.06f),
+            strokeWidth = 1.5f
+        )
+    }
+
+    // Augenhöhlen
+    drawCircle(Color.Black, radius = w * 0.075f, center = Offset(cx - w * 0.11f, h * 0.27f))
+    drawCircle(Color.Black, radius = w * 0.075f, center = Offset(cx + w * 0.11f, h * 0.27f))
+
+    // Nasenloch
+    val nosePath = Path().apply {
+        moveTo(cx, h * 0.31f)
+        lineTo(cx - w * 0.04f, h * 0.38f)
+        lineTo(cx + w * 0.04f, h * 0.38f)
+        close()
+    }
+    drawPath(nosePath, Color.Black)
+}
+
+// ─── Weihnachten: fallende Schneeflocken (Topbar-Deko) ──────────────────────
+
+/**
+ * Drei sanft fallende Schneeflocken für die TopBar, ergänzt den Weihnachtsmann/
+ * das Rentier um eine winterliche Note.
+ */
+@Composable
+fun SnowflakesDecoration(
+    modifier: Modifier = Modifier,
+    heightDp: Dp = 40.dp
+) {
+    val transition = rememberInfiniteTransition(label = "snow")
+    val fall1 by transition.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(durationMillis = 1900, easing = LinearEasing), RepeatMode.Restart),
+        label = "fall1"
+    )
+    val fall2 by transition.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(durationMillis = 2400, easing = LinearEasing), RepeatMode.Restart),
+        label = "fall2"
+    )
+    val fall3 by transition.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(durationMillis = 1600, easing = LinearEasing), RepeatMode.Restart),
+        label = "fall3"
+    )
+
+    Canvas(modifier = modifier.size(width = heightDp * 1.3f, height = heightDp)) {
+        drawSnowflake(fall1, xFrac = 0.18f, sizePx = size.height * 0.15f)
+        drawSnowflake(fall2, xFrac = 0.52f, sizePx = size.height * 0.11f)
+        drawSnowflake(fall3, xFrac = 0.84f, sizePx = size.height * 0.13f)
+    }
+}
+
+private fun DrawScope.drawSnowflake(frac: Float, xFrac: Float, sizePx: Float) {
+    val y = size.height * frac
+    val x = size.width * xFrac + (sin(frac * 2 * Math.PI).toFloat() * size.width * 0.05f)
+    val alpha = 1f - (frac * 0.25f)
+    for (i in 0 until 3) {
+        rotate(degrees = frac * 120f + i * 60f, pivot = Offset(x, y)) {
+            drawLine(
+                Color.White.copy(alpha = alpha),
+                Offset(x - sizePx, y),
+                Offset(x + sizePx, y),
+                strokeWidth = 2f,
+                cap = StrokeCap.Round
+            )
+        }
+    }
 }
