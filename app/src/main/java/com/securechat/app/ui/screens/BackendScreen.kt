@@ -530,6 +530,7 @@ fun BackendScreen(
                             LumisType.STRANGER_THINGS -> "🔴"
                             LumisType.LAST_OF_US      -> "🍄"
                             LumisType.MARIO           -> "⭐"
+                            LumisType.HALLOWEEN       -> "🎃"
                             LumisType.NONE            -> return@forEach
                         }
                         HorizontalDivider()

@@ -13777,6 +13777,7 @@ class MainViewModel @Inject constructor(
         com.securechat.app.ui.screens.LumisType.STRANGER_THINGS -> "Upside Down"
         com.securechat.app.ui.screens.LumisType.LAST_OF_US      -> "The Last of Us"
         com.securechat.app.ui.screens.LumisType.MARIO           -> "Mario & Peach"
+        com.securechat.app.ui.screens.LumisType.HALLOWEEN       -> "Halloween"
         com.securechat.app.ui.screens.LumisType.NONE            -> ""
     }
 

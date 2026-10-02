@@ -805,6 +805,7 @@
     <string name="contacts_greeting_easter_btn">Frohe Ostern wünschen!</string>
     <string name="contacts_greeting_may_btn">Schönen Mai wünschen!</string>
     <string name="contacts_greeting_christmas_btn">Frohe Weihnachten wünschen!</string>
+    <string name="contacts_greeting_halloween_btn">Frohes Halloween wünschen!</string>
     <string name="create_group_title">Gruppe erstellen</string>
     <string name="create_group_name_label">Gruppenname</string>
     <string name="create_group_select_members">Mitglieder auswählen</string>

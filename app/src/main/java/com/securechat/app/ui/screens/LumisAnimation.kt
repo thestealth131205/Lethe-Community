@@ -23,6 +23,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -34,6 +35,8 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalDensity
@@ -49,7 +52,7 @@ import kotlin.random.Random
 // Öffentliches Enum — welcher Lumis-Effekt läuft
 // ─────────────────────────────────────────────────────────────────────────────
 
-enum class LumisType { LOVE, SNOW, KISS, RAIN, SUMMER, CHRISTMAS, STRANGER_THINGS, LAST_OF_US, MARIO, NONE }
+enum class LumisType { LOVE, SNOW, KISS, RAIN, SUMMER, CHRISTMAS, STRANGER_THINGS, LAST_OF_US, MARIO, HALLOWEEN, NONE }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Interne Partikel-Datenklassen
@@ -127,6 +130,7 @@ fun LumisPickerDialog(
                             LumisType.STRANGER_THINGS -> { emoji = "🔴";  label = "Upside Down";    description = "Stranger Things: Ascheflocken, roter Himmel, Shadow Monster" }
                             LumisType.LAST_OF_US      -> { emoji = "🍄";  label = "The Last of Us"; description = "Ein Clicker steht düster in der Mitte" }
                             LumisType.MARIO           -> { emoji = "🍄";  label = "Mario & Peach";  description = "Mario-Landschaft mit Mario und Peach" }
+                            LumisType.HALLOWEEN       -> { emoji = "🎃";  label = "Halloween";      description = "Gruseliges Abdunkeln mit Kürbis, Totenkopf und Skelett" }
                             LumisType.NONE            -> return@forEach
                         }
                         Row(
@@ -214,6 +218,7 @@ fun LumisPlayer(
             LumisType.STRANGER_THINGS -> LumisStrangerThings(progress = progress, screenW = screenW, screenH = screenH)
             LumisType.LAST_OF_US      -> LumisLastOfUs(progress = progress, screenW = screenW, screenH = screenH)
             LumisType.MARIO           -> LumisMario(progress = progress, screenW = screenW, screenH = screenH)
+            LumisType.HALLOWEEN       -> LumisHalloween(progress = progress, screenW = screenW, screenH = screenH)
             LumisType.NONE            -> { /* Nichts zeichnen */ }
         }
     }
@@ -2521,6 +2526,128 @@ private fun DrawScope.drawMarioPeach(cx: Float, baseY: Float, size: Float, progr
         val heartPath  = buildHeartPath(heartCx, heartCy, heartSize)
         drawPath(heartPath, Color(0xFFFF3366).copy(alpha = heartAlpha))
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HALLOWEEN-Effekt
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * HALLOWEEN: Der Bildschirm dunkelt langsam ab, hellt kurz wieder etwas auf,
+ * blitzt ganz kurz weiß auf und dimmt dann langsam wieder herunter – exakt
+ * dieselbe Phasen-Kurve wie das Event auf der Kontaktliste/Login. Zusätzlich
+ * ein Kürbis mit rot flackernden Augen oben links, ein Totenschädel oben
+ * rechts und ein klapperndes Skelett unten rechts.
+ */
+@Composable
+private fun LumisHalloween(progress: Float, screenW: Float, screenH: Float) {
+    // Phasen-Grenzen als Anteile von 0..1 (identisch zur Kontaktlisten-Kurve: 2200/900/280/500/2120 ms von 6000 ms)
+    val pDarkEnd     = 0.3667f
+    val pLightEnd    = 0.5000f
+    val pFlashEnd    = 0.5250f
+    val pReboundEnd  = 0.5917f
+
+    fun lerpF(a: Float, b: Float, t: Float) = a + (b - a) * t.coerceIn(0f, 1f)
+
+    val blackAlpha = when {
+        progress < pDarkEnd    -> lerpF(0f, 0.62f, progress / pDarkEnd)
+        progress < pLightEnd   -> lerpF(0.62f, 0.30f, (progress - pDarkEnd) / (pLightEnd - pDarkEnd))
+        progress < pFlashEnd   -> 0f
+        progress < pReboundEnd -> lerpF(0f, 0.30f, (progress - pFlashEnd) / (pReboundEnd - pFlashEnd))
+        else                   -> lerpF(0.30f, 0f, (progress - pReboundEnd) / (1f - pReboundEnd))
+    }
+    val flashMid = pLightEnd + (pFlashEnd - pLightEnd) * 0.5f
+    val whiteAlpha = when {
+        progress < pLightEnd -> 0f
+        progress < flashMid  -> lerpF(0f, 0.85f, (progress - pLightEnd) / (flashMid - pLightEnd))
+        progress < pFlashEnd -> lerpF(0.85f, 0f, (progress - flashMid) / (pFlashEnd - flashMid))
+        else                 -> 0f
+    }
+
+    // Deko-Animationen: schnelles rotes Augenflackern, leichtes Wackeln/Pulsieren
+    val eyeFlicker      = 0.4f + 0.6f * kotlin.math.abs(sinf(progress * PI.toFloat() * 16f))
+    val pumpkinBobPx    = sinf(progress * PI.toFloat() * 6f) * (screenH * 0.01f)
+    val skeletonRattle  = sinf(progress * PI.toFloat() * 20f) * 4f
+    val skullPulse      = 1f + 0.06f * sinf(progress * PI.toFloat() * 4f)
+
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        // Dunkler Grundton, damit die Deko auch zwischen den Dimm-Phasen gut absticht
+        drawRect(color = Color(0xFF0A0004), size = size)
+
+        // Kürbis oben links – rot flackernde Augen statt der sonst gelben Mündung
+        val pumpkinW = screenW * 0.26f
+        val pumpkinH = screenH * 0.16f
+        translate(left = screenW * 0.04f, top = screenH * 0.06f + pumpkinBobPx) {
+            drawJackOLantern(
+                topLeft  = Offset.Zero,
+                w        = pumpkinW,
+                h        = pumpkinH,
+                glow     = eyeFlicker,
+                eyeColor = Color(0xFFFF1A1A)
+            )
+        }
+
+        // Totenschädel oben rechts
+        val skullW = screenW * 0.20f
+        val skullH = screenH * 0.14f
+        translate(left = screenW * 0.96f - skullW, top = screenH * 0.06f) {
+            scale(scale = skullPulse, pivot = Offset(skullW / 2f, skullH / 2f)) {
+                drawSkullIcon(w = skullW, h = skullH, jawDrop = eyeFlicker)
+            }
+        }
+
+        // Klapperndes Skelett unten rechts
+        val skelW = screenW * 0.30f
+        val skelH = screenH * 0.34f
+        withTransform({
+            translate(left = screenW * 0.96f - skelW, top = screenH * 0.94f - skelH)
+            rotate(degrees = skeletonRattle, pivot = Offset(skelW / 2f, skelH * 0.95f))
+            scale(scaleX = skelW / screenW, scaleY = skelH / screenH, pivot = Offset.Zero)
+        }) {
+            drawSkeletonFigure(jawDrop = eyeFlicker)
+        }
+
+        // Abdunkeln / Aufhellen / Blitz-Overlay (identisch zur Kontaktliste)
+        if (blackAlpha > 0f) {
+            drawRect(color = Color.Black.copy(alpha = blackAlpha), size = size)
+        }
+        if (whiteAlpha > 0f) {
+            drawRect(color = Color.White.copy(alpha = whiteAlpha), size = size)
+        }
+    }
+}
+
+/** Eigenständiger Totenschädel (ohne Brustkorb) – unterscheidet sich bewusst vom vollen Skelett. */
+private fun DrawScope.drawSkullIcon(w: Float, h: Float, jawDrop: Float) {
+    val cx = w / 2f
+
+    drawCircle(BoneWhite, radius = w * 0.34f, center = Offset(cx, h * 0.38f))
+
+    val jawOffset = h * 0.08f * jawDrop
+    drawRoundRect(
+        color = BoneWhite,
+        topLeft = Offset(cx - w * 0.19f, h * 0.55f + jawOffset),
+        size = Size(w * 0.38f, h * 0.13f),
+        cornerRadius = CornerRadius(w * 0.06f)
+    )
+    for (i in -2..2) {
+        drawLine(
+            BoneShadow,
+            Offset(cx + i * w * 0.057f, h * 0.56f + jawOffset),
+            Offset(cx + i * w * 0.057f, h * 0.56f + jawOffset + h * 0.075f),
+            strokeWidth = 1.5f
+        )
+    }
+    drawCircle(Color.Black, radius = w * 0.095f, center = Offset(cx - w * 0.14f, h * 0.35f))
+    drawCircle(Color.Black, radius = w * 0.095f, center = Offset(cx + w * 0.14f, h * 0.35f))
+
+    val nosePath = Path().apply {
+        moveTo(cx, h * 0.40f)
+        lineTo(cx - w * 0.05f, h * 0.49f)
+        lineTo(cx + w * 0.05f, h * 0.49f)
+        close()
+    }
+    drawPath(nosePath, Color.Black)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -810,6 +810,7 @@
     <string name="contacts_greeting_easter_btn">Happy Easter wishes!</string>
     <string name="contacts_greeting_may_btn">Happy May wishes!</string>
     <string name="contacts_greeting_christmas_btn">Merry Christmas wishes!</string>
+    <string name="contacts_greeting_halloween_btn">Happy Halloween wishes!</string>
     <string name="create_group_title">Create Group</string>
     <string name="create_group_name_label">Group name</string>
     <string name="create_group_select_members">Select members</string>

@@ -122,17 +122,20 @@ fun LoginScreen(
     }
 
     // ── Halloween: gruseliges Blitzen (abdunkeln/aufhellen) – identisch zur Kontaktliste ──
-    val halloweenFlickerAlpha = remember { Animatable(0f) }
+    // Ablauf über exakt 6 s: langsam abdunkeln → etwas aufhellen → ganz kurzer weißer Blitz → kurz
+    // nachdunkeln → langsam wieder auf 0 runterdimmen.
+    val halloweenBlackAlpha = remember { Animatable(0f) }
+    val halloweenWhiteAlpha = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
         val animation = snapshotFlow { eventAnimation }.filter { it != "none" }.first()
         if (animation == "halloween") {
-            halloweenFlickerAlpha.animateTo(0.78f, tween(80))
-            halloweenFlickerAlpha.animateTo(0.05f, tween(110))
-            halloweenFlickerAlpha.animateTo(0.6f, tween(70))
-            halloweenFlickerAlpha.animateTo(0f, tween(240))
-            delay(160)
-            halloweenFlickerAlpha.animateTo(0.45f, tween(60))
-            halloweenFlickerAlpha.animateTo(0f, tween(280))
+            halloweenBlackAlpha.animateTo(0.62f, tween(2200))
+            halloweenBlackAlpha.animateTo(0.30f, tween(900))
+            halloweenBlackAlpha.animateTo(0f, tween(120))
+            halloweenWhiteAlpha.animateTo(0.85f, tween(70))
+            halloweenWhiteAlpha.animateTo(0f, tween(90))
+            halloweenBlackAlpha.animateTo(0.30f, tween(500))
+            halloweenBlackAlpha.animateTo(0f, tween(2120))
         }
     }
 
@@ -908,11 +911,18 @@ fun LoginScreen(
         }
 
         // ── Halloween: gruseliges Blitzen-Overlay (abdunkeln/aufhellen) ───────
-        if (halloweenFlickerAlpha.value > 0f) {
+        if (halloweenBlackAlpha.value > 0f) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = halloweenFlickerAlpha.value))
+                    .background(Color.Black.copy(alpha = halloweenBlackAlpha.value))
+            )
+        }
+        if (halloweenWhiteAlpha.value > 0f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.White.copy(alpha = halloweenWhiteAlpha.value))
             )
         }
     }

@@ -43,12 +43,12 @@ private val XmasGreen     = Color(0xFF2E7D32)
 private val XmasWhite     = Color(0xFFF5F5F5)
 private val ReindeerBrown = Color(0xFF795548)
 private val RudolphRed    = Color(0xFFE53935)
-private val PumpkinOrange     = Color(0xFFFF6D00)
-private val PumpkinOrangeDark = Color(0xFFBF360C)
-private val PumpkinStem       = Color(0xFF558B2F)
-private val PumpkinGlow       = Color(0xFFFFF59D)
-private val BoneWhite         = Color(0xFFF5F0E0)
-private val BoneShadow        = Color(0xFFC9BFA0)
+internal val PumpkinOrange     = Color(0xFFFF6D00)
+internal val PumpkinOrangeDark = Color(0xFFBF360C)
+internal val PumpkinStem       = Color(0xFF558B2F)
+internal val PumpkinGlow       = Color(0xFFFFF59D)
+internal val BoneWhite         = Color(0xFFF5F0E0)
+internal val BoneShadow        = Color(0xFFC9BFA0)
 
 // ─── Öffentliches Composable ────────────────────────────────────────────────
 
@@ -535,7 +535,7 @@ private fun DrawScope.drawPumpkinHeadMascot() {
 /**
  * Zeichnet einen Jack-o'-Lantern (Kürbiskopf) mit leuchtenden Dreiecksaugen und Grinsemund.
  */
-private fun DrawScope.drawJackOLantern(topLeft: Offset, w: Float, h: Float, glow: Float) {
+internal fun DrawScope.drawJackOLantern(topLeft: Offset, w: Float, h: Float, glow: Float, eyeColor: Color = PumpkinGlow) {
     val cx = topLeft.x + w / 2f
     val cy = topLeft.y + h / 2f
 
@@ -568,7 +568,7 @@ private fun DrawScope.drawJackOLantern(topLeft: Offset, w: Float, h: Float, glow
         size = Size(w * 0.76f, h * 0.76f)
     )
 
-    val glowColor = PumpkinGlow.copy(alpha = (0.5f + 0.5f * glow).coerceIn(0f, 1f))
+    val glowColor = eyeColor.copy(alpha = (0.5f + 0.5f * glow).coerceIn(0f, 1f))
 
     // Dreiecksaugen
     fun triEye(x: Float) {
@@ -699,7 +699,7 @@ fun SkeletonDecoration(
     }
 }
 
-private fun DrawScope.drawSkeletonFigure(jawDrop: Float) {
+internal fun DrawScope.drawSkeletonFigure(jawDrop: Float) {
     val w = size.width
     val h = size.height
     val cx = w / 2f

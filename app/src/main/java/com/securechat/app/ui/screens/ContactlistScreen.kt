@@ -322,17 +322,20 @@ fun ContactlistScreen(
 
     // ── Halloween: gruseliges Blitzen (abdunkeln/aufhellen) bei jedem Öffnen ───
     // Läuft bei jedem Composition-Eintritt von ContactlistScreen (App-Start + jede Rückkehr hierher).
-    val halloweenFlickerAlpha = remember { Animatable(0f) }
+    // Ablauf über exakt 6 s: langsam abdunkeln → etwas aufhellen → ganz kurzer weißer Blitz → kurz
+    // nachdunkeln → langsam wieder auf 0 runterdimmen.
+    val halloweenBlackAlpha = remember { Animatable(0f) }
+    val halloweenWhiteAlpha = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
         val animation = snapshotFlow { eventAnimation }.filter { it != "none" }.first()
         if (animation == "halloween") {
-            halloweenFlickerAlpha.animateTo(0.78f, tween(80))
-            halloweenFlickerAlpha.animateTo(0.05f, tween(110))
-            halloweenFlickerAlpha.animateTo(0.6f, tween(70))
-            halloweenFlickerAlpha.animateTo(0f, tween(240))
-            delay(160)
-            halloweenFlickerAlpha.animateTo(0.45f, tween(60))
-            halloweenFlickerAlpha.animateTo(0f, tween(280))
+            halloweenBlackAlpha.animateTo(0.62f, tween(2200))
+            halloweenBlackAlpha.animateTo(0.30f, tween(900))
+            halloweenBlackAlpha.animateTo(0f, tween(120))
+            halloweenWhiteAlpha.animateTo(0.85f, tween(70))
+            halloweenWhiteAlpha.animateTo(0f, tween(90))
+            halloweenBlackAlpha.animateTo(0.30f, tween(500))
+            halloweenBlackAlpha.animateTo(0f, tween(2120))
         }
     }
 
@@ -1992,11 +1995,18 @@ fun ContactlistScreen(
     }
 
     // ── Halloween: gruseliges Blitzen-Overlay (abdunkeln/aufhellen) ───────────
-    if (halloweenFlickerAlpha.value > 0f) {
+    if (halloweenBlackAlpha.value > 0f) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = halloweenFlickerAlpha.value))
+                .background(Color.Black.copy(alpha = halloweenBlackAlpha.value))
+        )
+    }
+    if (halloweenWhiteAlpha.value > 0f) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.White.copy(alpha = halloweenWhiteAlpha.value))
         )
     }
 
@@ -2022,7 +2032,14 @@ fun ContactlistScreen(
                 }
             )
             "xmas" -> XmasGreetingDialog(onDismiss = { showGreetingOverlay = false })
-            "halloween" -> HalloweenGreetingDialog(onDismiss = { showGreetingOverlay = false })
+            "halloween" -> HalloweenGreetingDialog(
+                onDismiss = { showGreetingOverlay = false },
+                username = greetingUsername,
+                onShareCard = { uri ->
+                    viewModel.setPendingShare(uri = uri, mimeType = "image/jpeg")
+                    showGreetingOverlay = false
+                }
+            )
         }
     }
 
@@ -3316,7 +3333,15 @@ private fun XmasGreetingDialog(onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun HalloweenGreetingDialog(onDismiss: () -> Unit) {
+private fun HalloweenGreetingDialog(
+    onDismiss: () -> Unit,
+    username: String = "",
+    onShareCard: (Uri) -> Unit = {}
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var isSharingCard by remember { mutableStateOf(false) }
+
     Dialog(onDismissRequest = onDismiss) {
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -3348,9 +3373,191 @@ private fun HalloweenGreetingDialog(onDismiss: () -> Unit) {
                     onClick = onDismiss,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6D00))
                 ) {
-                    Text("Schließen", color = Color.White)
+                    Text(stringResource(com.securechat.app.R.string.contacts_greeting_halloween_btn), color = Color.White)
+                }
+                Spacer(Modifier.height(8.dp))
+                // Glückwunschkarte teilen
+                OutlinedButton(
+                    onClick = {
+                        if (isSharingCard) return@OutlinedButton
+                        isSharingCard = true
+                        scope.launch(Dispatchers.IO) {
+                            val uri = generateAndSaveHalloweenCard(context, username)
+                            withContext(Dispatchers.Main) {
+                                isSharingCard = false
+                                if (uri != null) onShareCard(uri)
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFF6D00)),
+                    enabled = !isSharingCard
+                ) {
+                    if (isSharingCard) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Color(0xFFFF6D00))
+                        Spacer(Modifier.width(8.dp))
+                    } else {
+                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text(stringResource(com.securechat.app.R.string.contacts_share_greeting_card))
                 }
             }
         }
     }
+}
+
+private fun generateAndSaveHalloweenCard(context: android.content.Context, username: String): Uri? {
+    return try {
+        val w = 900; val h = 1260
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val canvas = AndroidCanvas(bmp)
+        val p = AndroidPaint().apply { isAntiAlias = true }
+
+        // Hintergrund: tiefes Nachtlila mit Verlauf nach Schwarz unten
+        p.shader = android.graphics.LinearGradient(
+            0f, 0f, 0f, h.toFloat(),
+            android.graphics.Color.parseColor("#3C1053"),
+            android.graphics.Color.parseColor("#0D0D0D"),
+            android.graphics.Shader.TileMode.CLAMP
+        )
+        canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), p)
+        p.shader = null
+
+        // Vollmond
+        p.color = android.graphics.Color.parseColor("#FFF3C4")
+        p.alpha = 220
+        canvas.drawCircle(720f, 220f, 95f, p)
+        p.alpha = 255
+
+        // Fledermäuse (einfache Doppel-Dreiecke)
+        val batPaint = AndroidPaint().apply { isAntiAlias = true; color = android.graphics.Color.parseColor("#1A1A1A") }
+        listOf(150f to 160f, 300f to 260f, 560f to 150f).forEach { (bxp, byp) ->
+            val path = android.graphics.Path()
+            path.moveTo(bxp, byp)
+            path.lineTo(bxp - 45f, byp - 22f)
+            path.lineTo(bxp - 10f, byp)
+            path.lineTo(bxp, byp + 14f)
+            path.lineTo(bxp + 10f, byp)
+            path.lineTo(bxp + 45f, byp - 22f)
+            path.close()
+            canvas.drawPath(path, batPaint)
+        }
+
+        // Kürbis (links, groß)
+        val px = 230f; val py = 880f
+        p.color = android.graphics.Color.parseColor("#FF6D00")
+        canvas.drawOval(px - 140f, py - 110f, px + 140f, py + 120f, p)
+        // Kürbis-Rillen
+        val groovePaint = AndroidPaint().apply {
+            isAntiAlias = true
+            style = AndroidPaint.Style.STROKE
+            strokeWidth = 6f
+            color = android.graphics.Color.parseColor("#E65100")
+        }
+        listOf(-70f, 0f, 70f).forEach { dx ->
+            canvas.drawOval(px - 20f + dx, py - 108f, px + 20f + dx, py + 118f, groovePaint)
+        }
+        // Stiel
+        p.color = android.graphics.Color.parseColor("#4E342E")
+        canvas.drawRect(px - 15f, py - 155f, px + 15f, py - 95f, p)
+        // Gruselgesicht (Dreiecksaugen, Zickzack-Mund)
+        val facePaint = AndroidPaint().apply { isAntiAlias = true; color = android.graphics.Color.parseColor("#FFEE58") }
+        val eyeL = android.graphics.Path().apply {
+            moveTo(px - 60f, py - 20f); lineTo(px - 25f, py - 20f); lineTo(px - 42f, py + 25f); close()
+        }
+        val eyeR = android.graphics.Path().apply {
+            moveTo(px + 25f, py - 20f); lineTo(px + 60f, py - 20f); lineTo(px + 42f, py + 25f); close()
+        }
+        canvas.drawPath(eyeL, facePaint)
+        canvas.drawPath(eyeR, facePaint)
+        val mouth = android.graphics.Path().apply {
+            moveTo(px - 70f, py + 55f)
+            lineTo(px - 45f, py + 80f)
+            lineTo(px - 20f, py + 55f)
+            lineTo(px, py + 80f)
+            lineTo(px + 20f, py + 55f)
+            lineTo(px + 45f, py + 80f)
+            lineTo(px + 70f, py + 55f)
+        }
+        val mouthPaint = AndroidPaint().apply {
+            isAntiAlias = true; style = AndroidPaint.Style.STROKE; strokeWidth = 10f
+            color = android.graphics.Color.parseColor("#FFEE58")
+        }
+        canvas.drawPath(mouth, mouthPaint)
+
+        // Spinnennetz (rechts oben)
+        val webPaint = AndroidPaint().apply {
+            isAntiAlias = true; style = AndroidPaint.Style.STROKE; strokeWidth = 3f
+            color = android.graphics.Color.parseColor("#B0BEC5"); alpha = 170
+        }
+        val webCx = 800f; val webCy = 60f; val webR = 150f
+        for (i in 0 until 6) {
+            val angle = Math.toRadians((i * 60).toDouble())
+            canvas.drawLine(webCx, webCy, webCx + (webR * kotlin.math.cos(angle)).toFloat(), webCy + (webR * kotlin.math.sin(angle)).toFloat(), webPaint)
+        }
+        for (ring in 1..3) {
+            val ringPath = android.graphics.Path()
+            val rr = webR * ring / 3f
+            for (i in 0..6) {
+                val angle = Math.toRadians((i * 60).toDouble())
+                val x = webCx + (rr * kotlin.math.cos(angle)).toFloat()
+                val y = webCy + (rr * kotlin.math.sin(angle)).toFloat()
+                if (i == 0) ringPath.moveTo(x, y) else ringPath.lineTo(x, y)
+            }
+            canvas.drawPath(ringPath, webPaint)
+        }
+
+        // Headline
+        val titlePaint = AndroidPaint().apply {
+            isAntiAlias = true
+            typeface = AndroidTypeface.create(AndroidTypeface.DEFAULT, AndroidTypeface.BOLD)
+            textSize = 100f
+            color = android.graphics.Color.parseColor("#FF6D00")
+            textAlign = AndroidPaint.Align.CENTER
+            setShadowLayer(6f, 3f, 3f, android.graphics.Color.argb(160, 0, 0, 0))
+        }
+        canvas.drawText("Happy Halloween!", w / 2f, 1040f, titlePaint)
+
+        // Wunschtext
+        val bodyPaint = AndroidPaint().apply {
+            isAntiAlias = true
+            textSize = 52f
+            color = android.graphics.Color.parseColor("#E0E0E0")
+            textAlign = AndroidPaint.Align.CENTER
+        }
+        canvas.drawText("Lass dich von den Kürbissen nicht erschrecken –", w / 2f, 1100f, bodyPaint)
+        canvas.drawText("Süßes oder Saures! 🍬", w / 2f, 1160f, bodyPaint)
+
+        // Trennlinie
+        val linePaint = AndroidPaint().apply {
+            color = android.graphics.Color.parseColor("#FF6D00"); strokeWidth = 3f; isAntiAlias = true; alpha = 140
+        }
+        canvas.drawLine(80f, 1190f, (w - 80).toFloat(), 1190f, linePaint)
+
+        // Von-Zeile
+        val vonPaint = AndroidPaint().apply {
+            isAntiAlias = true
+            typeface = AndroidTypeface.create(AndroidTypeface.DEFAULT, AndroidTypeface.ITALIC)
+            textSize = 48f
+            color = android.graphics.Color.parseColor("#FF6D00")
+            textAlign = AndroidPaint.Align.CENTER
+        }
+        canvas.drawText("Von: $username", w / 2f, 1215f, vonPaint)
+
+        // Footer
+        val footerPaint = AndroidPaint().apply {
+            isAntiAlias = true
+            typeface = AndroidTypeface.create(AndroidTypeface.DEFAULT, AndroidTypeface.ITALIC)
+            textSize = 26f
+            color = android.graphics.Color.parseColor("#FF6D00")
+            alpha = 160
+            textAlign = AndroidPaint.Align.CENTER
+        }
+        canvas.drawText("versendet aus dem Lethe Messenger • https://letheapp.de", w / 2f, 1248f, footerPaint)
+
+        val dir = java.io.File(context.cacheDir, "greeting_cards").also { it.mkdirs() }
+        val file = java.io.File(dir, "halloween_${System.currentTimeMillis()}.jpg")
+        file.outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 92, it) }
+        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    } catch (_: Exception) { null }
 }

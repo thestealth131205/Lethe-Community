@@ -24,6 +24,17 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.189",
+            title = "Halloween-Lumi & Grußkarte zum Teilen",
+            items = listOf(
+                "Neues Halloween-Lumi im Chat (Smiley-Button): Kürbis mit rot flackernden Augen, Totenschädel und klapperndes Skelett während des gruseligen Abdunkelns",
+                "Die gruselige Abdunkel-/Aufhell-Animation beim Öffnen der Kontaktliste läuft jetzt langsamer über 6 Sekunden mit kurzem weißen Aufblitzen in der Mitte",
+                "Mehrfaches Tippen auf die Halloween-Deko in der Kontaktliste öffnet jetzt eine teilbare Happy-Halloween-Grußkarte mit dem eigenen Benutzernamen",
+            ),
+            shortSummary = "Halloween-Lumi zum Versenden & teilbare Halloween-Grußkarte"
+        ),
+
+        ChangelogEntry(
             version = "10.4.188",
             title = "Halloween-Event & Weihnachts-Vorbereitung",
             items = listOf(
@@ -53,16 +64,6 @@ object AppChangelog {
                 "Fehler behoben: Der Nachrichtendienst berechnete für die Tag/Nacht-Pingfrequenz bei jedem Ping erneut die aktuelle Uhrzeit inkl. kompletter Zeitzonendaten – über viele Stunden Laufzeit konnte das zu einem Speichermangel-Absturz führen. Der Wert wird jetzt 5 Minuten zwischengespeichert",
             ),
             shortSummary = "Stabilitäts-Fix gegen seltenen Speicher-Absturz im Hintergrunddienst"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.185",
-            title = "Klarere Fehlermeldung beim Login & Admin-Passwortänderung",
-            items = listOf(
-                "Fehler behoben: Beim Login erschien bei jedem Fehlschlag nur \"Login fehlgeschlagen\" ohne Grund – jetzt wird die tatsächliche Ursache vom Server angezeigt (z.B. falsches Passwort, unbekannte Nummer)",
-                "Fehler behoben: Ein im Backend-Bereich neu gesetztes Nutzer-Passwort mit unsichtbaren Leerzeichen am Rand führte beim Login zu einem Fehlschlag – Passwörter werden jetzt vor dem Login-Versuch bereinigt",
-            ),
-            shortSummary = "Klarere Fehlermeldungen beim Login, Passwort-Bugfix"
         ),
 
     )

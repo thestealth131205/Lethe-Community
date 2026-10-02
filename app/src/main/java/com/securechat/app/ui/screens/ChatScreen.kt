@@ -6785,11 +6785,12 @@ private fun EmojiPanel(
                         contentPadding = PaddingValues(vertical = 4.dp)
                     ) {
                         val lumisItems = listOf(
-                            Triple(LumisType.LOVE,   "❤️", "Love"),
-                            Triple(LumisType.SNOW,   "❄️", "Snow"),
-                            Triple(LumisType.KISS,   "💋", "Kiss"),
-                            Triple(LumisType.RAIN,   "🌧️", "Rain"),
-                            Triple(LumisType.SUMMER, "🌴", "Summer")
+                            Triple(LumisType.LOVE,      "❤️", "Love"),
+                            Triple(LumisType.SNOW,      "❄️", "Snow"),
+                            Triple(LumisType.KISS,      "💋", "Kiss"),
+                            Triple(LumisType.RAIN,      "🌧️", "Rain"),
+                            Triple(LumisType.SUMMER,    "🌴", "Summer"),
+                            Triple(LumisType.HALLOWEEN, "🎃", "Halloween")
                         )
                         items(lumisItems) { (type, emoji, label) ->
                             Row(
