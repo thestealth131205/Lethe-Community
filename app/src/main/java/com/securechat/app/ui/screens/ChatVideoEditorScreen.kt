@@ -738,8 +738,14 @@ fun ChatVideoEditorScreen(
             val success = processVideo(outFile) { processingProgress = it }
             if (success && outFile.exists()) {
                 val outUri = Uri.fromFile(outFile)
-                if (isGroup) viewModel.sendGroupMediaMessage(chatId, outUri, "video")
-                else viewModel.sendMediaMessage(chatId, outUri, "video")
+                // Zitat-Referenz (falls per Swipe-to-Reply gesetzt, bevor zu diesem Editor navigiert wurde)
+                val reply = viewModel.consumePendingMediaReply()
+                if (isGroup) viewModel.sendGroupMediaMessage(chatId, outUri, "video",
+                    replyToContent = reply?.content, replyToSenderId = reply?.senderId,
+                    replyToMediaType = reply?.mediaType, replyToMessageId = reply?.messageId)
+                else viewModel.sendMediaMessage(chatId, outUri, "video",
+                    replyToContent = reply?.content, replyToSenderId = reply?.senderId,
+                    replyToMediaType = reply?.mediaType, replyToMessageId = reply?.messageId)
                 onCancel()
             } else {
                 processingError = "Video konnte nicht verarbeitet werden."

@@ -1402,6 +1402,21 @@ fun ChatScreen(
 
     var replyToMessage by remember { mutableStateOf<MessageEntity?>(null) }
 
+    // Liest das per Swipe gesetzte Zitat aus und löscht die Quote-Vorschau sofort (wie beim
+    // Textversand) – nutzt, wer direkt (ohne Editor-Screen) ein Bild/Video sendet.
+    fun captureAndClearReply(): com.securechat.app.ui.MainViewModel.PendingMediaReply {
+        val reply = replyToMessage
+        val replyMsgId = reply?.messageId ?: reply?.clientMessageId
+        val replyContentStr = if (reply?.mediaType in listOf("image", "video", "gif", "sticker"))
+            (reply?.mediaUrl ?: reply?.content)?.take(200)
+        else reply?.content?.take(200)
+        replyToMessage = null
+        return com.securechat.app.ui.MainViewModel.PendingMediaReply(
+            content = replyContentStr, senderId = reply?.senderId,
+            mediaType = reply?.mediaType, messageId = replyMsgId
+        )
+    }
+
     // Nachrichten-Bearbeitung (kein Dialog — Text landet direkt im Eingabefeld)
 
     // Chat-Sounds (in-App Sound beim Senden/Empfangen)
@@ -1421,8 +1436,13 @@ fun ChatScreen(
     var loadedMediaUrls by remember { mutableStateOf(emptySet<String>()) }
     var forcedMediaUrls by remember { mutableStateOf(emptySet<String>()) }
     var visibleMediaQueue by remember { mutableStateOf(emptyList<String>()) }
-    val activeLoadingMediaUrl by remember {
-        derivedStateOf { visibleMediaQueue.firstOrNull { it !in loadedMediaUrls } }
+    // Bis zu 3 gleichzeitig statt strikt nacheinander: auf Geräten mit langsamerer Bitmap-/
+    // MediaMetadataRetriever-Dekodierung (z.B. viele Samsung-Modelle, deutlich langsamer als
+    // Pixel/Xiaomi) summiert sich eine rein serielle Kette zu spürbaren Sekunden pro Nachricht,
+    // da die nächste erst startet wenn die vorherige fertig ist. Ein kleines Fenster parallel
+    // behält die ursprüngliche Anti-OOM-Begrenzung bei, verkürzt aber die Wartezeit erheblich.
+    val activeLoadingMediaUrls by remember {
+        derivedStateOf { visibleMediaQueue.filter { it !in loadedMediaUrls }.take(3).toSet() }
     }
     val onboardingStep by viewModel.currentOnboardingStep.collectAsState()
     var showFirstMessageCelebration by remember { mutableStateOf(false) }
@@ -1759,7 +1779,16 @@ fun ChatScreen(
         if (viewModel.isXiaomiDevice && recorder == null && isRecording) {
             isRecording = false
             isRecordingLocked = false
-            viewModel.stopAndSendVoiceMessage(chatId)
+            // Reply-Zustand vor dem Senden sichern – Quote-Vorschau soll wie beim Textversand sofort verschwinden
+            val reply = replyToMessage
+            val replyMsgId = reply?.messageId ?: reply?.clientMessageId
+            val replyContentStr = if (reply?.mediaType in listOf("image", "video", "gif", "sticker"))
+                (reply?.mediaUrl ?: reply?.content)?.take(200)
+            else reply?.content?.take(200)
+            viewModel.stopAndSendVoiceMessage(chatId,
+                replyToContent = replyContentStr, replyToSenderId = reply?.senderId,
+                replyToMediaType = reply?.mediaType, replyToMessageId = replyMsgId)
+            replyToMessage = null
             return
         }
         amplitudeSamplerJob?.cancel()
@@ -1804,6 +1833,15 @@ fun ChatScreen(
                 .computeWaveformFromRecordingAmplitudes(ampSnapshot)
             viewModel.cacheWaveformForFile(fileToSend, liveWaveform)
 
+            // Reply-Zustand vor dem Hintergrund-Coroutine sichern (Hauptthread) – Quote-Vorschau
+            // soll wie beim Textversand sofort verschwinden, nicht erst wenn der Upload fertig ist
+            val reply = replyToMessage
+            val replyMsgId = reply?.messageId ?: reply?.clientMessageId
+            val replyContentStr = if (reply?.mediaType in listOf("image", "video", "gif", "sticker"))
+                (reply?.mediaUrl ?: reply?.content)?.take(200)
+            else reply?.content?.take(200)
+            replyToMessage = null
+
             recordingScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 // Normalisierung überspringen wenn geschätzter Gain < +3 dB (maxAmp ≥ 0,50).
                 // VOICE_COMMUNICATION-Quelle liefert bereits AGC-Audio; bei normaler Sprachlautstärke
@@ -1822,8 +1860,12 @@ fun ChatScreen(
                 }
 
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                    if (isGroup) viewModel.sendGroupMediaMessage(chatId, Uri.fromFile(readyFile), "audio")
-                    else viewModel.sendMediaMessage(chatId, Uri.fromFile(readyFile), "audio")
+                    if (isGroup) viewModel.sendGroupMediaMessage(chatId, Uri.fromFile(readyFile), "audio",
+                        replyToContent = replyContentStr, replyToSenderId = reply?.senderId,
+                        replyToMediaType = reply?.mediaType, replyToMessageId = replyMsgId)
+                    else viewModel.sendMediaMessage(chatId, Uri.fromFile(readyFile), "audio",
+                        replyToContent = replyContentStr, replyToSenderId = reply?.senderId,
+                        replyToMediaType = reply?.mediaType, replyToMessageId = replyMsgId)
                     // Chat-Sound: Sprachnachricht gesendet
                     if (chatSoundSendOn) {
                         try {
@@ -1892,14 +1934,20 @@ fun ChatScreen(
         val providerToUnbind = videoCameraProvider
         videoCameraProvider = null
         if (f != null) {
+            // Reply-Zustand sofort sichern – Quote-Vorschau soll wie bei Text/Voice sofort verschwinden
+            val r = captureAndClearReply()
             onVideoFinalizedCallback = {
                 providerToUnbind?.unbindAll()
                 recordingScope.launch {
                     if (f.exists() && f.length() > 10_000L) {
                         withContext(Dispatchers.Main) {
                             val type = if (wasCircleVideo) "circle_video" else "video"
-                            if (isGroup) viewModel.sendGroupMediaMessage(chatId, Uri.fromFile(f), type)
-                            else viewModel.sendMediaMessage(chatId, Uri.fromFile(f), type)
+                            if (isGroup) viewModel.sendGroupMediaMessage(chatId, Uri.fromFile(f), type,
+                                replyToContent = r.content, replyToSenderId = r.senderId,
+                                replyToMediaType = r.mediaType, replyToMessageId = r.messageId)
+                            else viewModel.sendMediaMessage(chatId, Uri.fromFile(f), type,
+                                replyToContent = r.content, replyToSenderId = r.senderId,
+                                replyToMediaType = r.mediaType, replyToMessageId = r.messageId)
                         }
                     } else {
                         f.delete()
@@ -2092,19 +2140,33 @@ fun ChatScreen(
         if (limited.size == 1) {
             // Einzelbild → normaler Editor
             if (onNavigateToImageEditor != null) {
+                val r = captureAndClearReply()
+                viewModel.setPendingMediaReply(r.content, r.senderId, r.mediaType, r.messageId)
                 onNavigateToImageEditor(limited[0])
             } else {
-                if (isGroup) viewModel.sendGroupMediaMessage(chatId, limited[0], "image")
-                else viewModel.sendMediaMessage(chatId, limited[0], "image")
+                val r = captureAndClearReply()
+                if (isGroup) viewModel.sendGroupMediaMessage(chatId, limited[0], "image",
+                    replyToContent = r.content, replyToSenderId = r.senderId,
+                    replyToMediaType = r.mediaType, replyToMessageId = r.messageId)
+                else viewModel.sendMediaMessage(chatId, limited[0], "image",
+                    replyToContent = r.content, replyToSenderId = r.senderId,
+                    replyToMediaType = r.mediaType, replyToMessageId = r.messageId)
             }
         } else {
             // Mehrere Bilder → Multi-Editor oder direkt senden
             if (onNavigateToMultiImageEditor != null) {
+                val r = captureAndClearReply()
+                viewModel.setPendingMediaReply(r.content, r.senderId, r.mediaType, r.messageId)
                 onNavigateToMultiImageEditor(limited)
             } else {
+                val r = captureAndClearReply()
                 limited.forEach {
-                    if (isGroup) viewModel.sendGroupMediaMessage(chatId, it, "image")
-                    else viewModel.sendMediaMessage(chatId, it, "image")
+                    if (isGroup) viewModel.sendGroupMediaMessage(chatId, it, "image",
+                        replyToContent = r.content, replyToSenderId = r.senderId,
+                        replyToMediaType = r.mediaType, replyToMessageId = r.messageId)
+                    else viewModel.sendMediaMessage(chatId, it, "image",
+                        replyToContent = r.content, replyToSenderId = r.senderId,
+                        replyToMediaType = r.mediaType, replyToMessageId = r.messageId)
                 }
             }
         }
@@ -2113,6 +2175,8 @@ fun ChatScreen(
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
         if (uris.size == 1 && onNavigateToVideoEditor != null) {
             // Einzelvideo → Video-Editor öffnen
+            val r = captureAndClearReply()
+            viewModel.setPendingMediaReply(r.content, r.senderId, r.mediaType, r.messageId)
             onNavigateToVideoEditor(uris[0])
         } else {
             if (uris.size > 4) {
@@ -2120,9 +2184,14 @@ fun ChatScreen(
                     context, "Maximal 4 Videos auf einmal", android.widget.Toast.LENGTH_SHORT
                 ).show()
             }
+            val r = captureAndClearReply()
             uris.take(4).forEach {
-                if (isGroup) viewModel.sendGroupMediaMessage(chatId, it, "video")
-                else viewModel.sendMediaMessage(chatId, it, "video")
+                if (isGroup) viewModel.sendGroupMediaMessage(chatId, it, "video",
+                    replyToContent = r.content, replyToSenderId = r.senderId,
+                    replyToMediaType = r.mediaType, replyToMessageId = r.messageId)
+                else viewModel.sendMediaMessage(chatId, it, "video",
+                    replyToContent = r.content, replyToSenderId = r.senderId,
+                    replyToMediaType = r.mediaType, replyToMessageId = r.messageId)
             }
         }
     }
@@ -2522,8 +2591,8 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
     // Sequenzielle Sichtbarkeits-Warteschlange: wird NUR neu berechnet wenn nicht (mehr) gescrollt
     // wird — während des Scrollens wird nichts Neues angestoßen, egal wie schnell gescrollt wird.
     // Sobald das Scrollen stoppt, enthält visibleMediaQueue genau die aktuell sichtbaren Bild-/
-    // Video-/Sprachnachrichten-URLs (in Reihenfolge) — geladen wird davon immer nur die erste noch
-    // nicht fertige (activeLoadingMediaUrl), die nächste erst wenn diese fertig ist (siehe oben).
+    // Video-/Sprachnachrichten-URLs (in Reihenfolge) — geladen werden davon bis zu 3 gleichzeitig
+    // (activeLoadingMediaUrls), die nächsten erst wenn ein Platz frei wird (siehe oben).
     LaunchedEffect(Unit) {
         snapshotFlow {
             if (listState.isScrollInProgress) null
@@ -4014,8 +4083,8 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
                                             prevMusicUrl = musicPrevUrlMap[msg.mediaUrl],
                                             nextMusicUrl = musicNextUrlMap[msg.mediaUrl],
                                             allChatMusicUrls = allChatMusicUrls,
-                                            activeLoadingMediaUrl = activeLoadingMediaUrl,
-                                            isMediaApproved = { url -> url == activeLoadingMediaUrl || url in loadedMediaUrls || url in forcedMediaUrls },
+                                            activeLoadingMediaUrl = if (msg.mediaUrl in activeLoadingMediaUrls) msg.mediaUrl else null,
+                                            isMediaApproved = { url -> url in activeLoadingMediaUrls || url in loadedMediaUrls || url in forcedMediaUrls },
                                             onMediaLoaded = { url -> loadedMediaUrls = loadedMediaUrls + url },
                                             onForceLoadMedia = { url -> forcedMediaUrls = forcedMediaUrls + url },
                                             onStartVoiceRecording = {
@@ -6055,7 +6124,12 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
                                     "Umfrage"         -> { showAttachSheet = false; showPollDialog = true }
                                     "3D-Datei\n.stl .obj .3mf" -> { showAttachSheet = false; threeDLauncher.launch("*/*") }
                                     "Kontakte"        -> { showAttachSheet = false; showContactPickerDialog = true }
-                                    "Video-Editor"    -> { showAttachSheet = false; onNavigateToVideoEditorEmpty?.invoke() }
+                                    "Video-Editor"    -> {
+                                        showAttachSheet = false
+                                        val r = captureAndClearReply()
+                                        viewModel.setPendingMediaReply(r.content, r.senderId, r.mediaType, r.messageId)
+                                        onNavigateToVideoEditorEmpty?.invoke()
+                                    }
                                 }
                             }
                         }
@@ -6318,20 +6392,31 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
         InAppCameraScreen(
             onPhotoCaptured = { uri ->
                 showInAppCamera = false
+                val r = captureAndClearReply()
                 scope.launch {
                     val croppedUri = withContext(Dispatchers.IO) { cropTo9x16(uri) }
                     if (onNavigateToImageEditor != null) {
+                        viewModel.setPendingMediaReply(r.content, r.senderId, r.mediaType, r.messageId)
                         onNavigateToImageEditor(croppedUri)
                     } else {
-                        if (isGroup) viewModel.sendGroupMediaMessage(chatId, croppedUri, "image")
-                        else viewModel.sendMediaMessage(chatId, croppedUri, "image")
+                        if (isGroup) viewModel.sendGroupMediaMessage(chatId, croppedUri, "image",
+                            replyToContent = r.content, replyToSenderId = r.senderId,
+                            replyToMediaType = r.mediaType, replyToMessageId = r.messageId)
+                        else viewModel.sendMediaMessage(chatId, croppedUri, "image",
+                            replyToContent = r.content, replyToSenderId = r.senderId,
+                            replyToMediaType = r.mediaType, replyToMessageId = r.messageId)
                     }
                 }
             },
             onVideoCaptured = { uri ->
                 showInAppCamera = false
-                if (isGroup) viewModel.sendGroupMediaMessage(chatId, uri, "video")
-                else viewModel.sendMediaMessage(chatId, uri, "video")
+                val r = captureAndClearReply()
+                if (isGroup) viewModel.sendGroupMediaMessage(chatId, uri, "video",
+                    replyToContent = r.content, replyToSenderId = r.senderId,
+                    replyToMediaType = r.mediaType, replyToMessageId = r.messageId)
+                else viewModel.sendMediaMessage(chatId, uri, "video",
+                    replyToContent = r.content, replyToSenderId = r.senderId,
+                    replyToMediaType = r.mediaType, replyToMessageId = r.messageId)
             },
             onDismiss = { showInAppCamera = false }
         )

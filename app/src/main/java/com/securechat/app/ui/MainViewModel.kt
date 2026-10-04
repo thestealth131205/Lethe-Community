@@ -3190,6 +3190,28 @@ class MainViewModel @Inject constructor(
     fun setPendingImageUris(uris: List<android.net.Uri>) { _pendingImageUris.value = uris }
     fun clearPendingImageUris() { _pendingImageUris.value = emptyList() }
 
+    /**
+     * Zitat-Referenz (Swipe-to-Reply), die über einen Editor-Screen (Bild/Video) hinweg
+     * transportiert werden muss, da `replyToMessage` nur lokaler State in ChatScreen ist
+     * und beim Navigieren zum Editor verloren gehen würde.
+     */
+    data class PendingMediaReply(
+        val content: String?,
+        val senderId: String?,
+        val mediaType: String?,
+        val messageId: String?
+    )
+    private var pendingMediaReply: PendingMediaReply? = null
+    fun setPendingMediaReply(content: String?, senderId: String?, mediaType: String?, messageId: String?) {
+        pendingMediaReply = PendingMediaReply(content, senderId, mediaType, messageId)
+    }
+    /** Liest die Zitat-Referenz einmalig aus und löscht sie danach (verhindert Mehrfach-Verwendung). */
+    fun consumePendingMediaReply(): PendingMediaReply? {
+        val reply = pendingMediaReply
+        pendingMediaReply = null
+        return reply
+    }
+
     /** Der aktuell eingeloggte Benutzer. */
     private val _currentUser = MutableStateFlow<UserEntity?>(null)
     val currentUser: StateFlow<UserEntity?> = _currentUser.asStateFlow()
@@ -4918,7 +4940,13 @@ class MainViewModel @Inject constructor(
      *  - Zweig A: [MediaRecorder]-Datei wird normalisiert, dann direkt gesendet.
      *  - Zweig B: Rohe PCM-Datei wird via [convertPcmToM4a] enkodiert, dann gesendet.
      */
-    fun stopAndSendVoiceMessage(chatId: String) {
+    fun stopAndSendVoiceMessage(
+        chatId: String,
+        replyToContent: String? = null,
+        replyToSenderId: String? = null,
+        replyToMediaType: String? = null,
+        replyToMessageId: String? = null
+    ) {
         if (!_isRecordingVoice.value) return
 
         voiceAutoStopJob?.cancel()
@@ -4983,8 +5011,12 @@ class MainViewModel @Inject constructor(
                 }
 
                 withContext(Dispatchers.Main) {
-                    if (_activeChatIsGroup.value) sendGroupMediaMessage(chatId, Uri.fromFile(readyFile), "audio")
-                    else sendMediaMessage(chatId, Uri.fromFile(readyFile), "audio")
+                    if (_activeChatIsGroup.value) sendGroupMediaMessage(chatId, Uri.fromFile(readyFile), "audio",
+                        replyToContent = replyToContent, replyToSenderId = replyToSenderId,
+                        replyToMediaType = replyToMediaType, replyToMessageId = replyToMessageId)
+                    else sendMediaMessage(chatId, Uri.fromFile(readyFile), "audio",
+                        replyToContent = replyToContent, replyToSenderId = replyToSenderId,
+                        replyToMediaType = replyToMediaType, replyToMessageId = replyToMessageId)
                 }
 
                 // Original löschen wenn normalizeAudio eine neue Datei erstellt hat
@@ -10225,6 +10257,11 @@ class MainViewModel @Inject constructor(
                             }
                             maybeBackupPlaintext(item.id, serverContent, groupId)
                         }
+                        // Reaktionen abgleichen (können sich nach dem ersten Insert ändern, z.B.
+                        // verpasstes "reaction"-WS-Event während das Gerät offline war).
+                        if (item.reaction != existingById.reaction) {
+                            messageDao.setReactionByServerId(item.id, item.reaction)
+                        }
                     } else {
                         val existing = messageDao.getMessageByClientId(item.clientMessageId ?: "")
                         if (existing != null) {
@@ -10272,7 +10309,9 @@ class MainViewModel @Inject constructor(
                                     replyToContent = item.replyToContent,
                                     replyToSenderId = item.replyToSenderId,
                                     replyToMediaType = item.replyToMediaType,
-                                    deliveryStatus = groupDeliveryStatus
+                                    replyToMessageId = item.replyToMessageId,
+                                    deliveryStatus = groupDeliveryStatus,
+                                    reaction = item.reaction
                                 )
                             )
                             if (item.mediaType == "text") {
@@ -10547,9 +10586,11 @@ class MainViewModel @Inject constructor(
                         FcmMessageBus.wasNotificationShownByFcm(messageId)
                     val alreadyNotifiedByDb = messageId != null &&
                         messageDao.isDeliveredAsNotification(messageId) == 1
-                    // FCM konnte den Text nicht entschlüsseln → WS soll die Notification updaten
+                    // FCM konnte den Text nicht entschlüsseln → WS soll die Notification updaten.
+                    // Nur für Text relevant: bei Medien (Bild/Video/...) zeigt FCM bereits denselben
+                    // Icon-Text wie WS, ein "Update" wäre nur ein unnötiges Re-Alert-Duplikat.
                     val shouldUpdateFcmNotif = alreadyNotifiedByFcm && !alreadyNotifiedByDb
-                        && preview != "Neue Nachricht"
+                        && mediaType == "text" && preview != "Neue Nachricht"
                     val alreadyNotified = (alreadyNotifiedByFcm || alreadyNotifiedByDb) && !shouldUpdateFcmNotif
 
                     if (!alreadyNotified) {
@@ -10579,6 +10620,9 @@ class MainViewModel @Inject constructor(
                                 notificationId = notifId,
                                 recentMessages = recentMessages,
                                 badgeCount = unreadCount,
+                                // Reiner Inhalts-Update eines bereits von FCM gezeigten Banners
+                                // (entschlüsselter Text nachgeliefert) → nicht erneut alarmieren.
+                                silent = shouldUpdateFcmNotif,
                                 mediaType = mediaType,
                                 mediaHttpUrl = wsMediaUrl
                             )
@@ -11274,6 +11318,7 @@ class MainViewModel @Inject constructor(
                     isEncrypted = isE2ee && mediaType == "text",
                     replyToContent = payload["reply_to_content"] as? String,
                     replyToSenderId = payload["reply_to_sender_id"] as? String,
+                    replyToMediaType = payload["reply_to_media_type"] as? String,
                     replyToMessageId = payload["reply_to_message_id"] as? String
                 ))
 
@@ -11315,9 +11360,10 @@ class MainViewModel @Inject constructor(
                             else "$senderDisplayName: ${c.take(400)}"
                         }
                     }
-                    // FCM konnte den Text nicht entschlüsseln → WS soll die Notification updaten
+                    // FCM konnte den Text nicht entschlüsseln → WS soll die Notification updaten.
+                    // Nur für Text relevant: bei Medien zeigt FCM bereits denselben Icon-Text wie WS.
                     val grpShouldUpdate = alreadyNotifiedByFcm && !alreadyNotifiedByDb
-                        && !grpPreview.endsWith("Neue Nachricht")
+                        && mediaType == "text" && !grpPreview.endsWith("Neue Nachricht")
                     val alreadyNotified = (alreadyNotifiedByFcm || alreadyNotifiedByDb) && !grpShouldUpdate
                     if (!alreadyNotified) {
                         val notifId = (groupId.hashCode() and 0x7FFFFFFF) + 5000
@@ -11329,6 +11375,9 @@ class MainViewModel @Inject constructor(
                             messagePreview = grpPreview,
                             notificationId = notifId,
                             isGroup = true,
+                            // Reiner Inhalts-Update eines bereits von FCM gezeigten Banners
+                            // (entschlüsselter Text nachgeliefert) → nicht erneut alarmieren.
+                            silent = grpShouldUpdate,
                             senderDisplayName = senderDisplayName,
                             senderProfileUrl = senderProfileImg
                         )
@@ -12818,7 +12867,9 @@ class MainViewModel @Inject constructor(
         }
     }
 
-    fun sendGroupMediaMessage(groupId: String, uri: Uri, mediaType: String) {
+    fun sendGroupMediaMessage(groupId: String, uri: Uri, mediaType: String,
+        replyToContent: String? = null, replyToSenderId: String? = null,
+        replyToMediaType: String? = null, replyToMessageId: String? = null) {
         viewModelScope.launch {
             _isLoading.value = true
             val me = _currentUser.value ?: return@launch
@@ -12966,18 +13017,24 @@ class MainViewModel @Inject constructor(
                                     chatId = groupId, senderId = me.userId, receiverId = groupId,
                                     content = label, mediaType = effectiveMediaType, mediaUrl = mediaUrl,
                                     timestamp = System.currentTimeMillis(),
-                                    isSent = false, clientMessageId = clientId, deliveryStatus = 0
+                                    isSent = false, clientMessageId = clientId, deliveryStatus = 0,
+                                    replyToContent = replyToContent, replyToSenderId = replyToSenderId,
+                                    replyToMediaType = replyToMediaType, replyToMessageId = replyToMessageId
                                 )
                             )
                         }
-                        webSocketManager.sendMessage("group_message", groupId, mapOf(
-                            "content_blob" to label,
-                            "media_type" to effectiveMediaType,
-                            "media_url" to mediaUrl,
-                            "group_id" to groupId,
-                            "client_message_id" to clientId,
-                            "sender_timestamp" to System.currentTimeMillis()
-                        ))
+                        webSocketManager.sendMessage("group_message", groupId, buildMap<String, Any?> {
+                            put("content_blob", label)
+                            put("media_type", effectiveMediaType)
+                            put("media_url", mediaUrl)
+                            put("group_id", groupId)
+                            put("client_message_id", clientId)
+                            put("sender_timestamp", System.currentTimeMillis())
+                            if (replyToContent != null) put("reply_to_content", replyToContent)
+                            if (replyToSenderId != null) put("reply_to_sender_id", replyToSenderId)
+                            if (replyToMediaType != null) put("reply_to_media_type", replyToMediaType)
+                            if (replyToMessageId != null) put("reply_to_message_id", replyToMessageId)
+                        })
                     }
                 } else {
                     if (mediaType == "video") {
@@ -13485,6 +13542,7 @@ class MainViewModel @Inject constructor(
                             replyToContent = item.replyToContent,
                             replyToSenderId = item.replyToSenderId,
                             replyToMediaType = item.replyToMediaType,
+                            replyToMessageId = item.replyToMessageId,
                             isDeliveredAsNotification = item.isDeliveredAsNotification,
                             reaction = item.reaction,
                             isEdited = item.isEdited,
@@ -13862,10 +13920,13 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             messageDao.setReactionByLocalId(localId, emoji)
             if (messageId.isNotBlank()) {
-                webSocketManager.sendMessage(
-                    "reaction", chatPartnerId,
-                    mapOf("message_id" to messageId, "emoji" to emoji)
-                )
+                val isGroup = groupDao.getGroupById(chatPartnerId) != null
+                val payload = buildMap<String, Any> {
+                    put("message_id", messageId)
+                    put("emoji", emoji)
+                    if (isGroup) put("group_id", chatPartnerId)
+                }
+                webSocketManager.sendMessage("reaction", chatPartnerId, payload)
             }
             Timber.tag("LETHE_WS").d("Reaktion gesendet: $emoji auf $messageId an $chatPartnerId")
         }
@@ -14255,7 +14316,9 @@ class MainViewModel @Inject constructor(
      * Für Videos: Placeholder-Nachricht (mediaUrl=null) wird sofort eingefügt,
      * der Upload-Fortschritt wird per _videoUploadProgress getrackt.
      */
-    fun sendMediaMessage(chatId: String, uri: Uri, mediaType: String) {
+    fun sendMediaMessage(chatId: String, uri: Uri, mediaType: String,
+        replyToContent: String? = null, replyToSenderId: String? = null,
+        replyToMediaType: String? = null, replyToMessageId: String? = null) {
         val clientId = UUID.randomUUID().toString()
         val job = viewModelScope.launch {
             _isLoading.value = true
@@ -14279,7 +14342,11 @@ class MainViewModel @Inject constructor(
                         timestamp = System.currentTimeMillis(),
                         isSent = false,
                         clientMessageId = clientId,
-                        deliveryStatus = 0
+                        deliveryStatus = 0,
+                        replyToContent = replyToContent,
+                        replyToSenderId = replyToSenderId,
+                        replyToMediaType = replyToMediaType,
+                        replyToMessageId = replyToMessageId
                     )
                 )
                 if (mediaType == "video" || mediaType == "circle_video") {
@@ -14551,12 +14618,16 @@ class MainViewModel @Inject constructor(
                         if (chatId == "self_notes") {
                             messageDao.markSelfNoteDelivered(clientId)
                         } else {
-                            webSocketManager.sendMessage("message", chatId, mapOf(
-                                "content_blob" to label,
-                                "media_type" to effectiveMediaType,
-                                "media_url" to mediaUrl,
-                                "client_message_id" to clientId
-                            ))
+                            webSocketManager.sendMessage("message", chatId, buildMap<String, Any?> {
+                                put("content_blob", label)
+                                put("media_type", effectiveMediaType)
+                                put("media_url", mediaUrl)
+                                put("client_message_id", clientId)
+                                if (replyToContent != null) put("reply_to_content", replyToContent)
+                                if (replyToSenderId != null) put("reply_to_sender_id", replyToSenderId)
+                                if (replyToMediaType != null) put("reply_to_media_type", replyToMediaType)
+                                if (replyToMessageId != null) put("reply_to_message_id", replyToMessageId)
+                            })
                         }
                     }
                 } else {
@@ -14623,7 +14694,11 @@ class MainViewModel @Inject constructor(
      * (schwarzes Bild mit Fortschrittsanzeige). Gibt sofort true zurück damit der
      * ImageEditor den Chat anzeigen kann. Upload + WS-Dispatch laufen asynchron.
      */
-    suspend fun sendImageMessageSuspend(chatId: String, uri: Uri, isGroup: Boolean = false): Boolean {
+    suspend fun sendImageMessageSuspend(
+        chatId: String, uri: Uri, isGroup: Boolean = false,
+        replyToContent: String? = null, replyToSenderId: String? = null,
+        replyToMediaType: String? = null, replyToMessageId: String? = null
+    ): Boolean {
         val me = _currentUser.value ?: return false
         if (_userPrefs.value.decentralizedMode) {
             _statusMessage.value = "Dezentral-Modus: Bildversand ist deaktiviert."
@@ -14643,7 +14718,11 @@ class MainViewModel @Inject constructor(
                 timestamp = System.currentTimeMillis(),
                 isSent = false,
                 clientMessageId = clientId,
-                deliveryStatus = 0
+                deliveryStatus = 0,
+                replyToContent = replyToContent,
+                replyToSenderId = replyToSenderId,
+                replyToMediaType = replyToMediaType,
+                replyToMessageId = replyToMessageId
             )
         )
         _imageUploadProgress.update { it + (clientId to 0f) }
@@ -14680,21 +14759,29 @@ class MainViewModel @Inject constructor(
                         if (chatId == "self_notes") {
                             messageDao.markSelfNoteDelivered(clientId)
                         } else if (isGroup) {
-                            webSocketManager.sendMessage("group_message", chatId, mapOf(
-                                "content_blob" to "[image]",
-                                "media_type" to "image",
-                                "media_url" to mediaUrl,
-                                "group_id" to chatId,
-                                "client_message_id" to clientId,
-                                "sender_timestamp" to System.currentTimeMillis()
-                            ))
+                            webSocketManager.sendMessage("group_message", chatId, buildMap<String, Any?> {
+                                put("content_blob", "[image]")
+                                put("media_type", "image")
+                                put("media_url", mediaUrl)
+                                put("group_id", chatId)
+                                put("client_message_id", clientId)
+                                put("sender_timestamp", System.currentTimeMillis())
+                                if (replyToContent != null) put("reply_to_content", replyToContent)
+                                if (replyToSenderId != null) put("reply_to_sender_id", replyToSenderId)
+                                if (replyToMediaType != null) put("reply_to_media_type", replyToMediaType)
+                                if (replyToMessageId != null) put("reply_to_message_id", replyToMessageId)
+                            })
                         } else {
-                            webSocketManager.sendMessage("message", chatId, mapOf(
-                                "content_blob" to "[image]",
-                                "media_type" to "image",
-                                "media_url" to mediaUrl,
-                                "client_message_id" to clientId
-                            ))
+                            webSocketManager.sendMessage("message", chatId, buildMap<String, Any?> {
+                                put("content_blob", "[image]")
+                                put("media_type", "image")
+                                put("media_url", mediaUrl)
+                                put("client_message_id", clientId)
+                                if (replyToContent != null) put("reply_to_content", replyToContent)
+                                if (replyToSenderId != null) put("reply_to_sender_id", replyToSenderId)
+                                if (replyToMediaType != null) put("reply_to_media_type", replyToMediaType)
+                                if (replyToMessageId != null) put("reply_to_message_id", replyToMessageId)
+                            })
                         }
                     } else {
                         markImageUploadFailed(clientId, chatId, uri, "image", isGroup)
@@ -14721,9 +14808,16 @@ class MainViewModel @Inject constructor(
      * Lädt mehrere Bilder im Hintergrund hoch. Erstellt sofort einen Placeholder
      * und navigiert den User zurück zum Chat.
      */
-    suspend fun sendMultiImageMessageSuspend(chatId: String, uris: List<Uri>, isGroup: Boolean = false): Boolean {
+    suspend fun sendMultiImageMessageSuspend(
+        chatId: String, uris: List<Uri>, isGroup: Boolean = false,
+        replyToContent: String? = null, replyToSenderId: String? = null,
+        replyToMediaType: String? = null, replyToMessageId: String? = null
+    ): Boolean {
         if (uris.isEmpty()) return false
-        if (uris.size == 1) return sendImageMessageSuspend(chatId, uris[0], isGroup)
+        if (uris.size == 1) return sendImageMessageSuspend(
+            chatId, uris[0], isGroup,
+            replyToContent, replyToSenderId, replyToMediaType, replyToMessageId
+        )
         val me = _currentUser.value ?: return false
         val clientId = UUID.randomUUID().toString()
 
@@ -14739,7 +14833,11 @@ class MainViewModel @Inject constructor(
                 timestamp = System.currentTimeMillis(),
                 isSent = false,
                 clientMessageId = clientId,
-                deliveryStatus = 0
+                deliveryStatus = 0,
+                replyToContent = replyToContent,
+                replyToSenderId = replyToSenderId,
+                replyToMediaType = replyToMediaType,
+                replyToMessageId = replyToMessageId
             )
         )
         _imageUploadProgress.update { it + (clientId to 0f) }
@@ -14782,21 +14880,29 @@ class MainViewModel @Inject constructor(
                 if (chatId == "self_notes") {
                     messageDao.markSelfNoteDelivered(clientId)
                 } else if (isGroup) {
-                    webSocketManager.sendMessage("group_message", chatId, mapOf(
-                        "content_blob" to "[multi_image]",
-                        "media_type" to "multi_image",
-                        "media_url" to urlsJson,
-                        "group_id" to chatId,
-                        "client_message_id" to clientId,
-                        "sender_timestamp" to System.currentTimeMillis()
-                    ))
+                    webSocketManager.sendMessage("group_message", chatId, buildMap<String, Any?> {
+                        put("content_blob", "[multi_image]")
+                        put("media_type", "multi_image")
+                        put("media_url", urlsJson)
+                        put("group_id", chatId)
+                        put("client_message_id", clientId)
+                        put("sender_timestamp", System.currentTimeMillis())
+                        if (replyToContent != null) put("reply_to_content", replyToContent)
+                        if (replyToSenderId != null) put("reply_to_sender_id", replyToSenderId)
+                        if (replyToMediaType != null) put("reply_to_media_type", replyToMediaType)
+                        if (replyToMessageId != null) put("reply_to_message_id", replyToMessageId)
+                    })
                 } else {
-                    webSocketManager.sendMessage("message", chatId, mapOf(
-                        "content_blob" to "[multi_image]",
-                        "media_type" to "multi_image",
-                        "media_url" to urlsJson,
-                        "client_message_id" to clientId
-                    ))
+                    webSocketManager.sendMessage("message", chatId, buildMap<String, Any?> {
+                        put("content_blob", "[multi_image]")
+                        put("media_type", "multi_image")
+                        put("media_url", urlsJson)
+                        put("client_message_id", clientId)
+                        if (replyToContent != null) put("reply_to_content", replyToContent)
+                        if (replyToSenderId != null) put("reply_to_sender_id", replyToSenderId)
+                        if (replyToMediaType != null) put("reply_to_media_type", replyToMediaType)
+                        if (replyToMessageId != null) put("reply_to_message_id", replyToMessageId)
+                    })
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 markImageUploadFailed(clientId, chatId, uris[0], "multi_image", isGroup)

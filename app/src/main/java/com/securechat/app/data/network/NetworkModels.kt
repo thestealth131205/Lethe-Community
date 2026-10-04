@@ -914,6 +914,7 @@ data class MessageItemResponse(
     @SerializedName("reply_to_content") val replyToContent: String? = null,
     @SerializedName("reply_to_sender_id") val replyToSenderId: String? = null,
     @SerializedName("reply_to_media_type") val replyToMediaType: String? = null,
+    @SerializedName("reply_to_message_id") val replyToMessageId: String? = null,
     @SerializedName("reaction") val reaction: String? = null,
     @SerializedName("is_edited") val isEdited: Boolean = false,
     @SerializedName("is_encrypted") val isEncrypted: Boolean = false,

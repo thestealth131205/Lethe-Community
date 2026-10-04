@@ -443,7 +443,13 @@ fun ImageEditorScreen(
             }
 
             // Upload im Hintergrund starten (ViewModel managed den Job)
-            val success = viewModel.sendMultiImageMessageSuspend(partnerId, resultUris, isGroup)
+            // Zitat-Referenz (falls per Swipe-to-Reply gesetzt, bevor zu diesem Editor navigiert wurde)
+            val reply = viewModel.consumePendingMediaReply()
+            val success = viewModel.sendMultiImageMessageSuspend(
+                partnerId, resultUris, isGroup,
+                replyToContent = reply?.content, replyToSenderId = reply?.senderId,
+                replyToMediaType = reply?.mediaType, replyToMessageId = reply?.messageId
+            )
             if (success && snapCaptionText.isNotBlank()) {
                 if (isGroup) viewModel.sendGroupMessage(partnerId, snapCaptionText.trim())
                 else viewModel.sendMessage(partnerId, snapCaptionText.trim())

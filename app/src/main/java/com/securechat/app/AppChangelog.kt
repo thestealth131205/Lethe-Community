@@ -24,6 +24,18 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.190",
+            title = "Benachrichtigungen, Reaktionen & Zitate korrigiert",
+            items = listOf(
+                "Fehler behoben: Nach Akku-leer/Neustart wurden bereits zugestellte Benachrichtigungen teils erneut mit Ton/Vibration angezeigt",
+                "Reaktionen (z.B. ❤️) auf Bilder/Videos in Gruppenchats werden jetzt zuverlässig bei allen angezeigt und bei mehreren gleichen Reaktionen hochgezählt",
+                "Zitierte Nachricht blieb beim Senden einer Sprachnachricht oder eines Bildes/Videos am Textfeld hängen, statt an die gesendete Nachricht angehängt zu werden – jetzt korrekt verknüpft (auch in Gruppenchats)",
+                "Samsung-Geräte: Bilder/Videos beim Betreten eines Gruppenchats laden jetzt deutlich flüssiger statt einzeln und langsam nacheinander",
+            ),
+            shortSummary = "Benachrichtigungs-Duplikate, Gruppen-Reaktionen & Zitate behoben"
+        ),
+
+        ChangelogEntry(
             version = "10.4.189",
             title = "Halloween-Lumi & Grußkarte zum Teilen",
             items = listOf(
@@ -55,15 +67,6 @@ object AppChangelog {
                 "Media Player (Windows): Lethe-Playlisten, Titel-Detailansicht und Playlist-Hinzufügen-Button ergänzt",
             ),
             shortSummary = "Weniger Abstürze in aktiven Gruppenchats, Media-Player-Fixes"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.186",
-            title = "Absturz durch Speichermangel im Dauer-Hintergrunddienst behoben",
-            items = listOf(
-                "Fehler behoben: Der Nachrichtendienst berechnete für die Tag/Nacht-Pingfrequenz bei jedem Ping erneut die aktuelle Uhrzeit inkl. kompletter Zeitzonendaten – über viele Stunden Laufzeit konnte das zu einem Speichermangel-Absturz führen. Der Wert wird jetzt 5 Minuten zwischengespeichert",
-            ),
-            shortSummary = "Stabilitäts-Fix gegen seltenen Speicher-Absturz im Hintergrunddienst"
         ),
 
     )
