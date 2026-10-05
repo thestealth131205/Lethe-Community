@@ -24,6 +24,26 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.192",
+            title = "Backend-Passwort-Bestätigung verbessert",
+            items = listOf(
+                "Beim Bestätigen des Backend-Passworts im Drei-Punkte-Menü wird jetzt ein Lade-Symbol im Button angezeigt, solange die Prüfung läuft",
+                "Bei schlechter Verbindung erscheint nach 15 Sekunden eine klare Fehlermeldung, statt dass der Button dauerhaft hängen bleibt",
+            ),
+            shortSummary = "Backend-Passwort-Bestätigung: Lade-Anzeige & Zeitüberschreitung bei schlechter Verbindung"
+        ),
+
+        ChangelogEntry(
+            version = "10.4.191",
+            title = "Anruf-Benachrichtigungen & Reaktionen korrigiert",
+            items = listOf(
+                "Bei eingehenden Anrufen erscheint jetzt nur noch eine Benachrichtigung statt beider gleichzeitig: Ist das Display aus oder der Sperrbildschirm aktiv, nur die kleine Benachrichtigung; wird das Gerät gerade aktiv genutzt, direkt die Vollbild-Anrufansicht",
+                "Fehler behoben: Eine gesetzte Reaktion (z.B. ❤️) konnte kurz aufblitzen und sofort wieder verschwinden, wenn gleichzeitig eine Benachrichtigung oder ein Chat-Abgleich lief",
+            ),
+            shortSummary = "Anruf-Benachrichtigungen vereinheitlicht, Reaktions-Flackern behoben"
+        ),
+
+        ChangelogEntry(
             version = "10.4.190",
             title = "Benachrichtigungen, Reaktionen & Zitate korrigiert",
             items = listOf(
@@ -44,29 +64,6 @@ object AppChangelog {
                 "Mehrfaches Tippen auf die Halloween-Deko in der Kontaktliste öffnet jetzt eine teilbare Happy-Halloween-Grußkarte mit dem eigenen Benutzernamen",
             ),
             shortSummary = "Halloween-Lumi zum Versenden & teilbare Halloween-Grußkarte"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.188",
-            title = "Halloween-Event & Weihnachts-Vorbereitung",
-            items = listOf(
-                "Neues Halloween-Event: wackelnde Kürbisköpfe und ein klapperndes Skelett in der Kontaktliste und auf dem Login-Bildschirm, dazu ein kurzes gruseliges Abdunkeln/Aufhellen beim Öffnen",
-                "Weihnachts-Event erweitert: zusätzlich sanft fallende Schneeflocken neben Weihnachtsmann und Rentier",
-                "Admin-Bereich: Halloween und Weihnachten können jetzt direkt über die Event-Auswahl aktiviert werden",
-            ),
-            shortSummary = "Halloween-Event mit Kürbissen & Skelett, Weihnachten erweitert"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.187",
-            title = "Chat-Speicherverbrauch reduziert & Media-Player-Verbesserungen",
-            items = listOf(
-                "Fehler behoben: Sehr aktive Gruppenchats mit vielen Bildern/Videos konnten die App durch Speichermangel zum Absturz bringen – das Zeitfenster für geladene Nachrichten wird jetzt nicht mehr versehentlich komplett deaktiviert und medienreiche Chats starten mit einer kleineren Anzeigemenge",
-                "Verwaiste, inaktive Gruppen ohne Mitglieder werden bereinigt",
-                "Media Player: Songtexte-Button erscheint jetzt auch nach längerer Nichtnutzung zuverlässig beim letzten Titel",
-                "Media Player (Windows): Lethe-Playlisten, Titel-Detailansicht und Playlist-Hinzufügen-Button ergänzt",
-            ),
-            shortSummary = "Weniger Abstürze in aktiven Gruppenchats, Media-Player-Fixes"
         ),
 
     )

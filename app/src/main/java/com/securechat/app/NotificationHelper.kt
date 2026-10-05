@@ -615,7 +615,11 @@ class NotificationHelper @Inject constructor(
     /** Zeigt eine Benachrichtigung für einen eingehenden Anruf (Video oder Sprache).
      *  Nutzt IncomingCallActivity als FullScreen-Intent (Sperrbildschirm-Anruf-UI).
      *  Aktions-Buttons "Annehmen" und "Ablehnen" ermöglichen Interaktion ohne Entsperren. */
-    fun showIncomingCallNotification(callerName: String, callType: String = "VIDEO") {
+    fun showIncomingCallNotification(
+        callerName: String,
+        callType: String = "VIDEO",
+        useFullScreenIntent: Boolean = true
+    ) {
         // Bildschirm sofort aufwecken (funktioniert auch wenn Gerät im Standby/Doze ist).
         // SCREEN_BRIGHT_WAKE_LOCK | ACQUIRE_CAUSES_WAKEUP ist deprecated, aber die einzige
         // zuverlässige Methode, den Bildschirm aus einem Service heraus aktiv einzuschalten.
@@ -660,8 +664,14 @@ class NotificationHelper @Inject constructor(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val canUseFullScreen = Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE ||
-                manager.canUseFullScreenIntent()
+        // useFullScreenIntent=false (CallDisplayPolicy entschied sich für die kleine Variante,
+        // z. B. Bildschirm aus/Sperrbildschirm aktiv) → bewusst NIE CallStyle+FullScreenIntent
+        // setzen, sonst zeigt/launcht das System zusätzlich die Vollbild-Activity und es
+        // erscheinen beide Benachrichtigungsformen gleichzeitig.
+        val canUseFullScreen = useFullScreenIntent && (
+                Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE ||
+                        manager.canUseFullScreenIntent()
+                )
 
         val title = if (callType == "VOICE") "Eingehender Sprachanruf" else "Eingehender Videoanruf"
         val text  = if (callType == "VOICE") "$callerName ruft an …" else "$callerName möchte einen Videoanruf …"
@@ -845,6 +855,10 @@ class NotificationHelper @Inject constructor(
     fun cancelCallNotification() {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.cancel(9001)
+        // Zentraler Stopp-Punkt: egal ob der Klingelton über den Notification-Channel
+        // (CHANNEL_ID_CALLS) oder explizit über CallRingtonePlayer (Vollbild-Pfad ohne
+        // Notification) lief - hier wird er in jedem Fall beendet.
+        CallRingtonePlayer.stop()
     }
 
     /** Bricht die Nachrichtenbenachrichtigung für einen bestimmten Absender ab (z.B. wenn Chat geöffnet wird). */

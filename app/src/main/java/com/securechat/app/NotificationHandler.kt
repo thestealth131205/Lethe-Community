@@ -1,6 +1,5 @@
 package com.securechat.app
 
-import android.app.KeyguardManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -196,10 +195,18 @@ class NotificationHandler : Service() {
                     groupParticipants = groupParticipants,
                     groupName = groupName
                 )
-                notificationHelper.showIncomingCallNotification(callerName, callType)
-                val kg = applicationContext.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
-                if (kg?.isKeyguardLocked == true) {
-                    IncomingCallActivity.startFromBackground(applicationContext)
+                // Genau EINE der beiden Darstellungen - nie beide gleichzeitig.
+                when (CallDisplayPolicy.decide(applicationContext, isAppForeground = false)) {
+                    CallDisplayPolicy.Mode.FULL_SCREEN -> {
+                        IncomingCallActivity.startFromBackground(applicationContext)
+                        CallRingtonePlayer.start(applicationContext)
+                    }
+                    CallDisplayPolicy.Mode.SMALL -> {
+                        notificationHelper.showIncomingCallNotification(
+                            callerName, callType, useFullScreenIntent = false
+                        )
+                    }
+                    CallDisplayPolicy.Mode.NONE -> { /* unerreichbar, isAppForeground=false */ }
                 }
             }
 

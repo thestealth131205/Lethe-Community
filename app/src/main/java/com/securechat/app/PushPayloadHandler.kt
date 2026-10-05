@@ -300,22 +300,37 @@ class PushPayloadHandler @Inject constructor(
                     ?.map { it to null }
                     ?: emptyList()
 
-                // Nur speichern wenn noch kein Anruf von diesem Anrufer aussteht
-                if (IncomingCallStore.pendingCall?.callerId != callerId) {
-                    IncomingCallStore.pendingCall = IncomingCallStore.PendingCall(
-                        callerId      = callerId,
-                        callerName    = callerName,
-                        callerImageUrl = null,
-                        sdpOffer      = sdpOffer,
-                        callType      = callType,
-                        isGroupCall   = isGroupCall,
-                        groupParticipants = groupParticipants,
-                        groupName     = groupName
-                    )
-                    // IncomingCallActivity auf dem Sperrbildschirm starten
-                    IncomingCallActivity.startFromBackground(context)
+                // WS/ViewModel im Vordergrund übernimmt Anzeige + Klingelton bereits selbst
+                // (siehe MainViewModel call_offer-Handler) - FCM darf hier nichts doppeln.
+                if (FcmMessageBus.isViewModelActive) return
+
+                // Nur beim ersten Empfang dieses Anrufs anzeigen - verhindert Doppel-Anzeige,
+                // wenn WS (NotificationHandler) und FCM redundant denselben call_offer liefern.
+                if (IncomingCallStore.pendingCall?.callerId == callerId) return
+
+                IncomingCallStore.pendingCall = IncomingCallStore.PendingCall(
+                    callerId      = callerId,
+                    callerName    = callerName,
+                    callerImageUrl = null,
+                    sdpOffer      = sdpOffer,
+                    callType      = callType,
+                    isGroupCall   = isGroupCall,
+                    groupParticipants = groupParticipants,
+                    groupName     = groupName
+                )
+                // Genau EINE der beiden Darstellungen - nie beide gleichzeitig.
+                when (CallDisplayPolicy.decide(context, isAppForeground = false)) {
+                    CallDisplayPolicy.Mode.FULL_SCREEN -> {
+                        IncomingCallActivity.startFromBackground(context)
+                        CallRingtonePlayer.start(context)
+                    }
+                    CallDisplayPolicy.Mode.SMALL -> {
+                        notificationHelper.showIncomingCallNotification(
+                            callerName, callType, useFullScreenIntent = false
+                        )
+                    }
+                    CallDisplayPolicy.Mode.NONE -> { /* unerreichbar, isAppForeground=false */ }
                 }
-                notificationHelper.showIncomingCallNotification(callerName, callType)
             }
 
             "call_cancelled" -> {

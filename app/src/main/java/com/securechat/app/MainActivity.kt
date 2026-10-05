@@ -2451,7 +2451,17 @@ class MainActivity : FragmentActivity() {
                                                 }
                                             },
                                             enabled = verifyPassword.isNotBlank() && !verifyLoading
-                                        ) { Text("Bestätigen") }
+                                        ) {
+                                            if (verifyLoading) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(16.dp),
+                                                    strokeWidth = 2.dp,
+                                                    color = MaterialTheme.colorScheme.onPrimary
+                                                )
+                                                Spacer(Modifier.width(8.dp))
+                                            }
+                                            Text("Bestätigen")
+                                        }
                                     },
                                     dismissButton = {
                                         TextButton(onClick = { navController.popBackStack() }) { Text("Abbrechen") }

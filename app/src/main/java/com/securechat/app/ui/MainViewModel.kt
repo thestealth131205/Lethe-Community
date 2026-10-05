@@ -15,7 +15,6 @@ import androidx.lifecycle.viewModelScope
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
-import android.app.KeyguardManager
 import com.securechat.app.ContactRequestWorker
 import com.securechat.app.NotificationHandler
 import com.securechat.app.SpeedTestWorker
@@ -73,8 +72,6 @@ import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.media.MediaMuxer
 import android.media.MediaRecorder
-import android.media.Ringtone
-import android.media.RingtoneManager
 import android.media.ToneGenerator
 import android.os.Build
 import android.os.PowerManager
@@ -676,9 +673,6 @@ class MainViewModel @Inject constructor(
     /** Eingehender Anruf (noch nicht angenommen), null wenn kein eingehender Anruf. */
     private val _incomingCall = MutableStateFlow<IncomingCallState?>(null)
     val incomingCall: StateFlow<IncomingCallState?> = _incomingCall.asStateFlow()
-
-    /** Klingelton für eingehende Anrufe (null wenn kein Anruf klingelt). */
-    private var callRingtone: Ringtone? = null
 
     /** Freizeichen-ToneGenerator für den Anrufer (läuft solange der Angerufene klingelt). */
     private var ringbackToneGenerator: ToneGenerator? = null
@@ -1987,23 +1981,16 @@ class MainViewModel @Inject constructor(
         )
     }
 
+    // Delegiert an den prozessweiten CallRingtonePlayer, damit der Klingelton egal ob
+    // ausgelöst vom Vordergrund (hier) oder von den Hintergrund-Pfaden (NotificationHandler,
+    // PushPayloadHandler) immer derselbe einzelne Player ist - verhindert doppelten/
+    // überlappenden Klingelton bei redundanter WS+FCM-Zustellung desselben Anrufs.
     private fun startRingtone() {
-        try {
-            val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-            callRingtone = RingtoneManager.getRingtone(context, uri)?.also { ringtone ->
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-                    ringtone.isLooping = true
-                }
-                ringtone.play()
-            }
-        } catch (e: Exception) {
-            Timber.tag("LETHE_VIDEO").w("Ringtone start failed: $e")
-        }
+        CallRingtonePlayer.start(context)
     }
 
     private fun stopRingtone() {
-        callRingtone?.stop()
-        callRingtone = null
+        CallRingtonePlayer.stop()
     }
 
     /** Startet leises Freizeichen (Ringback) für den Anrufer – läuft bis stopRingbackTone(). */
@@ -8975,7 +8962,9 @@ class MainViewModel @Inject constructor(
     fun verifyAdminPanelPassword(password: String, onResult: (Boolean, String?, Boolean) -> Unit) {
         viewModelScope.launch {
             try {
-                val response = apiService.verifyAdminPanelPassword(VerifyAdminPanelPasswordRequest(password))
+                val response = kotlinx.coroutines.withTimeout(15_000L) {
+                    apiService.verifyAdminPanelPassword(VerifyAdminPanelPasswordRequest(password))
+                }
                 if (response.isSuccessful) {
                     onResult(true, null, false)
                 } else if (response.code() == 428) {
@@ -8985,6 +8974,8 @@ class MainViewModel @Inject constructor(
                     val detail = try { org.json.JSONObject(err).optString("detail", "Falsches Backend-Passwort.") } catch (_: Exception) { "Falsches Backend-Passwort." }
                     onResult(false, detail, false)
                 }
+            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                onResult(false, "Zeitüberschreitung – bitte Verbindung prüfen und erneut versuchen.", false)
             } catch (e: Exception) {
                 onResult(false, "Netzwerkfehler: ${e.message}", false)
             }
@@ -10259,7 +10250,9 @@ class MainViewModel @Inject constructor(
                         }
                         // Reaktionen abgleichen (können sich nach dem ersten Insert ändern, z.B.
                         // verpasstes "reaction"-WS-Event während das Gerät offline war).
-                        if (item.reaction != existingById.reaction) {
+                        // Gnadenfrist: eine gerade erst lokal gesetzte eigene Reaktion nicht mit
+                        // einem evtl. veralteten Server-Snapshot überschreiben (Race mit dem WS-Call).
+                        if (item.reaction != existingById.reaction && !isReactionSyncSuppressed(item.id)) {
                             messageDao.setReactionByServerId(item.id, item.reaction)
                         }
                     } else {
@@ -11632,20 +11625,23 @@ class MainViewModel @Inject constructor(
                     groupName         = groupName
                 )
                 // App im Vordergrund: die In-App-Anruf-UI (incoming_call-Screen) zeigt den Anruf
-                // bereits im Vollbild an. Dann KEINE zusätzliche Heads-Up-Benachrichtigung posten –
-                // sonst erscheint erst der kleine Banner mit den zwei Buttons und ~1s später nochmal
-                // die Vollbild-UI (die vom Nutzer gemeldete Doppel-Benachrichtigung).
-                val kg = context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
-                val screenLocked = kg?.isKeyguardLocked == true
-                if (!_isAppInForeground.value && !_onlyFcmMode.value) {
-                    notificationHelper.showIncomingCallNotification(callerName, callType)
-                }
-                // Vollbild-Activity NUR bei gesperrtem Bildschirm selbst starten. Im entsperrten
-                // Hintergrund bleibt es beim Heads-Up-Banner mit Annehmen/Ablehnen-Buttons, das
-                // beim Wegklicken erneut per FCM erscheint – kein Vollbild-Hijack, der ~1s nach dem
-                // Banner über die gerade genutzte App poppt.
-                if (screenLocked) {
-                    IncomingCallActivity.startFromBackground(context)
+                // bereits im Vollbild an - dann weder Heads-Up-Banner noch separate Vollbild-
+                // Activity. Im Hintergrund entscheidet CallDisplayPolicy anhand von Bildschirm-/
+                // Sperrzustand GENAU EINE der beiden Darstellungen, nie beide gleichzeitig:
+                // Standby/gesperrt → kleiner Banner, Gerät aktiv in Benutzung (Bildschirm an
+                // und entsperrt) → direkt die Vollbild-Anruf-UI.
+                if (!_onlyFcmMode.value) {
+                    when (CallDisplayPolicy.decide(context, _isAppInForeground.value)) {
+                        CallDisplayPolicy.Mode.FULL_SCREEN -> {
+                            IncomingCallActivity.startFromBackground(context)
+                        }
+                        CallDisplayPolicy.Mode.SMALL -> {
+                            notificationHelper.showIncomingCallNotification(
+                                callerName, callType, useFullScreenIntent = false
+                            )
+                        }
+                        CallDisplayPolicy.Mode.NONE -> { /* In-App-UI zeigt den Anruf bereits */ }
+                    }
                 }
                 startRingtone()
                 // 60s-Timeout: eingehender Anruf der nicht angenommen wird → automatisch ablehnen
@@ -13199,8 +13195,8 @@ class MainViewModel @Inject constructor(
                 val serverId = local.messageId ?: return@forEach
                 val server = serverMap[serverId] ?: return@forEach
 
-                // Reaction synchronisieren
-                if (server.reaction != local.reaction) {
+                // Reaction synchronisieren (Gnadenfrist: s. isReactionSyncSuppressed)
+                if (server.reaction != local.reaction && !isReactionSyncSuppressed(serverId)) {
                     messageDao.setReactionByServerId(serverId, server.reaction)
                 }
                 // isEdited synchronisieren
@@ -13395,7 +13391,8 @@ class MainViewModel @Inject constructor(
                             messageDao.markDeliveredAsNotification(item.id)
                         }
                         // reaction + isEdited vom Server synchronisieren (können sich nach dem ersten Insert ändern)
-                        if (item.reaction != existingById.reaction) {
+                        // Gnadenfrist: s. isReactionSyncSuppressed – verhindert Race mit dem eigenen WS-Reaction-Call.
+                        if (item.reaction != existingById.reaction && !isReactionSyncSuppressed(item.id)) {
                             messageDao.setReactionByServerId(item.id, item.reaction)
                         }
                         if (item.isEdited && !existingById.isEdited) {
@@ -13915,11 +13912,30 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    /** Zeitstempel der letzten LOKAL (durch mich) gesetzten Reaktion pro Server-Nachrichten-ID.
+     *  Verhindert, dass ein knapp danach laufender Server-Abgleich (Chat öffnen, FCM-Nachlade,
+     *  Reconnect-Sync) die gerade gesetzte Reaktion mit einem veralteten Snapshot überschreibt,
+     *  bevor der WS-Reaction-Call beim Server committet war (Race: GET-Request kann dem noch
+     *  nicht verarbeiteten WS-Frame zuvorkommen). */
+    private val recentlyLocalReactionAt = mutableMapOf<String, Long>()
+    private val reactionSyncGraceMs = 8000L
+
+    /** True, wenn für diese Server-Nachrichten-ID innerhalb der Gnadenfrist eine eigene Reaktion
+     *  gesetzt wurde – der Aufrufer soll dann einen Server-Abgleich für genau diese Nachricht
+     *  überspringen, statt die frische lokale Reaktion zu überschreiben. */
+    private fun isReactionSyncSuppressed(messageId: String): Boolean {
+        val setAt = recentlyLocalReactionAt[messageId] ?: return false
+        val expired = System.currentTimeMillis() - setAt > reactionSyncGraceMs
+        if (expired) recentlyLocalReactionAt.remove(messageId)
+        return !expired
+    }
+
     /** Setzt oder entfernt eine Emoji-Reaktion auf eine Nachricht (lokal + WS-Relay an Partner). */
     fun sendReaction(messageId: String, chatPartnerId: String, localId: Long, emoji: String) {
         viewModelScope.launch {
             messageDao.setReactionByLocalId(localId, emoji)
             if (messageId.isNotBlank()) {
+                recentlyLocalReactionAt[messageId] = System.currentTimeMillis()
                 val isGroup = groupDao.getGroupById(chatPartnerId) != null
                 val payload = buildMap<String, Any> {
                     put("message_id", messageId)
