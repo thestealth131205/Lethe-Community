@@ -78,6 +78,8 @@ import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material.icons.filled.StopCircle
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.automirrored.filled.ScreenShare
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
@@ -912,7 +914,8 @@ fun ActiveVideoCallScreen(
     onToggleRecording: () -> Unit = {},
     zoomFactor: Float = 1f,
     onZoomIn: () -> Unit = {},
-    onZoomOut: () -> Unit = {}
+    onZoomOut: () -> Unit = {},
+    isVolumeTooLow: Boolean = false
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -1127,6 +1130,54 @@ fun ActiveVideoCallScreen(
                     color = Color(0xFFFF3B30).copy(alpha = recAlpha),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        // ── 4.1a-2 Warnung: Anruflautstärke auf Minimum/stumm, oben mittig ──
+        if (isVolumeTooLow) {
+            val volTransition = rememberInfiniteTransition(label = "volWarnBlink")
+            val volAlpha by volTransition.animateFloat(
+                initialValue = 1f,
+                targetValue = 0.35f,
+                animationSpec = infiniteRepeatable(tween(650), RepeatMode.Reverse),
+                label = "volAlpha"
+            )
+            val arrowOffset by volTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = -6f,
+                animationSpec = infiniteRepeatable(tween(650), RepeatMode.Reverse),
+                label = "volArrowBounce"
+            )
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(top = 8.dp)
+                    .background(Color(0xFFB71C1C).copy(alpha = 0.75f), shape = RoundedCornerShape(16.dp))
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.VolumeOff,
+                    contentDescription = "Lautstärke zu niedrig",
+                    tint = Color.White.copy(alpha = volAlpha),
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = "Lauter stellen",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Icon(
+                    Icons.Default.KeyboardArrowUp,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier
+                        .size(18.dp)
+                        .graphicsLayer { translationY = arrowOffset }
                 )
             }
         }
@@ -1751,6 +1802,7 @@ fun VideoCallScreen(
     val callState         by viewModel.callState.collectAsState()
     val eglCtx            by viewModel.webRtcEglBaseContext.collectAsState()
     val callStatusMessage by viewModel.callStatusMessage.collectAsState()
+    val isVolumeTooLow    by viewModel.isCallVolumeTooLow.collectAsState()
     val isFrontCamera          by viewModel.isUsingFrontCamera.collectAsState()
     val callZoomFactor        by viewModel.callZoomFactor.collectAsState()
     val virtualBackgroundMode by viewModel.virtualBackgroundMode.collectAsState()
@@ -1900,6 +1952,7 @@ fun VideoCallScreen(
             zoomFactor             = callZoomFactor,
             onZoomIn               = { viewModel.zoomCallIn() },
             onZoomOut              = { viewModel.zoomCallOut() },
+            isVolumeTooLow         = isVolumeTooLow,
             onToggleMute           = { viewModel.toggleCallMute() },
             onSwitchCamera         = { viewModel.switchCallCamera() },
             onToggleScreenShare    = onToggleScreenShare,

@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -96,6 +97,23 @@ class IncomingCallActivity : ComponentActivity() {
             IntentFilter(ACTION_CALL_CANCELLED),
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
+
+        // Versehentliches Wegdrücken (Zurück-Taste/-Geste) darf den Anruf NICHT stillschweigend
+        // verschwinden lassen: der Anruf bleibt bestehen (IncomingCallStore.pendingCall wird
+        // NICHT gelöscht), stattdessen wird auf die kompakte Benachrichtigung mit
+        // Annehmen/Ablehnen-Buttons zurückgewechselt, damit der Anruf weiter erreichbar bleibt.
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                IncomingCallStore.pendingCall?.let { pending ->
+                    NotificationHelper(applicationContext).showIncomingCallNotification(
+                        callerName = pending.callerName,
+                        callType = pending.callType,
+                        useFullScreenIntent = false
+                    )
+                }
+                finish()
+            }
+        })
 
         setContent {
             SecureChatTheme {

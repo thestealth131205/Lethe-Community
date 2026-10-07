@@ -57,6 +57,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Lock
@@ -3284,7 +3285,7 @@ class MainActivity : FragmentActivity() {
         super.onStop()
         lifecycleScope.launch {
             cacheManager.cleanOldMedia(daysOld = 7)
-            cacheManager.enforceMaxCacheSize(maxMb = 500)
+            cacheManager.enforceMaxCacheSize(maxMb = CacheMaintenanceWorker.CACHE_LIMIT_MB)
         }
     }
 

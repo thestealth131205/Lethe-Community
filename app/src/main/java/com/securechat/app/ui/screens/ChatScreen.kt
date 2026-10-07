@@ -127,6 +127,7 @@ import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Forward
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
@@ -5010,24 +5011,35 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
                             onValueChange = { newValue ->
                                 try {
                                     // Tabulator-Zeichen und problematische Unicode-Steuerzeichen
-                                    // sanitieren – Android's Text-Layout-Engine kann damit crashen
-                                    val sanitized = newValue.text
-                                        .replace("\r\n", "\n") // CRLF (Windows-Clipboard) → LF
-                                        .replace("\r", "\n")   // CR (altes Mac-Format) → LF
-                                        .replace("\t", "    ")
-                                        .replace("\u2028", "\n")  // Line Separator → Zeilenumbruch
-                                        .replace("\u2029", "\n")  // Paragraph Separator → Zeilenumbruch
-                                        .filter { c ->
-                                            (c.code >= 0x20 || c == '\n')
-                                            && c.code != 0xFFFC  // Object Replacement Character
-                                            && c.code != 0xFFFD  // Replacement Character
-                                            && c.code != 0xFFFE
-                                            && c.code != 0xFFFF
-                                            // BiDi-Steuerzeichen → crashen Android's Text-Layout-Engine
-                                            && c.code != 0x200E && c.code != 0x200F  // LRM / RLM
-                                            && c.code !in 0x202A..0x202E            // LRE/RLE/PDF/LRO/RLO
-                                            && c.code !in 0x2066..0x2069            // LRI/RLI/FSI/PDI
+                                    // sanitieren – Android's Text-Layout-Engine kann damit crashen.
+                                    // Einzelner Durchlauf statt 5x replace()+filter() über den ganzen
+                                    // String (bei jedem Tastendruck bis 10.000 Zeichen) – vermeidet
+                                    // mehrere volle String-Kopien pro Zeichen und den dadurch
+                                    // entstehenden GC-Druck, der beim Tippen zu Stockern führte.
+                                    val src = newValue.text
+                                    val sanitized = buildString(src.length) {
+                                        var i = 0
+                                        while (i < src.length) {
+                                            val c = src[i]
+                                            when {
+                                                c == '\r' -> {
+                                                    append('\n')
+                                                    if (i + 1 < src.length && src[i + 1] == '\n') i++
+                                                }
+                                                c == '\t' -> append("    ")
+                                                c == '\u2028' || c == '\u2029' -> append('\n')
+                                                c.code < 0x20 && c != '\n' -> { /* Steuerzeichen verwerfen */ }
+                                                c.code == 0xFFFC || c.code == 0xFFFD ||
+                                                c.code == 0xFFFE || c.code == 0xFFFF -> { /* verwerfen */ }
+                                                // BiDi-Steuerzeichen → crashen Android's Text-Layout-Engine
+                                                c.code == 0x200E || c.code == 0x200F -> { /* LRM/RLM verwerfen */ }
+                                                c.code in 0x202A..0x202E -> { /* LRE/RLE/PDF/LRO/RLO verwerfen */ }
+                                                c.code in 0x2066..0x2069 -> { /* LRI/RLI/FSI/PDI verwerfen */ }
+                                                else -> append(c)
+                                            }
+                                            i++
                                         }
+                                    }
                                     // Cursor-Position immer begrenzen – auch ohne Sanitierung
                                     // (einige IMEs liefern selection.end > text.length beim Einfügen)
                                     val clampedStart = newValue.selection.start.coerceIn(0, sanitized.length)
@@ -11226,6 +11238,9 @@ fun AudioMessagePlayer(
     // Gegenseitiges Stoppen: wenn eine andere Sprachnachricht abgespielt wird, diese pausieren
     val currentlyPlayingAudio by viewModel.currentlyPlayingAudioUrl.collectAsState()
 
+    // Warnung "zu leise" während der Wiedergabe dieser Sprachnachricht
+    val isMediaVolumeTooLow by viewModel.isMediaVolumeTooLow.collectAsState()
+
     // Auto-Start/Stop durch currentlyPlayingAudio-Signal
     LaunchedEffect(currentlyPlayingAudio, isPrepared) {
         when {
@@ -11614,13 +11629,38 @@ fun AudioMessagePlayer(
                 drawCircle(color = dotColor, radius = dotRadiusPx, center = Offset(dotX, centerY))
             }
 
-            // Gesamtdauer links
-            Text(
-                text = "%d:%02d".format(totalSec / 60, totalSec % 60),
-                fontSize = 10.sp,
-                color = metaColor,
-                modifier = Modifier.padding(top = 1.dp)
-            )
+            // Gesamtdauer links + "zu leise"-Warnung während der Wiedergabe
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "%d:%02d".format(totalSec / 60, totalSec % 60),
+                    fontSize = 10.sp,
+                    color = metaColor,
+                    modifier = Modifier.padding(top = 1.dp)
+                )
+                if (isPlaying && isMediaVolumeTooLow) {
+                    Spacer(Modifier.width(6.dp))
+                    val volTransition = rememberInfiniteTransition(label = "voiceMsgVolWarn")
+                    val volAlpha by volTransition.animateFloat(
+                        initialValue = 1f,
+                        targetValue = 0.35f,
+                        animationSpec = infiniteRepeatable(tween(650), RepeatMode.Reverse),
+                        label = "voiceMsgVolAlpha"
+                    )
+                    Icon(
+                        Icons.AutoMirrored.Filled.VolumeOff,
+                        contentDescription = "Lautstärke zu niedrig",
+                        tint = Color(0xFFD32F2F).copy(alpha = volAlpha),
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Spacer(Modifier.width(3.dp))
+                    Text(
+                        text = "Lauter stellen",
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFD32F2F).copy(alpha = volAlpha)
+                    )
+                }
+            }
         }
 
         Spacer(Modifier.width(8.dp))

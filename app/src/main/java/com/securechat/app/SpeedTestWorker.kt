@@ -160,15 +160,17 @@ object SpeedTestHelper {
 
     /**
      * Bestimmt die maximale Bildbreite basierend auf der Upload-Geschwindigkeit.
+     * Werte liegen bei 2/3 der ursprünglichen Breiten (um ein Drittel verkleinert),
+     * um den Speicherverbrauch im Chat-Medien-Cache zu senken.
      */
     fun getOptimalMaxWidth(speedMbps: Float): Int {
         return when {
-            speedMbps < 0f -> 1920  // Kein Messwert → Standard
-            speedMbps < 0.5f -> 800  // Sehr langsam
-            speedMbps < 1.0f -> 1024 // Langsam
-            speedMbps < 2.0f -> 1280 // Mäßig
-            speedMbps < 5.0f -> 1600 // Gut
-            else -> 1920             // Schnell
+            speedMbps < 0f -> 1280  // Kein Messwert → Standard
+            speedMbps < 0.5f -> 533  // Sehr langsam
+            speedMbps < 1.0f -> 683  // Langsam
+            speedMbps < 2.0f -> 853  // Mäßig
+            speedMbps < 5.0f -> 1067 // Gut
+            else -> 1280             // Schnell
         }
     }
 

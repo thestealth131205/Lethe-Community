@@ -13,6 +13,7 @@ import androidx.browser.customtabs.CustomTabsIntent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -80,6 +81,11 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.window.Dialog
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.Path as ComposePath
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import com.securechat.app.ui.OnboardingStep
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.ui.graphics.asImageBitmap
@@ -98,6 +104,57 @@ private fun generateQrBitmapCL(content: String, size: Int = 512): Bitmap? {
             bmp.setPixel(x, y, if (matrix[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
         bmp
     } catch (_: Exception) { null }
+}
+
+/**
+ * Zwei schnelle, jagged Blitze (oben → unten) kurz vor dem weißen Halloween-Flackern.
+ * [progress1]/[progress2] laufen 0f→1f während ihrer jeweiligen Animation; die Pfade werden per
+ * [seed] einmal pro Auslösung neu gewürfelt, damit jeder Blitz anders "einschlägt".
+ */
+@Composable
+private fun LightningBoltsOverlay(seed: Int, progress1: Float, progress2: Float, alpha: Float) {
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val w = size.width
+        val h = size.height
+        if (progress1 > 0f) {
+            drawLightningBolt(seed = seed * 2, xFraction = 0.28f, width = w, height = h, progress = progress1, alpha = alpha)
+        }
+        if (progress2 > 0f) {
+            drawLightningBolt(seed = seed * 2 + 1, xFraction = 0.68f, width = w, height = h, progress = progress2, alpha = alpha)
+        }
+    }
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawLightningBolt(
+    seed: Int,
+    xFraction: Float,
+    width: Float,
+    height: Float,
+    progress: Float,
+    alpha: Float
+) {
+    val rnd = kotlin.random.Random(seed)
+    val path = ComposePath()
+    var x = width * xFraction
+    path.moveTo(x, 0f)
+    val segments = 10
+    for (i in 1..segments) {
+        val y = height * i / segments
+        x += (rnd.nextFloat() - 0.5f) * width * 0.1f
+        path.lineTo(x, y)
+        // Gelegentlicher kurzer Seitenast für einen natürlicheren Blitz
+        if (rnd.nextFloat() < 0.3f) {
+            val branchX = x + (rnd.nextFloat() - 0.5f) * width * 0.15f
+            val branchY = y + height * 0.04f
+            path.moveTo(x, y)
+            path.lineTo(branchX, branchY)
+            path.moveTo(x, y)
+        }
+    }
+    clipRect(left = 0f, top = 0f, right = width, bottom = height * progress) {
+        drawPath(path = path, color = Color.White.copy(alpha = alpha * 0.35f), style = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round))
+        drawPath(path = path, color = Color.White.copy(alpha = alpha), style = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round))
+    }
 }
 
 /** Neon-Gelb für den Account-Zusatz eingemischter Kontakte anderer, nicht aktiver Accounts. */
@@ -320,22 +377,55 @@ fun ContactlistScreen(
         viewModel.loadAnimationState()
     }
 
-    // ── Halloween: gruseliges Blitzen (abdunkeln/aufhellen) bei jedem Öffnen ───
-    // Läuft bei jedem Composition-Eintritt von ContactlistScreen (App-Start + jede Rückkehr hierher).
-    // Ablauf über exakt 6 s: langsam abdunkeln → etwas aufhellen → ganz kurzer weißer Blitz → kurz
-    // nachdunkeln → langsam wieder auf 0 runterdimmen.
+    // ── Halloween: gruseliges Blitzen (abdunkeln/aufhellen) — nur alle 2-4 Öffnungen ───
+    // Läuft nicht mehr bei jedem Composition-Eintritt: ein lokaler Zähler in SharedPreferences
+    // entscheidet pro Öffnung, ob diesmal "dran" ist (zufällige Schwelle 2-4, danach neu gewürfelt),
+    // damit der Effekt nicht bei jedem Chatlisten-Aufruf nervt.
+    // Ablauf über exakt 6 s: langsam abdunkeln → etwas aufhellen → zwei blitzschnelle Blitze von
+    // oben nach unten → ganz kurzer weißer Blitz → kurz nachdunkeln → langsam wieder auf 0 runterdimmen.
     val halloweenBlackAlpha = remember { Animatable(0f) }
     val halloweenWhiteAlpha = remember { Animatable(0f) }
+    val lightning1Progress = remember { Animatable(0f) }
+    val lightning2Progress = remember { Animatable(0f) }
+    val lightningAlpha = remember { Animatable(0f) }
+    var lightningSeed by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) {
         val animation = snapshotFlow { eventAnimation }.filter { it != "none" }.first()
         if (animation == "halloween") {
-            halloweenBlackAlpha.animateTo(0.62f, tween(2200))
-            halloweenBlackAlpha.animateTo(0.30f, tween(900))
-            halloweenBlackAlpha.animateTo(0f, tween(120))
-            halloweenWhiteAlpha.animateTo(0.85f, tween(70))
-            halloweenWhiteAlpha.animateTo(0f, tween(90))
-            halloweenBlackAlpha.animateTo(0.30f, tween(500))
-            halloweenBlackAlpha.animateTo(0f, tween(2120))
+            val prefs = context.getSharedPreferences("lethe_app_prefs", Context.MODE_PRIVATE)
+            val count = prefs.getInt("halloween_anim_count", 0) + 1
+            val threshold = if (prefs.contains("halloween_anim_threshold")) {
+                prefs.getInt("halloween_anim_threshold", 3)
+            } else {
+                (2..4).random().also { prefs.edit().putInt("halloween_anim_threshold", it).apply() }
+            }
+            if (count < threshold) {
+                prefs.edit().putInt("halloween_anim_count", count).apply()
+            } else {
+                prefs.edit()
+                    .putInt("halloween_anim_count", 0)
+                    .putInt("halloween_anim_threshold", (2..4).random())
+                    .apply()
+                lightningSeed++
+                halloweenBlackAlpha.animateTo(0.62f, tween(2200))
+                halloweenBlackAlpha.animateTo(0.30f, tween(900))
+                halloweenBlackAlpha.animateTo(0f, tween(120))
+                // Zwei Blitze, extrem schnell und leicht versetzt (wie echte Blitze)
+                lightningAlpha.snapTo(1f)
+                launch { lightning1Progress.animateTo(1f, tween(70, easing = LinearEasing)) }
+                launch {
+                    delay(30)
+                    lightning2Progress.animateTo(1f, tween(55, easing = LinearEasing))
+                }
+                delay(100)
+                lightningAlpha.animateTo(0f, tween(50))
+                lightning1Progress.snapTo(0f)
+                lightning2Progress.snapTo(0f)
+                halloweenWhiteAlpha.animateTo(0.85f, tween(70))
+                halloweenWhiteAlpha.animateTo(0f, tween(90))
+                halloweenBlackAlpha.animateTo(0.30f, tween(500))
+                halloweenBlackAlpha.animateTo(0f, tween(2120))
+            }
         }
     }
 
@@ -2000,6 +2090,14 @@ fun ContactlistScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = halloweenBlackAlpha.value))
+        )
+    }
+    if (lightningAlpha.value > 0f) {
+        LightningBoltsOverlay(
+            seed = lightningSeed,
+            progress1 = lightning1Progress.value,
+            progress2 = lightning2Progress.value,
+            alpha = lightningAlpha.value
         )
     }
     if (halloweenWhiteAlpha.value > 0f) {

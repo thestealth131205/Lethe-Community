@@ -20,6 +20,7 @@ import androidx.media3.effect.RgbMatrix
 import androidx.media3.effect.TextureOverlay
 import com.google.common.collect.ImmutableList
 import androidx.media3.transformer.Composition
+import androidx.media3.transformer.DefaultEncoderFactory
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.EditedMediaItemSequence
 import androidx.media3.transformer.Effects
@@ -27,6 +28,7 @@ import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.ProgressHolder
 import androidx.media3.transformer.Transformer
+import androidx.media3.transformer.VideoEncoderSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
@@ -81,7 +83,9 @@ data class ColorAdjustments(
 }
 
 /**
- * Transkodiert Videos lokal auf dem Gerät zu H.264/AAC MP4, max 720p.
+ * Transkodiert Videos lokal auf dem Gerät zu H.264/AAC MP4, max 1080p, mit explizit
+ * gesetzter Ziel-Bitrate (leicht stärkere Kompression als Encoder-Standard, siehe
+ * [bitrateForHeight]) um den Chat-Medien-Cache klein zu halten.
  * Verwendet Jetpack Media3 Transformer (Hardware-beschleunigt via MediaCodec).
  * Läuft auf dem Haupt-Thread, blockiert diesen aber nicht (async via Listener).
  *
@@ -92,6 +96,28 @@ data class ColorAdjustments(
 object VideoTranscoder {
 
     private val transcodeMutex = Mutex()
+
+    /**
+     * Ziel-Bitrate je Ausgabehöhe – bewusst etwas unter dem, was der Encoder ohne
+     * Vorgabe wählen würde (leicht erhöhte Kompression), aber hoch genug, dass die
+     * Qualität gegenüber der Auflösung weiterhin im Vordergrund steht.
+     */
+    private fun bitrateForHeight(height: Int): Int = when {
+        height >= 1080 -> 6_000_000
+        height >= 720 -> 3_800_000
+        height >= 540 -> 2_200_000
+        height >= 480 -> 1_800_000
+        height >= 360 -> 1_000_000
+        else -> 700_000
+    }
+
+    @OptIn(UnstableApi::class)
+    private fun encoderFactory(context: Context, targetHeight: Int) =
+        DefaultEncoderFactory.Builder(context)
+            .setRequestedVideoEncoderSettings(
+                VideoEncoderSettings.Builder().setBitrate(bitrateForHeight(targetHeight)).build()
+            )
+            .build()
 
     /**
      * Erzeugt eine stille WAV-Datei der Länge [durationMs] (44.1 kHz, Stereo, 16-bit PCM).
@@ -307,7 +333,7 @@ object VideoTranscoder {
         context: Context,
         inputUri: Uri,
         outputFile: File,
-        targetHeight: Int = 720,
+        targetHeight: Int = 1080,
         colorAdjustments: ColorAdjustments? = null,
         onProgress: (Float) -> Unit = {}
     ): Boolean = transcodeMutex.withLock { withContext(Dispatchers.Main) {
@@ -335,6 +361,7 @@ object VideoTranscoder {
 
             transformer = Transformer.Builder(context)
                 .addListener(listener)
+                .setEncoderFactory(encoderFactory(context, targetHeight))
                 .build()
 
             // Ziel-Höhe (Standard 720p; Editor kann HD/4K anfordern, nie über Quellauflösung)
@@ -428,7 +455,10 @@ object VideoTranscoder {
                 }
             }
 
-            transformer = Transformer.Builder(context).addListener(listener).build()
+            transformer = Transformer.Builder(context)
+                .addListener(listener)
+                .setEncoderFactory(encoderFactory(context, targetHeight))
+                .build()
 
             // Video-Effekte: optional Farb-/Ton-Anpassung + Crop + Ziel-Höhe
             val videoEffects = mutableListOf<androidx.media3.common.Effect>()
@@ -592,7 +622,10 @@ object VideoTranscoder {
                 }
             }
 
-            transformer = Transformer.Builder(context).addListener(listener).build()
+            transformer = Transformer.Builder(context)
+                .addListener(listener)
+                .setEncoderFactory(encoderFactory(context, targetHeight))
+                .build()
 
             // Übergänge: Fade durch Schwarz. Übergang an Grenze b wird zur Hälfte am Ende
             // von Clip b (Ausblenden) und zur Hälfte am Anfang von Clip b+1 (Einblenden) gelegt.

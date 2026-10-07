@@ -13,6 +13,7 @@ import com.securechat.app.BuildConfig
 import dagger.hilt.android.HiltAndroidApp
 import org.webrtc.PeerConnectionFactory
 import timber.log.Timber
+import java.io.File
 import javax.inject.Inject
 
 @HiltAndroidApp
@@ -95,6 +96,8 @@ class SecureChatApplication : Application(), Configuration.Provider, ImageLoader
         }
         Timber.tag("LETHE_INIT").i("Lethe gestartet (debug=${BuildConfig.DEBUG})")
 
+        clearCacheOnceForNewVersion()
+
         // Cast-Discovery sofort starten, damit Geräte bereits gefunden sind
         castDiscoveryManager.startDiscovery()
 
@@ -106,6 +109,35 @@ class SecureChatApplication : Application(), Configuration.Provider, ImageLoader
                 .setEnableInternalTracer(false)
                 .createInitializationOptions()
         )
+    }
+
+    /**
+     * Löscht beim allerersten Start einer neuen App-Version einmalig den kompletten
+     * Medien- und Bild-Cache (media_cache, osmdroid-Kartenkacheln, Coil-Bildcache).
+     * Grund: angesammelter Cache aus Vorversionen soll nicht unbegrenzt weiterwachsen,
+     * ohne dass Bestandsnutzer dafür manuell etwas tun müssen. Läuft im Hintergrund,
+     * damit der App-Start nicht durch potenziell großen Cache (bis 300 MB) blockiert.
+     */
+    private fun clearCacheOnceForNewVersion() {
+        val prefs = getSharedPreferences("lethe_app_prefs", Context.MODE_PRIVATE)
+        val lastClearedVersionCode = prefs.getInt("cache_cleared_version_code", -1)
+        if (lastClearedVersionCode == BuildConfig.VERSION_CODE) return
+
+        Thread {
+            try {
+                File(filesDir, "media_cache").deleteRecursively()
+                File(filesDir, "osmdroid/tiles").deleteRecursively()
+                imageLoader.memoryCache?.clear()
+                imageLoader.diskCache?.clear()
+                Timber.tag("LETHE_CACHE").i(
+                    "Einmaliger Cache-Reset für Version ${BuildConfig.VERSION_CODE} abgeschlossen"
+                )
+            } catch (e: Exception) {
+                Timber.tag("LETHE_CACHE").e(e, "Einmaliger Cache-Reset fehlgeschlagen")
+            } finally {
+                prefs.edit().putInt("cache_cleared_version_code", BuildConfig.VERSION_CODE).apply()
+            }
+        }.start()
     }
 
     /** Release-Tree: unterdrückt alle Logs außer Fehler/Warnungen. */

@@ -82,6 +82,8 @@ import java.io.FileInputStream
 import kotlinx.coroutines.isActive
 import com.securechat.app.push.PushProvider
 import com.securechat.app.CallForegroundService
+import com.securechat.app.CallRingtonePlayer
+import com.securechat.app.CallDisplayPolicy
 import com.securechat.app.data.crypto.CryptoManager
 import com.securechat.app.data.webrtc.WebRtcClient
 import com.securechat.app.data.DeviceIdentifier
@@ -670,6 +672,19 @@ class MainViewModel @Inject constructor(
     private val _callStatusMessage = MutableStateFlow<String?>(null)
     val callStatusMessage: StateFlow<String?> = _callStatusMessage.asStateFlow()
 
+    /** true, wenn während eines laufenden Anrufs die Geräte-/Anruflautstärke auf Minimum oder stumm steht. */
+    private val _isCallVolumeTooLow = MutableStateFlow(false)
+    val isCallVolumeTooLow: StateFlow<Boolean> = _isCallVolumeTooLow.asStateFlow()
+
+    /**
+     * true, wenn die Medien-/Musiklautstärke (STREAM_MUSIC) auf Minimum oder stumm steht.
+     * Wird laufend aktualisiert (nicht an eine Aktion gebunden) – Konsumenten wie
+     * Sprachnachrichten-Player oder Status-Viewer zeigen die Warnung nur, solange sie
+     * selbst tatsächlich Ton wiedergeben.
+     */
+    private val _isMediaVolumeTooLow = MutableStateFlow(false)
+    val isMediaVolumeTooLow: StateFlow<Boolean> = _isMediaVolumeTooLow.asStateFlow()
+
     /** Eingehender Anruf (noch nicht angenommen), null wenn kein eingehender Anruf. */
     private val _incomingCall = MutableStateFlow<IncomingCallState?>(null)
     val incomingCall: StateFlow<IncomingCallState?> = _incomingCall.asStateFlow()
@@ -946,6 +961,7 @@ class MainViewModel @Inject constructor(
         }
         audioFocusManager.requestFocus()
         audioFocusManager.setCommunicationActive(true)
+        refreshCallVolumeTooLow()
         _callState.value = CallState.IDLE  // Reset in case we were in ENDED
         _activeCallType.value = callType
         // Tracking für "Keine Antwort"-Bubble: wir sind Anrufer, noch nicht verbunden
@@ -1005,6 +1021,7 @@ class MainViewModel @Inject constructor(
         primaryPeerLost = false
         audioFocusManager.requestFocus()
         audioFocusManager.setCommunicationActive(true)
+        refreshCallVolumeTooLow()
         stopRingtone()
         notificationHelper.cancelCallNotification()
         _incomingCall.value = null
@@ -2084,6 +2101,7 @@ class MainViewModel @Inject constructor(
         }
         audioFocusManager.abandonFocus()
         audioFocusManager.setCommunicationActive(false)
+        _isCallVolumeTooLow.value = false
         // Telefonmodus IMMER hart zurücksetzen – auch wenn dieser cleanupCall unten früh
         // zurückkehrt (webRtcClient bereits null) und WebRtcClient.dispose() den Modus nicht
         // mehr auf NORMAL setzt. Verhindert einen "hängenden" MODE_IN_COMMUNICATION, der Sounds
@@ -2355,12 +2373,12 @@ class MainViewModel @Inject constructor(
     private val _musicCoverCache = android.util.LruCache<String, android.graphics.Bitmap>(15)
 
     /** In-Memory-Cache für Titel + Artist (Key: URL). Wird bei Prefetch und Wiedergabe befüllt. */
-    private val _musicTitleArtistCache = HashMap<String, Pair<String?, String?>>()
+    private val _musicTitleArtistCache = android.util.LruCache<String, Pair<String?, String?>>(300)
     fun cacheMusicCover(url: String, bitmap: android.graphics.Bitmap?) {
         if (bitmap != null) _musicCoverCache.put(url, bitmap)
     }
     fun getCachedMusicCover(url: String): android.graphics.Bitmap? = _musicCoverCache.get(url)
-    fun getCachedTitleArtist(url: String): Pair<String?, String?>? = _musicTitleArtistCache[url]
+    fun getCachedTitleArtist(url: String): Pair<String?, String?>? = _musicTitleArtistCache.get(url)
 
     /**
      * Anzeige-Titel, wenn die Datei keinen ID3-Titel hat oder die Metadaten-Extraktion
@@ -2550,7 +2568,7 @@ class MainViewModel @Inject constructor(
         val uploadsUrl = url
             .replace(Regex("(https://letheapp\\.de)/m/(.+)$"), "$1/uploads/$2")
         val (cachedTitle, cachedArtist) =
-            _musicTitleArtistCache[url] ?: _musicTitleArtistCache[uploadsUrl] ?: Pair(null, null)
+            _musicTitleArtistCache.get(url) ?: _musicTitleArtistCache.get(uploadsUrl) ?: Pair(null, null)
         // Cover-URL: /mc/-Endpunkt benötigt immer /uploads/-Pfad als Basis
         val coverBase = if (uploadsUrl != url) uploadsUrl else url
         return castDiscoveryManager.buildMusicMetadata(
@@ -2717,10 +2735,10 @@ class MainViewModel @Inject constructor(
                     }
                     _musicTitle.value = if (!t.isNullOrBlank()) t else musicFallbackTitle(url)
                     if (!a.isNullOrBlank()) _musicArtist.value = a
-                    _musicTitleArtistCache[url] = Pair(
+                    _musicTitleArtistCache.put(url, Pair(
                         if (!t.isNullOrBlank()) t else null,
                         if (!a.isNullOrBlank()) a else null
-                    )
+                    ))
                     var coverPath: String? = null
                     if (art != null) {
                         val bm = decodeSampledBitmap(art)
@@ -2957,10 +2975,10 @@ class MainViewModel @Inject constructor(
                     }
                     _musicTitle.value = if (!title.isNullOrBlank()) title else musicFallbackTitle(url)
                     if (!artist.isNullOrBlank()) _musicArtist.value = artist
-                    _musicTitleArtistCache[url] = Pair(
+                    _musicTitleArtistCache.put(url, Pair(
                         if (!title.isNullOrBlank()) title else null,
                         if (!artist.isNullOrBlank()) artist else null
-                    )
+                    ))
                     if (bm != null) _musicCoverBitmap.value = bm
                     updateMediaSessionMetadata()
                     _musicNotificationManager?.invalidate()
@@ -2992,10 +3010,10 @@ class MainViewModel @Inject constructor(
 
                 _musicTitle.value = if (!t.isNullOrBlank()) t else musicFallbackTitle(url)
                 if (!a.isNullOrBlank()) _musicArtist.value = a
-                _musicTitleArtistCache[url] = Pair(
+                _musicTitleArtistCache.put(url, Pair(
                     if (!t.isNullOrBlank()) t else null,
                     if (!a.isNullOrBlank()) a else null
-                )
+                ))
 
                 var coverPath: String? = null
                 if (art != null) {
@@ -3115,7 +3133,7 @@ class MainViewModel @Inject constructor(
                         val bm = decodeSampledBitmapFromFile(cached.coverPath)
                         if (bm != null) _musicCoverCache.put(url, bm)
                     }
-                    _musicTitleArtistCache[url] = Pair(cached.title, cached.artist)
+                    _musicTitleArtistCache.put(url, Pair(cached.title, cached.artist))
                     continue
                 }
                 // Netzwerk-Laden (bevorzugt lokale Datei für zuverlässige Cover-Extraktion)
@@ -3142,7 +3160,7 @@ class MainViewModel @Inject constructor(
                     } finally {
                         retriever.release()
                     }
-                    _musicTitleArtistCache[url] = Pair(title, artist)
+                    _musicTitleArtistCache.put(url, Pair(title, artist))
                     var coverPath: String? = null
                     if (art != null) {
                         val bm = decodeSampledBitmap(art)
@@ -3877,7 +3895,10 @@ class MainViewModel @Inject constructor(
                 val url = msg.mediaUrl?.takeIf { it.isNotBlank() } ?: continue
                 _chatMediaUrls.add(url)
                 when (msg.mediaType) {
-                    "image" -> mediaCache.getForChat(url, chatId, "images")
+                    // Bilder werden NICHT mehr vorab in den MediaCache geladen: Coil cached sie
+                    // bereits beim Anzeigen (ImageLoader-Disk-Cache, 150 MB) – ein zusätzlicher
+                    // MediaCache-Eintrag wäre eine reine Dopplung derselben Datei auf der Platte.
+                    // Für den Galerie-Export lädt exportImageToPictures() bei Bedarf nach.
                     "audio" -> {
                         mediaCache.getForChat(url, chatId, "audio")
                         if (_waveformCache.get(url) == null) loadWaveformForUrl(url)
@@ -7676,6 +7697,48 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    /**
+     * BroadcastReceiver: beobachtet Lautstärkeänderungen während eines laufenden Anrufs.
+     * Reagiert nur auf den Anruf-Stream (STREAM_VOICE_CALL) und nur solange tatsächlich
+     * telefoniert wird, damit normale Musik-/Medienlautstärke-Änderungen keine Warnung auslösen.
+     */
+    private val volumeChangeReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(ctx: android.content.Context, intent: android.content.Intent) {
+            if (intent.action != "android.media.VOLUME_CHANGED_ACTION") return
+            val streamType = intent.getIntExtra("android.media.EXTRA_VOLUME_STREAM_TYPE", -1)
+            when (streamType) {
+                android.media.AudioManager.STREAM_VOICE_CALL -> {
+                    if (_callState.value in setOf(CallState.CALLING, CallState.RINGING, CallState.CONNECTED)) {
+                        refreshCallVolumeTooLow()
+                    }
+                }
+                android.media.AudioManager.STREAM_MUSIC -> refreshMediaVolumeTooLow()
+            }
+        }
+    }
+
+    /** Prüft die aktuelle Anruflautstärke und aktualisiert [isCallVolumeTooLow] entsprechend. */
+    private fun refreshCallVolumeTooLow() {
+        try {
+            val audioManager = context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+            val current = audioManager.getStreamVolume(android.media.AudioManager.STREAM_VOICE_CALL)
+            _isCallVolumeTooLow.value = current <= 1
+        } catch (_: Exception) {
+            // Lautstärke-Abfrage ist rein kosmetisch – bei Fehlern keine Warnung anzeigen.
+        }
+    }
+
+    /** Prüft die aktuelle Medienlautstärke (Sprachnachrichten, Status mit Ton) und aktualisiert [isMediaVolumeTooLow]. */
+    private fun refreshMediaVolumeTooLow() {
+        try {
+            val audioManager = context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+            val current = audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
+            _isMediaVolumeTooLow.value = current <= 1
+        } catch (_: Exception) {
+            // Lautstärke-Abfrage ist rein kosmetisch – bei Fehlern keine Warnung anzeigen.
+        }
+    }
+
     // --- ACCOUNT-SWITCHER ---
     private val _savedAccounts = MutableStateFlow<List<ProfileManager.SavedAccount>>(emptyList())
     /** Alle auf diesem Gerät gespeicherten Accounts. */
@@ -7703,6 +7766,11 @@ class MainViewModel @Inject constructor(
             addAction(android.content.Intent.ACTION_SCREEN_ON)
         }
         context.registerReceiver(screenStateReceiver, screenFilter)
+
+        // Lautstärke-Receiver für die Anruf-Warnung registrieren
+        val volumeFilter = android.content.IntentFilter("android.media.VOLUME_CHANGED_ACTION")
+        context.registerReceiver(volumeChangeReceiver, volumeFilter)
+        refreshMediaVolumeTooLow()
 
         // P2P DataChannel: eingehende Textnachrichten in Room DB speichern
         viewModelScope.launch {
@@ -14563,7 +14631,7 @@ class MainViewModel @Inject constructor(
                                 val srvArtist = body?.get("artist")?.takeIf { it.isNotBlank() }
                                 val srvCoverUrl = body?.get("cover_url")?.let { toAbsoluteUrl(it) }
                                 val srvDurMs = body?.get("duration")?.toDoubleOrNull()?.let { (it * 1000).toLong() } ?: 0L
-                                _musicTitleArtistCache[mediaUrl] = Pair(srvTitle, srvArtist)
+                                _musicTitleArtistCache.put(mediaUrl, Pair(srvTitle, srvArtist))
                                 var coverPath: String? = null
                                 if (srvCoverUrl != null) {
                                     val art = withContext(Dispatchers.IO) {
@@ -17235,13 +17303,9 @@ class MainViewModel @Inject constructor(
             val chatId = msg.chatId
             try {
                 when (msg.mediaType) {
-                    "image" -> {
-                        // Bereits in die Galerie verschobene Bilder nicht erneut laden (Datenvolumen).
-                        if (!mediaCache.isInPublicStore(url, false) &&
-                            !mediaCache.isCachedForChat(url, chatId, "images")) {
-                            mediaCache.getForChat(url, chatId, "images")
-                        }
-                    }
+                    // Bilder werden hier bewusst NICHT vorab gecacht (siehe preloadChatMedia) –
+                    // Coil übernimmt das Caching für die Anzeige, exportImageToPictures() lädt
+                    // für den Galerie-Export selbst nach. Vermeidet doppelte Dateien auf der Platte.
                     "audio" -> {
                         if (!mediaCache.isCachedForChat(url, chatId, "audio")) {
                             mediaCache.getForChat(url, chatId, "audio")
@@ -18928,7 +18992,7 @@ class MainViewModel @Inject constructor(
     /**
      * Liest EXIF-Orientierung, dreht das Bild, skaliert und komprimiert adaptiv
      * basierend auf der gemessenen Upload-Geschwindigkeit. Bei schnellem Netz/WLAN
-     * wird Standard-Qualität (82%, 1920px) verwendet, bei langsamem Mobilnetz
+     * wird Standard-Qualität (82%, 1280px) verwendet, bei langsamem Mobilnetz
      * wird stärker komprimiert.
      */
     private fun fixImageOrientation(file: File): File {
@@ -22023,6 +22087,7 @@ class MainViewModel @Inject constructor(
         // Nachrichten verloren gehen.
         FcmMessageBus.isViewModelActive = false
         context.unregisterReceiver(screenStateReceiver)
+        context.unregisterReceiver(volumeChangeReceiver)
         webSocketManager.disconnect()
         p2pMeshManager.stop()
         webRTCDataChannelManager.closeAll()

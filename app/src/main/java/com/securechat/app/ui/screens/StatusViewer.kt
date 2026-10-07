@@ -3,6 +3,10 @@
 package com.securechat.app.ui.screens
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -15,8 +19,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.TextSnippet
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -37,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.layout.ContentScale
@@ -75,6 +82,7 @@ fun StatusViewer(
     val currentUser by viewModel.currentUser.collectAsState()
     val statusViewers by viewModel.statusViewers.collectAsState()
     val likedStatusIds by viewModel.likedStatusIds.collectAsState()
+    val isMediaVolumeTooLow by viewModel.isMediaVolumeTooLow.collectAsState()
     var showViewersDialog by remember { mutableStateOf(false) }
     var showReplyInput by remember { mutableStateOf(false) }
     var replyText by remember { mutableStateOf(TextFieldValue("")) }
@@ -589,6 +597,56 @@ fun StatusViewer(
                         }
                     }
                 }
+            }
+        }
+
+        // ─── Warnung: Medienlautstärke auf Minimum/stumm, oben mittig ──────────
+        val statusHasSound = status.mediaType == "video" ||
+            status.mediaType == "audio" ||
+            (status.mediaType == "image" && !status.musicUrl.isNullOrBlank())
+        if (statusHasSound && isMediaVolumeTooLow) {
+            val volTransition = rememberInfiniteTransition(label = "statusVolWarnBlink")
+            val volAlpha by volTransition.animateFloat(
+                initialValue = 1f,
+                targetValue = 0.35f,
+                animationSpec = infiniteRepeatable(tween(650), RepeatMode.Reverse),
+                label = "statusVolAlpha"
+            )
+            val arrowOffset by volTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = -6f,
+                animationSpec = infiniteRepeatable(tween(650), RepeatMode.Reverse),
+                label = "statusVolArrowBounce"
+            )
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 100.dp)
+                    .background(Color(0xFFB71C1C).copy(alpha = 0.75f), shape = RoundedCornerShape(16.dp))
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.VolumeOff,
+                    contentDescription = "Lautstärke zu niedrig",
+                    tint = Color.White.copy(alpha = volAlpha),
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = "Lauter stellen",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Icon(
+                    Icons.Default.KeyboardArrowUp,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier
+                        .size(18.dp)
+                        .graphicsLayer { translationY = arrowOffset }
+                )
             }
         }
 

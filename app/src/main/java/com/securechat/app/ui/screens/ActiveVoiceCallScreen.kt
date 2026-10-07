@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CallEnd
 import androidx.compose.material.icons.filled.EmojiEmotions
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Person
@@ -35,6 +36,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -58,7 +60,8 @@ fun ActiveVoiceCallScreen(
     onToggleSpeakerphone: () -> Unit,
     onHangUp: () -> Unit,
     onSendEmoji: (CallEmoji) -> Unit = {},
-    remoteEmoji: CallEmoji? = null
+    remoteEmoji: CallEmoji? = null,
+    isVolumeTooLow: Boolean = false
 ) {
     val context = LocalContext.current
 
@@ -334,6 +337,54 @@ fun ActiveVoiceCallScreen(
                 onDismiss = {}
             )
         }
+
+        // ── Warnung: Anruflautstärke auf Minimum/stumm, oben mittig ──────────
+        if (isVolumeTooLow) {
+            val volTransition = rememberInfiniteTransition(label = "volWarnBlink")
+            val volAlpha by volTransition.animateFloat(
+                initialValue = 1f,
+                targetValue = 0.35f,
+                animationSpec = infiniteRepeatable(tween(650), RepeatMode.Reverse),
+                label = "volAlpha"
+            )
+            val arrowOffset by volTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = -6f,
+                animationSpec = infiniteRepeatable(tween(650), RepeatMode.Reverse),
+                label = "volArrowBounce"
+            )
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .systemBarsPadding()
+                    .padding(top = 8.dp)
+                    .background(Color(0xFFB71C1C).copy(alpha = 0.75f), shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.VolumeOff,
+                    contentDescription = "Lautstärke zu niedrig",
+                    tint = Color.White.copy(alpha = volAlpha),
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = "Lauter stellen",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Icon(
+                    Icons.Default.KeyboardArrowUp,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier
+                        .size(18.dp)
+                        .graphicsLayer { translationY = arrowOffset }
+                )
+            }
+        }
     }
 }
 
@@ -368,6 +419,7 @@ fun VoiceCallScreen(
     val isMuted               by viewModel.callIsMuted.collectAsState()
     val isSpeakerphone        by viewModel.isSpeakerphoneOn.collectAsState()
     val callStatusMsg         by viewModel.callStatusMessage.collectAsState()
+    val isVolumeTooLow        by viewModel.isCallVolumeTooLow.collectAsState()
     val incomingCallEmojiName by viewModel.incomingCallEmoji.collectAsState()
     val remoteEmoji = incomingCallEmojiName?.let { name ->
         CallEmoji.entries.firstOrNull { it.name == name }
@@ -398,7 +450,8 @@ fun VoiceCallScreen(
             onToggleSpeakerphone = { viewModel.toggleSpeakerphone() },
             onHangUp             = { viewModel.endCall() },
             onSendEmoji          = { emoji -> viewModel.sendCallEmoji(emoji.name) },
-            remoteEmoji          = remoteEmoji
+            remoteEmoji          = remoteEmoji,
+            isVolumeTooLow       = isVolumeTooLow
         )
 
         // Status-Overlay (Besetzt, Verbindungsabbruch)

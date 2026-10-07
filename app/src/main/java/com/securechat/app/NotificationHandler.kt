@@ -423,6 +423,14 @@ class NotificationHandler : Service() {
             reconnectRequest
         )
 
+        val cacheMaintenanceRequest = PeriodicWorkRequestBuilder<CacheMaintenanceWorker>(6, TimeUnit.HOURS)
+            .build()
+        wm.enqueueUniquePeriodicWork(
+            "cache_maintenance",
+            ExistingPeriodicWorkPolicy.KEEP,
+            cacheMaintenanceRequest
+        )
+
         Timber.tag("LETHE_BG").d("NotificationHandler: WorkManager-Jobs geplant")
     }
 
