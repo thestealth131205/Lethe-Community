@@ -470,6 +470,24 @@ interface ApiService {
     @POST("login/device-auth/{request_id}/deny")
     suspend fun denyDeviceAuthRequest(@Path("request_id") requestId: String): Response<Map<String, String>>
 
+    // NocTurn media:read-Kopplung — Freigabe-Anzeige/-Aktionen im Lethe Messenger.
+    // Bewusst getrennt von den Geräte-Authentifizierungs-Routen oben: liefert nur den schmalen
+    // Scope-Token, nie ein Login-Token/UMK-Zugriff.
+    @GET("nocturn/media/pair/{request_id}")
+    suspend fun getNocturnMediaGrant(@Path("request_id") requestId: String): Response<NocturnMediaGrantInfo>
+
+    @POST("nocturn/media/pair/{request_id}/approve")
+    suspend fun approveNocturnMediaGrant(@Path("request_id") requestId: String): Response<Map<String, String>>
+
+    @POST("nocturn/media/pair/{request_id}/deny")
+    suspend fun denyNocturnMediaGrant(@Path("request_id") requestId: String): Response<Map<String, String>>
+
+    @GET("nocturn/media/grants")
+    suspend fun listNocturnMediaGrants(): Response<List<NocturnMediaGrantSummary>>
+
+    @DELETE("nocturn/media/grants/{grant_id}")
+    suspend fun revokeNocturnMediaGrant(@Path("grant_id") grantId: String): Response<Map<String, String>>
+
     @POST("blocks/add")
     suspend fun blockUser(@Body request: BlockUserRequest): Response<Map<String, String>>
 

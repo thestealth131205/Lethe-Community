@@ -240,6 +240,18 @@ interface MessageDao {
     @Query("UPDATE messages SET reaction = :emoji WHERE localId = :localId")
     suspend fun setReactionByLocalId(localId: Long, emoji: String?)
 
+    /** Pinnt/löst eine Nachricht (per Server-ID) – für "Angepinnte Elemente". */
+    @Query("UPDATE messages SET isPinned = :pinned, pinnedAt = :pinnedAt WHERE messageId = :messageId")
+    suspend fun setPinnedByServerId(messageId: String, pinned: Boolean, pinnedAt: Long?): Int
+
+    /** Pinnt/löst eine Nachricht (per lokaler ID) – optimistisches Update beim Antippen. */
+    @Query("UPDATE messages SET isPinned = :pinned, pinnedAt = :pinnedAt WHERE localId = :localId")
+    suspend fun setPinnedByLocalId(localId: Long, pinned: Boolean, pinnedAt: Long?)
+
+    /** Alle angepinnten Elemente eines Chats, neueste Anpinnung zuerst. */
+    @Query("SELECT * FROM messages WHERE chatId = :chatId AND isPinned = 1 ORDER BY pinnedAt DESC")
+    fun getPinnedMessages(chatId: String): Flow<List<MessageEntity>>
+
     /** Alle ausstehenden eigenen Text-Nachrichten (deliveryStatus=0), die erneut gesendet werden sollen. */
     @Query("SELECT * FROM messages WHERE deliveryStatus = 0 AND senderId = :myId AND mediaType = 'text' AND clientMessageId IS NOT NULL")
     suspend fun getPendingOutgoingTextMessages(myId: String): List<MessageEntity>

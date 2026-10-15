@@ -930,6 +930,9 @@ fun ActiveVideoCallScreen(
         }
     }
 
+    // HDR-Wiedergabe für lokales + entferntes Videobild
+    HdrWindowEffect()
+
     // Auto-hide controls
     var controlsVisible by remember { mutableStateOf(true) }
     // Wird bei JEDER Bildschirmberührung erhöht → setzt den Auto-Hide-Timer zurück

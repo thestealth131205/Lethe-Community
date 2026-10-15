@@ -266,6 +266,9 @@ fun SparksFeedScreen(
         }
     }
 
+    // HDR-Wiedergabe während des Spark-Feeds
+    HdrWindowEffect()
+
     // Audio-Fokus beim Betreten des Spark-Feeds anfordern → pausiert Musik anderer Apps.
     // Delegiert an den zentralen AudioFocusManager in MainActivity.
     DisposableEffect(Unit) {

@@ -8,7 +8,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [UserEntity::class, ContactEntity::class, MessageEntity::class, StatusEntity::class, PollEntity::class, GroupEntity::class, GroupSenderKeyEntity::class, MusicMetadataEntity::class],
-    version = 40,
+    version = 41,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -351,6 +351,14 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE contacts ADD COLUMN imageUpdatedAt INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE `groups` ADD COLUMN imageCheckedAt INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE `groups` ADD COLUMN imageUpdatedAt INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        val MIGRATION_40_41 = object : Migration(40, 41) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Angepinnte Elemente (Links/Bilder/Videos/Sprachnachrichten/Dateien/Beiträge)
+                db.execSQL("ALTER TABLE messages ADD COLUMN isPinned INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE messages ADD COLUMN pinnedAt INTEGER")
             }
         }
     }

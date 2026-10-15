@@ -244,7 +244,7 @@ class MainActivity : FragmentActivity() {
                 // Normaler Benachrichtigungs-Deep-Link (chat_id / navigate_to)
                 val intentChatId = when (intentNavigateTo) {
                     "nearby_chat" -> intent.getStringExtra("match_id")
-                    "device_auth" -> intent.getStringExtra("request_id")
+                    "device_auth", "nocturn_media_grant" -> intent.getStringExtra("request_id")
                     else -> intent.getStringExtra("chat_id")
                 }
                 viewModel.setPendingDeepLink(
@@ -568,6 +568,16 @@ class MainActivity : FragmentActivity() {
                                 launchSingleTop = true
                             }
                             navController.navigate("device_auth/$chatId")
+                        }
+                        return@LaunchedEffect
+                    }
+                    if (navigateTo == "nocturn_media_grant") {
+                        if (chatId != null) {
+                            navController.navigate("contacts") {
+                                popUpTo("login") { inclusive = true }
+                                launchSingleTop = true
+                            }
+                            navController.navigate("nocturn_media_grant/$chatId")
                         }
                         return@LaunchedEffect
                     }
@@ -1534,6 +1544,15 @@ class MainActivity : FragmentActivity() {
                                 requestId = reqId,
                                 viewModel = viewModel,
                                 activity = this@MainActivity,
+                                onNavigateBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        composable("nocturn_media_grant/{requestId}") { backStack ->
+                            val reqId = backStack.arguments?.getString("requestId") ?: return@composable
+                            NocturnMediaGrantScreen(
+                                requestId = reqId,
+                                viewModel = viewModel,
                                 onNavigateBack = { navController.popBackStack() }
                             )
                         }
@@ -3041,7 +3060,7 @@ class MainActivity : FragmentActivity() {
         // Bei navigate_to="nearby_chat" wird match_id als chatId weitergegeben
         val newIntentChatId = when (newIntentNavigateTo) {
             "nearby_chat" -> intent.getStringExtra("match_id")
-            "device_auth" -> intent.getStringExtra("request_id")
+            "device_auth", "nocturn_media_grant" -> intent.getStringExtra("request_id")
             else -> intent.getStringExtra("chat_id")
         }
         viewModel.setPendingDeepLink(

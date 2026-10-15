@@ -657,6 +657,25 @@ data class DeviceAuthApproveRequest(
     @SerializedName("via_biometric") val viaBiometric: Boolean = false
 )
 
+// --- NocTurn media:read-Kopplung (schlanker Scope, kein Login/UMK-Zugriff) ---
+
+data class NocturnMediaGrantInfo(
+    val id: String,
+    @SerializedName("device_name") val deviceName: String?,
+    @SerializedName("ip_address") val ipAddress: String?,
+    @SerializedName("approx_location") val approxLocation: String?,
+    @SerializedName("created_at") val createdAt: String,
+    val status: String
+)
+
+data class NocturnMediaGrantSummary(
+    val id: String,
+    @SerializedName("device_name") val deviceName: String?,
+    val status: String,
+    @SerializedName("created_at") val createdAt: String,
+    @SerializedName("last_used_at") val lastUsedAt: String?
+)
+
 data class IncomingDeviceAuthRequest(
     @SerializedName("request_id") val requestId: String,
     @SerializedName("app_name") val appName: String,
@@ -923,7 +942,9 @@ data class MessageItemResponse(
     @SerializedName("sender_web_pub") val senderWebPub: String? = null,
     // Multi-Device Fan-Out: UUID des sendenden Linked-Device + Selbst-verschlüsselte Kopie
     @SerializedName("sender_device_id") val senderDeviceId: String? = null,
-    @SerializedName("self_content_blob") val selfContentBlob: String? = null
+    @SerializedName("self_content_blob") val selfContentBlob: String? = null,
+    @SerializedName("is_pinned") val isPinned: Boolean = false,
+    @SerializedName("pinned_at") val pinnedAt: String? = null
 )
 
 // --- SYNC (leichtgewichtiger Nachrichten-Abgleich ohne Blobs) ---
@@ -936,7 +957,9 @@ data class SyncMessageItem(
     @SerializedName("is_delivered") val isDelivered: Boolean = false,
     @SerializedName("is_read") val isRead: Boolean = false,
     val reaction: String? = null,
-    @SerializedName("is_edited") val isEdited: Boolean = false
+    @SerializedName("is_edited") val isEdited: Boolean = false,
+    @SerializedName("is_pinned") val isPinned: Boolean = false,
+    @SerializedName("pinned_at") val pinnedAt: String? = null
 )
 
 // --- GRUPPEN ---

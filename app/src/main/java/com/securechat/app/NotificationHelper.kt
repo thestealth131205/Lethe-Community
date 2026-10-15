@@ -60,6 +60,7 @@ class NotificationHelper @Inject constructor(
 
         // Geräte-Authentifizierung (neues Gerät möchte sich per Messenger anmelden)
         const val CHANNEL_ID_DEVICE_AUTH = "lethe_device_auth"
+        const val CHANNEL_ID_NOCTURN_MEDIA = "lethe_nocturn_media"
 
         // Kategorie: Nearby (Likes, Matches, Nachrichten)
         const val CHANNEL_ID_NEARBY = "lethe_nearby"
@@ -180,6 +181,15 @@ class NotificationHelper @Inject constructor(
             }
         )
 
+        // NocTurn-Medienzugriff – Wecker-App fragt media:read-Kopplung an (kein Login/UMK)
+        manager.createNotificationChannel(
+            NotificationChannel(CHANNEL_ID_NOCTURN_MEDIA, "NocTurn-Medienzugriff", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Anfragen von NocTurn (Wecker-App), Weckertöne aus deiner Musikbibliothek lesen zu dürfen"
+                enableVibration(true)
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+            }
+        )
+
         // Nearby – Likes, Matches, Nachrichten
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL_ID_NEARBY, "Nearby", NotificationManager.IMPORTANCE_HIGH).apply {
@@ -278,6 +288,34 @@ class NotificationHelper @Inject constructor(
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Neues Gerät anmelden")
             .setContentText("${deviceName ?: appName} möchte sich an deinem Konto anmelden.")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(NOTIFICATION_ID_BASE + requestId.hashCode(), notification)
+    }
+
+    /**
+     * Zeigt eine Benachrichtigung, wenn NocTurn (Wecker-App) eine media:read-Kopplung anfragt
+     * (nur Lesezugriff auf die Musikbibliothek für Weckertöne, kein Login/UMK-Zugriff).
+     */
+    fun showNocturnMediaGrantNotification(appName: String, requestId: String) {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("navigate_to", "nocturn_media_grant")
+            putExtra("request_id", requestId)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context, requestId.hashCode(), intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID_NOCTURN_MEDIA)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("Wecker-Sound-Bibliothek freigeben?")
+            .setContentText("$appName möchte Weckertöne aus deiner Musikbibliothek lesen dürfen.")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)

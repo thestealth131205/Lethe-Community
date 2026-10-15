@@ -24,6 +24,27 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.198",
+            title = "HDR-Unterstützung & Absturz-Fix",
+            items = listOf(
+                "Bilder und Videos werden jetzt in HDR angezeigt, sofern Gerät und Bildschirm das unterstützen – im Vollbildmodus im Chat, bei Videoanrufen, Livestreams und im Sparks-Feed",
+                "Angepinnte Bilder in der Übersicht 'Angepinnte Elemente' luden das Originalfoto ungekürzt in den Speicher – behoben, das konnte bei großen Fotos zu einem Absturz durch Speichermangel führen",
+            ),
+            shortSummary = "HDR bei Bildern/Videos, Videoanrufen, Livestreams & Sparks; Absturz-Fix bei angepinnten Bildern"
+        ),
+
+        ChangelogEntry(
+            version = "10.4.197",
+            title = "Angepinnte Elemente & Reaktionen in Einzelchats",
+            items = listOf(
+                "Links, Bilder, Videos, Sprachnachrichten, Dateien und Beiträge können jetzt in jedem Chat angepinnt werden – im Auswahlmenü einer Nachricht erscheint 'Anpinnen'/'Lösen'. Über das 3-Punkte-Menü ('Angepinnte Elemente') gibt es eine Übersicht mit Vorschau (Bild/Video klein mit Vollbild-Tipp, Sprachnachricht direkt abspielbar), ein Tipp springt zur Stelle im Chat",
+                "Reaktionen (Emojis) auf Nachrichten funktionieren in Einzelchats jetzt genauso wie in Gruppen – mit korrekten Zählern bei mehreren Reaktionen, statt nur einer einzelnen überschriebenen Reaktion",
+                "Antworten direkt aus einer Benachrichtigung wurde zuverlässiger: War Lethe lange nicht geöffnet, kam die Antwort bisher erst beim nächsten App-Start an – jetzt wird sie sofort verschickt",
+            ),
+            shortSummary = "Angepinnte Elemente in Chats, Reaktions-Zähler auch in Einzelchats, Antwort aus Benachrichtigung zuverlässiger"
+        ),
+
+        ChangelogEntry(
             version = "10.4.196",
             title = "Anruf-Benachrichtigungen & Lautstärke-Warnung",
             items = listOf(
@@ -42,26 +63,6 @@ object AppChangelog {
                 "Nach diesem Update wird der Medien-Zwischenspeicher der App einmalig automatisch geleert, damit alte, unkomprimierte Dateien nicht unnötig Platz belegen",
             ),
             shortSummary = "Kleinere Bilder/Videos beim Senden, einmaliger Cache-Reset nach Update"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.194",
-            title = "Cache-Verwaltung optimiert",
-            items = listOf(
-                "Bilder wurden beim Laden im Chat doppelt zwischengespeichert – das belegte bei mehreren aktiven Chats unnötig viel Speicherplatz, jetzt nur noch einmal",
-                "Der Zwischenspeicher für Medien wird jetzt automatisch alle 6 Stunden aufgeräumt statt nur beim Schließen der App, und das Limit wurde von 500 MB auf 300 MB reduziert",
-            ),
-            shortSummary = "Speicherplatzbedarf des Medien-Caches deutlich reduziert"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.193",
-            title = "Chat-Eingabe & Speicherverbrauch verbessert",
-            items = listOf(
-                "Beim Tippen längerer Nachrichten im Chat konnte das Textfeld spürbar stocken – die Eingabe reagiert jetzt wieder sofort",
-                "Speicherverbrauch im Hintergrund reduziert, der bei langer Nutzung des Messengers zu Abstürzen führen konnte",
-            ),
-            shortSummary = "Chat-Eingabe-Stocken behoben, Speicherverbrauch reduziert"
         ),
 
     )

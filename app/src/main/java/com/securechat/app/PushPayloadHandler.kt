@@ -366,6 +366,14 @@ class PushPayloadHandler @Inject constructor(
                 notificationHelper.showDeviceAuthRequestNotification(appName, deviceName, requestId)
             }
 
+            "nocturn_media_grant_request" -> {
+                // Bewusst eigener Typ/eigene Anzeige statt device_auth_request: hier wird nur ein
+                // schmaler media:read-Scope für NocTurn freigegeben, kein Login-/UMK-Zugriff.
+                val appName   = data["app_name"] ?: "NocTurn Wecker"
+                val requestId = data["request_id"] ?: return
+                notificationHelper.showNocturnMediaGrantNotification(appName, requestId)
+            }
+
             "nearby_message" -> {
                 val senderName = data["sender_name"] ?: "Nearby"
                 val text       = data["text"] ?: "[Bild]"

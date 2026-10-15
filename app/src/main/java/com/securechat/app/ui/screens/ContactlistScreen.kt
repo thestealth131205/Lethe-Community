@@ -3616,15 +3616,21 @@ private fun generateAndSaveHalloweenCard(context: android.content.Context, usern
         }
         canvas.drawText("Happy Halloween!", w / 2f, 1040f, titlePaint)
 
-        // Wunschtext
+        // Wunschtext (Schriftgröße wird verkleinert, falls die Zeile sonst über den Bildrand hinausragen würde)
         val bodyPaint = AndroidPaint().apply {
             isAntiAlias = true
             textSize = 52f
             color = android.graphics.Color.parseColor("#E0E0E0")
             textAlign = AndroidPaint.Align.CENTER
         }
-        canvas.drawText("Lass dich von den Kürbissen nicht erschrecken –", w / 2f, 1100f, bodyPaint)
-        canvas.drawText("Süßes oder Saures! 🍬", w / 2f, 1160f, bodyPaint)
+        val bodyLine1 = "Lass dich von den Kürbissen nicht erschrecken –"
+        val bodyLine2 = "Süßes oder Saures! 🍬"
+        val maxBodyWidth = w - 120f
+        while (bodyPaint.textSize > 28f && (bodyPaint.measureText(bodyLine1) > maxBodyWidth || bodyPaint.measureText(bodyLine2) > maxBodyWidth)) {
+            bodyPaint.textSize -= 2f
+        }
+        canvas.drawText(bodyLine1, w / 2f, 1100f, bodyPaint)
+        canvas.drawText(bodyLine2, w / 2f, 1160f, bodyPaint)
 
         // Trennlinie
         val linePaint = AndroidPaint().apply {

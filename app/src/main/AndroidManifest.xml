@@ -395,6 +395,13 @@
                 <data android:mimeType="application/octet-stream" />
             </intent-filter>
 
+            <!-- Kalenderdateien teilen (.ics, z. B. aus NocTurn "Kalender teilen") -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/calendar" />
+            </intent-filter>
+
             <!-- Mehrere Dateien auf einmal teilen -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND_MULTIPLE" />

@@ -129,7 +129,9 @@ data class MessageEntity(
     val senderDeviceId: String? = null,    // UUID des sendenden Linked-Device (null = primäres Android)
     val replyToMessageId: String? = null,  // Server-ID der zitierten Nachricht (für Scroll-to-Quote)
     val isP2pDelivered: Boolean = false,   // Nachricht wurde direkt per WebRTC DataChannel (P2P) übertragen
-    val backedUp: Boolean = false          // Opt-in Chat-Backup: Klartext wurde bereits via "backup_store" gesichert (Dedup)
+    val backedUp: Boolean = false,         // Opt-in Chat-Backup: Klartext wurde bereits via "backup_store" gesichert (Dedup)
+    val isPinned: Boolean = false,         // Im Chat angepinnt (Link/Bild/Video/Sprachnachricht/Datei/Beitrag)
+    val pinnedAt: Long? = null             // Zeitpunkt des Anpinnens (für Sortierung in "Angepinnte Elemente")
 )
 
 @Entity(tableName = "groups")

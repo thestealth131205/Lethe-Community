@@ -31,6 +31,7 @@ import com.securechat.app.R
 import com.securechat.app.data.network.DeviceListItem
 import com.securechat.app.data.network.KnownDeviceItem
 import com.securechat.app.data.network.LinkedDevice
+import com.securechat.app.data.network.NocturnMediaGrantSummary
 import com.securechat.app.ui.MainViewModel
 import com.securechat.app.ui.theme.topBarTitleColor
 import java.time.Instant
@@ -46,6 +47,7 @@ fun DevicesScreen(
     val devices by viewModel.linkedDevices.collectAsState()
     val enrolledDevices by viewModel.enrolledDevices.collectAsState()
     val knownDevices by viewModel.knownDevices.collectAsState()
+    val nocturnMediaGrants by viewModel.nocturnMediaGrants.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
     val context = LocalContext.current
 
@@ -60,6 +62,7 @@ fun DevicesScreen(
         viewModel.loadLinkedDevices()
         viewModel.loadEnrolledDevices()
         viewModel.loadKnownDevices()
+        viewModel.loadNocturnMediaGrants()
     }
 
     Scaffold(
@@ -196,7 +199,7 @@ fun DevicesScreen(
             }
 
             // Geräteliste
-            if (devices.isEmpty() && enrolledDevices.isEmpty() && knownDevices.isEmpty()) {
+            if (devices.isEmpty() && enrolledDevices.isEmpty() && knownDevices.isEmpty() && nocturnMediaGrants.isEmpty()) {
                 DevicesEmptyState()
             } else {
                 LazyColumn(
@@ -263,8 +266,105 @@ fun DevicesScreen(
                         }
                     }
 
+                    // NocTurn media:read-Kopplungen (nur Lesezugriff auf Musikbibliothek, kein UMK)
+                    if (nocturnMediaGrants.isNotEmpty()) {
+                        item {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "NocTurn-Wecker (${nocturnMediaGrants.size})",
+                                modifier = Modifier.padding(vertical = 4.dp),
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        items(nocturnMediaGrants, key = { "nocturn_media_${it.id}" }) { grant ->
+                            NocturnMediaGrantItemCard(
+                                grant = grant,
+                                onRemove = { viewModel.removeNocturnMediaGrant(grant.id) }
+                            )
+                        }
+                    }
+
                     item { Spacer(Modifier.height(16.dp)) }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun NocturnMediaGrantItemCard(grant: NocturnMediaGrantSummary, onRemove: () -> Unit) {
+    var showConfirm by remember { mutableStateOf(false) }
+
+    if (showConfirm) {
+        AlertDialog(
+            onDismissRequest = { showConfirm = false },
+            title = { Text("Zugriff widerrufen?") },
+            text = { Text("${grant.deviceName ?: "NocTurn"} verliert sofort den Lesezugriff auf deine Musikbibliothek.") },
+            confirmButton = {
+                Button(
+                    onClick = { showConfirm = false; onRemove() },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text(stringResource(R.string.devices_disconnect_confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirm = false }) { Text(stringResource(R.string.devices_disconnect_cancel)) }
+            }
+        )
+    }
+
+    Card(
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(2.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MaterialTheme.colorScheme.secondaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.LibraryMusic,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    grant.deviceName ?: "NocTurn Wecker",
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    buildString {
+                        append("Nur Lesezugriff auf Musikbibliothek · Verbunden: ${formatDeviceDate(grant.createdAt)}")
+                        grant.lastUsedAt?.let { append(" · Zuletzt: ${formatDeviceDate(it)}") }
+                    },
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            IconButton(onClick = { showConfirm = true }) {
+                Icon(
+                    Icons.Default.LinkOff,
+                    contentDescription = stringResource(R.string.devices_disconnect_button),
+                    tint = MaterialTheme.colorScheme.error
+                )
             }
         }
     }

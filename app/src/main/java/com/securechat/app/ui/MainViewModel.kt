@@ -10372,7 +10372,12 @@ class MainViewModel @Inject constructor(
                                     replyToMediaType = item.replyToMediaType,
                                     replyToMessageId = item.replyToMessageId,
                                     deliveryStatus = groupDeliveryStatus,
-                                    reaction = item.reaction
+                                    reaction = item.reaction,
+                                    isPinned = item.isPinned,
+                                    pinnedAt = item.pinnedAt?.let {
+                                        try { java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US).parse(it)?.time }
+                                        catch (e: Exception) { null }
+                                    }
                                 )
                             )
                             if (item.mediaType == "text") {
@@ -12083,12 +12088,13 @@ class MainViewModel @Inject constructor(
 
             // ─── Emoji-Reaktion ────────────────────────────────────────────────
 
-            // Emoji-Reaktion auf eine Nachricht vom Chat-Partner empfangen
+            // Emoji-Reaktion auf eine Nachricht vom Chat-Partner empfangen (1:1 und Gruppe
+            // liefern inzwischen beide eine vollständige JSON-Map {emoji:[uid,...]} mit Zählern)
             "reaction" -> {
                 val payload = msg.payload as? Map<*, *> ?: return
                 val messageId = payload["message_id"] as? String ?: return
                 val emoji = payload["emoji"] as? String
-                // Für Gruppen-Nachrichten kommt die vollständige JSON-Map mit
+                val groupId = payload["group_id"] as? String
                 val reactionsJson = payload["reactions_json"] as? String
                 val senderId = msg.senderId ?: return
                 val reactionValue = reactionsJson ?: emoji
@@ -12099,8 +12105,17 @@ class MainViewModel @Inject constructor(
                 }
                 // Benachrichtigung an den Nachrichten-Ersteller (auch ohne FCM), wenn jemand
                 // auf eine EIGENE 1:1-Nachricht neu reagiert hat (nicht beim Entfernen/eigenem Mirror).
+                // "Hinzugefügt" statt "entfernt" wird anhand der JSON-Map erkannt: Reaktor-ID muss
+                // nach dem Toggle in der Liste des Emojis stehen.
                 val myUid = _currentUser.value?.userId
-                if (reactionsJson == null && !emoji.isNullOrBlank() && senderId != myUid && !_onlyFcmMode.value) {
+                val wasAdded = if (!reactionsJson.isNullOrBlank() && !emoji.isNullOrBlank()) {
+                    try {
+                        val type = object : com.google.gson.reflect.TypeToken<Map<String, List<String>>>() {}.type
+                        val map: Map<String, List<String>> = com.google.gson.Gson().fromJson(reactionsJson, type)
+                        map[emoji]?.contains(senderId) == true
+                    } catch (e: Exception) { true }
+                } else !emoji.isNullOrBlank()
+                if (groupId == null && wasAdded && senderId != myUid && !_onlyFcmMode.value && !emoji.isNullOrBlank()) {
                     val reacted = messageDao.getMessageById(messageId)
                     if (reacted != null && reacted.senderId == myUid) {
                         val reactorContact = contactDao.getContactById(senderId)
@@ -12117,10 +12132,26 @@ class MainViewModel @Inject constructor(
                             "poll"  -> "deine Umfrage"
                             else    -> "deine Nachricht"
                         }
-                        notificationHelper.showReactionNotification(reactorName, emoji, senderId, target)
+                        notificationHelper.showReactionNotification(reactorName, emoji!!, senderId, target)
                     }
                 }
                 Timber.tag("LETHE_WS").d("Reaktion empfangen: $emoji auf $messageId (updated=$updated)")
+            }
+
+            // Nachricht/Element wurde an- oder abgepinnt (1:1 oder Gruppe, auch eigene andere Geräte)
+            "pin_message" -> {
+                val payload = msg.payload as? Map<*, *> ?: return
+                val messageId = payload["message_id"] as? String ?: return
+                val pinned = payload["pinned"] as? Boolean ?: true
+                val pinnedAtRaw = payload["pinned_at"] as? String
+                val pinnedAtMillis = if (pinned) {
+                    pinnedAtRaw?.let {
+                        try { java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US).parse(it)?.time }
+                        catch (e: Exception) { System.currentTimeMillis() }
+                    } ?: System.currentTimeMillis()
+                } else null
+                messageDao.setPinnedByServerId(messageId, pinned, pinnedAtMillis)
+                Timber.tag("LETHE_WS").d("Pin-Status empfangen: $messageId pinned=$pinned")
             }
 
             // Eine Nachricht wurde vom Sender für alle gelöscht (1:1 oder Gruppe) oder auf einem
@@ -13267,6 +13298,14 @@ class MainViewModel @Inject constructor(
                 if (server.reaction != local.reaction && !isReactionSyncSuppressed(serverId)) {
                     messageDao.setReactionByServerId(serverId, server.reaction)
                 }
+                // Pin-Status synchronisieren (z.B. von einem anderen eigenen Gerät angepinnt)
+                if (server.isPinned != local.isPinned) {
+                    val pinnedAtMillis = server.pinnedAt?.let {
+                        try { java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US).parse(it)?.time }
+                        catch (e: Exception) { null }
+                    }
+                    messageDao.setPinnedByServerId(serverId, server.isPinned, pinnedAtMillis)
+                }
                 // isEdited synchronisieren
                 if (server.isEdited && !local.isEdited) {
                     val editedBlob = server.contentBlob ?: local.content ?: ""
@@ -13612,7 +13651,12 @@ class MainViewModel @Inject constructor(
                             reaction = item.reaction,
                             isEdited = item.isEdited,
                             senderDeviceId = item.senderDeviceId,
-                            deliveryStatus = computedDeliveryStatus
+                            deliveryStatus = computedDeliveryStatus,
+                            isPinned = item.isPinned,
+                            pinnedAt = item.pinnedAt?.let {
+                                try { java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US).parse(it)?.time }
+                                catch (e: Exception) { null }
+                            }
                         )
                     )
                 }
@@ -14001,7 +14045,13 @@ class MainViewModel @Inject constructor(
     /** Setzt oder entfernt eine Emoji-Reaktion auf eine Nachricht (lokal + WS-Relay an Partner). */
     fun sendReaction(messageId: String, chatPartnerId: String, localId: Long, emoji: String) {
         viewModelScope.launch {
-            messageDao.setReactionByLocalId(localId, emoji)
+            val myUid = _currentUser.value?.userId ?: ""
+            // Lokal optimistisch dieselbe Toggle-Logik wie der Server anwenden (JSON-Map
+            // {emoji:[uid,...]}) – damit zeigen 1:1- UND Gruppen-Chats sofort korrekte Zähler
+            // statt eines rohen Einzel-Emojis, das die Server-Antwort erst später korrigiert.
+            val current = messageDao.getMessageByLocalId(localId)?.reaction
+            val newReaction = toggleReactionJson(current, myUid, emoji)
+            messageDao.setReactionByLocalId(localId, newReaction)
             if (messageId.isNotBlank()) {
                 recentlyLocalReactionAt[messageId] = System.currentTimeMillis()
                 val isGroup = groupDao.getGroupById(chatPartnerId) != null
@@ -14013,6 +14063,39 @@ class MainViewModel @Inject constructor(
                 webSocketManager.sendMessage("reaction", chatPartnerId, payload)
             }
             Timber.tag("LETHE_WS").d("Reaktion gesendet: $emoji auf $messageId an $chatPartnerId")
+        }
+    }
+
+    /** Toggelt den eigenen Eintrag in der Reaktions-JSON-Map {emoji:[uid,...]} (analog zum Server). */
+    private fun toggleReactionJson(current: String?, userId: String, emoji: String): String? {
+        val map: MutableMap<String, MutableList<String>> =
+            if (!current.isNullOrBlank() && current.trimStart().startsWith("{")) {
+                try {
+                    val type = object : com.google.gson.reflect.TypeToken<MutableMap<String, MutableList<String>>>() {}.type
+                    com.google.gson.Gson().fromJson(current, type) ?: mutableMapOf()
+                } catch (e: Exception) { mutableMapOf() }
+            } else mutableMapOf()
+        val users = map.getOrPut(emoji) { mutableListOf() }
+        if (users.contains(userId)) users.remove(userId) else users.add(userId)
+        if (users.isEmpty()) map.remove(emoji) else map[emoji] = users
+        return if (map.isEmpty()) null else com.google.gson.Gson().toJson(map)
+    }
+
+    /** Pinnt/löst ein Element (Link/Bild/Video/Sprachnachricht/Datei/Beitrag) in einem Chat an. */
+    fun setMessagePinned(messageId: String, chatPartnerId: String, localId: Long, pinned: Boolean) {
+        viewModelScope.launch {
+            val pinnedAt = if (pinned) System.currentTimeMillis() else null
+            messageDao.setPinnedByLocalId(localId, pinned, pinnedAt)
+            if (messageId.isNotBlank()) {
+                val isGroup = groupDao.getGroupById(chatPartnerId) != null
+                val payload = buildMap<String, Any> {
+                    put("message_id", messageId)
+                    put("pinned", pinned)
+                    if (isGroup) put("group_id", chatPartnerId)
+                }
+                webSocketManager.sendMessage("pin_message", chatPartnerId, payload)
+            }
+            Timber.tag("LETHE_WS").d("Pin gesendet: $messageId pinned=$pinned an $chatPartnerId")
         }
     }
 
@@ -16404,6 +16487,25 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    private val _nocturnMediaGrants = MutableStateFlow<List<NocturnMediaGrantSummary>>(emptyList())
+    val nocturnMediaGrants: StateFlow<List<NocturnMediaGrantSummary>> = _nocturnMediaGrants.asStateFlow()
+
+    fun loadNocturnMediaGrants() {
+        viewModelScope.launch {
+            _nocturnMediaGrants.value = fetchNocturnMediaGrants().filter { it.status == "approved" }
+        }
+    }
+
+    fun removeNocturnMediaGrant(grantId: String) {
+        revokeNocturnMediaGrant(grantId) { ok ->
+            if (ok) {
+                _nocturnMediaGrants.value = _nocturnMediaGrants.value.filter { it.id != grantId }
+            } else {
+                _statusMessage.value = "Kopplung konnte nicht widerrufen werden."
+            }
+        }
+    }
+
     // ──────────────────────────────────────────────────────────────────────────
     // UMK – Initialisierung & Persistenz
     // ──────────────────────────────────────────────────────────────────────────
@@ -17544,6 +17646,80 @@ class MainViewModel @Inject constructor(
     }
 
     fun clearIncomingDeviceAuthRequest() { _incomingDeviceAuthRequest.value = null }
+
+    // --- NocTurn media:read-Kopplung (schlanker Scope, kein Login/UMK-Zugriff) ---
+
+    suspend fun fetchNocturnMediaGrantInfo(requestId: String): NocturnMediaGrantInfo? = withContext(Dispatchers.IO) {
+        try {
+            val resp = apiService.getNocturnMediaGrant(requestId)
+            if (resp.isSuccessful) resp.body() else null
+        } catch (e: Exception) {
+            Timber.tag("LETHE_NOCTURN_MEDIA").w("fetchNocturnMediaGrantInfo: ${e.message}")
+            null
+        }
+    }
+
+    fun approveNocturnMediaGrant(requestId: String, onResult: ((Boolean, String?) -> Unit)? = null) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val resp = apiService.approveNocturnMediaGrant(requestId)
+                withContext(Dispatchers.Main) {
+                    if (resp.isSuccessful) {
+                        _contactScreenMessage.value = "NocTurn-Zugriff auf die Musikbibliothek wurde freigegeben"
+                        onResult?.invoke(true, null)
+                    } else {
+                        val msg = "Freigabe fehlgeschlagen (${resp.code()})"
+                        _contactScreenMessage.value = msg
+                        onResult?.invoke(false, msg)
+                    }
+                }
+            } catch (e: Exception) {
+                Timber.tag("LETHE_NOCTURN_MEDIA").w("approveNocturnMediaGrant: ${e.message}")
+                withContext(Dispatchers.Main) {
+                    _contactScreenMessage.value = "Freigabe fehlgeschlagen"
+                    onResult?.invoke(false, "Freigabe fehlgeschlagen")
+                }
+            }
+        }
+    }
+
+    fun denyNocturnMediaGrant(requestId: String, onResult: ((Boolean) -> Unit)? = null) {
+        viewModelScope.launch(Dispatchers.IO) {
+            var ok = true
+            try {
+                apiService.denyNocturnMediaGrant(requestId)
+            } catch (e: Exception) {
+                ok = false
+                Timber.tag("LETHE_NOCTURN_MEDIA").w("denyNocturnMediaGrant: ${e.message}")
+            }
+            withContext(Dispatchers.Main) {
+                _contactScreenMessage.value = "Anfrage wurde abgelehnt"
+                onResult?.invoke(ok)
+            }
+        }
+    }
+
+    suspend fun fetchNocturnMediaGrants(): List<NocturnMediaGrantSummary> = withContext(Dispatchers.IO) {
+        try {
+            val resp = apiService.listNocturnMediaGrants()
+            if (resp.isSuccessful) resp.body() ?: emptyList() else emptyList()
+        } catch (e: Exception) {
+            Timber.tag("LETHE_NOCTURN_MEDIA").w("fetchNocturnMediaGrants: ${e.message}")
+            emptyList()
+        }
+    }
+
+    fun revokeNocturnMediaGrant(grantId: String, onResult: ((Boolean) -> Unit)? = null) {
+        viewModelScope.launch(Dispatchers.IO) {
+            var ok = false
+            try {
+                ok = apiService.revokeNocturnMediaGrant(grantId).isSuccessful
+            } catch (e: Exception) {
+                Timber.tag("LETHE_NOCTURN_MEDIA").w("revokeNocturnMediaGrant: ${e.message}")
+            }
+            withContext(Dispatchers.Main) { onResult?.invoke(ok) }
+        }
+    }
 
     // --- BLOCKIERUNGEN ---
 

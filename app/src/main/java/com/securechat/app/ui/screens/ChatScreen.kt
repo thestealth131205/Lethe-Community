@@ -136,6 +136,7 @@ import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.TextSnippet
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -823,6 +824,7 @@ private val MORE_EMOJIS = listOf(
     "😟","😕","🙁","☹️","😣","😖","😫","😩","🥺","😢",
     "😤","😠","😡","🤬","😈","👿","💀","💩","🤡","👻",
     "👽","🤖","😺","😸","😹","😻","😼","😽","🙀","😿",
+    "😐","😛","🤤",
     // Gesichter mit Merkmalen
     "🥳","🥴","🥸","🤩","😵","😵‍💫","🤯","🤠","🥶","🥵",
     "😷","🤒","🤕","🤑","🤧","😇","🤓","🧐","🤫","🫨",
@@ -832,6 +834,7 @@ private val MORE_EMOJIS = listOf(
     "🤛","✊","👊","🤞","🖖","🤟","🤘","👌","🤌","🫰",
     "🫵","🫱","🫲","🫳","🫴","👈","👉","👆","👇","☝️",
     "🤲","🙏","💪","🦾","🦵","🦶","👂","🦻","👃","🫀",
+    "🖕","👅",
     // Herzen & Liebe
     "💔","🧡","💛","💚","💙","💜","🖤","🤍","🤎","❣️",
     "💕","💞","💓","💗","💖","💝","💘","❤️‍🔥","❤️‍🩹","🫶",
@@ -873,6 +876,7 @@ private val MORE_EMOJIS = listOf(
     "👶","🧒","👦","👧","🧑","👱","👨","🧔","👩","👴",
     "👵","👮","👷","💂","🕵️","👩‍⚕️","👨‍🍳","👩‍🎤","👨‍💻","👩‍🎨",
     "👰","🤵","🦸","🦹","🧙","🧝","🧛","🧟","🧞","🧜",
+    "🎅","🧑‍🎤",
     // Reisen & Orte
     "🚂","🚃","🚄","🚅","🚆","🚇","🚈","🚉","🚊","🚝",
     "🚞","🚋","🚌","🚍","🚎","🚐","🚑","🚒","🚓","🚔",
@@ -996,130 +1000,130 @@ private val PEOPLE_SKIN_EMOJIS = listOf(
 /** Deutsche Stichwörter für die Emoji-Suche. Emoji → Liste von Stichwörtern (Kleinbuchstaben). */
 private val EMOJI_KEYWORDS: Map<String, List<String>> = mapOf(
     // Gefühle – positiv
-    "😀" to listOf("lachen", "froh", "glücklich", "freude", "grinsen"),
-    "😃" to listOf("lachen", "froh", "glücklich", "freude", "grinsen"),
-    "😄" to listOf("lachen", "froh", "glücklich", "freude"),
-    "😁" to listOf("lachen", "grinsen", "froh", "glücklich"),
-    "😆" to listOf("lachen", "haha", "lustig", "komisch"),
-    "😊" to listOf("lächeln", "glücklich", "froh", "nett", "freundlich"),
-    "😍" to listOf("verliebt", "liebe", "herz", "begeistert", "toll"),
-    "🥰" to listOf("verliebt", "liebe", "herz", "kuscheln", "süß"),
-    "😎" to listOf("cool", "sonnenbrille", "lässig", "stark"),
-    "🤩" to listOf("begeistert", "wow", "super", "toll", "star"),
-    "🥳" to listOf("party", "feiern", "geburtstag", "feier"),
-    "😇" to listOf("engel", "heilig", "unschuldig", "gut"),
-    "🤗" to listOf("umarmen", "umarmung", "herzlich", "nett"),
-    "😋" to listOf("lecker", "genießen", "essen", "köstlich"),
-    "😏" to listOf("frech", "wissen", "schlau", "lächeln"),
-    "🫶" to listOf("liebe", "herz", "hände", "freundschaft", "lieben"),
+    "😀" to listOf("lachen", "froh", "glücklich", "freude", "grinsen", "lustig", "strahlen", "happy", "fröhlich"),
+    "😃" to listOf("lachen", "froh", "glücklich", "freude", "grinsen", "strahlen", "happy", "fröhlich"),
+    "😄" to listOf("lachen", "froh", "glücklich", "freude", "strahlen", "grinsen", "happy", "fröhlich", "lachend"),
+    "😁" to listOf("lachen", "grinsen", "froh", "glücklich", "zähne", "happy", "strahlen", "freude"),
+    "😆" to listOf("lachen", "haha", "lustig", "komisch", "witzig", "kichern", "lachflash"),
+    "😊" to listOf("lächeln", "glücklich", "froh", "nett", "freundlich", "zufrieden", "schüchtern", "lächelnd"),
+    "😍" to listOf("verliebt", "liebe", "herz", "begeistert", "toll", "augen herzen", "schwärmen", "lieben", "herzaugen"),
+    "🥰" to listOf("verliebt", "liebe", "herz", "kuscheln", "süß", "geliebt", "umschwärmt", "lieben", "herzlich"),
+    "😎" to listOf("cool", "sonnenbrille", "lässig", "stark", "selbstbewusst", "chillen", "entspannt"),
+    "🤩" to listOf("begeistert", "wow", "super", "toll", "star", "sternenaugen", "beeindruckt", "staunen"),
+    "🥳" to listOf("party", "feiern", "geburtstag", "feier", "hut", "konfetti", "silvester", "partyhut"),
+    "😇" to listOf("engel", "heilig", "unschuldig", "gut", "brav", "heiligenschein"),
+    "🤗" to listOf("umarmen", "umarmung", "herzlich", "nett", "liebevoll", "knuddeln", "drücken"),
+    "😋" to listOf("lecker", "genießen", "essen", "köstlich", "hunger", "schlecken", "yummy", "mund abwischen"),
+    "😏" to listOf("frech", "wissen", "schlau", "lächeln", "süffisant", "schmunzeln", "schelmisch"),
+    "🫶" to listOf("liebe", "herz", "hände", "freundschaft", "lieben", "dankbar", "herzform"),
     // Gefühle – negativ / traurig
-    "😢" to listOf("traurig", "weinen", "schade", "trauer", "traurigkeit"),
-    "😭" to listOf("weinen", "heulen", "traurig", "schluchzen", "trauer"),
-    "😔" to listOf("traurig", "nachdenklich", "betrübt", "schade"),
-    "😞" to listOf("enttäuscht", "traurig", "schade", "niedergeschlagen"),
-    "😟" to listOf("besorgt", "traurig", "sorge", "unglücklich"),
-    "😕" to listOf("verwirrt", "unsicher", "schade", "durcheinander"),
-    "🙁" to listOf("traurig", "unglücklich", "schade"),
+    "😢" to listOf("traurig", "weinen", "schade", "trauer", "traurigkeit", "tränen", "heulen", "nass"),
+    "😭" to listOf("weinen", "heulen", "traurig", "schluchzen", "trauer", "tränen", "doll weinen", "nass", "tränenüberströmt"),
+    "😔" to listOf("traurig", "nachdenklich", "betrübt", "schade", "enttäuscht"),
+    "😞" to listOf("enttäuscht", "traurig", "schade", "niedergeschlagen", "frustriert"),
+    "😟" to listOf("besorgt", "traurig", "sorge", "unglücklich", "ängstlich"),
+    "😕" to listOf("verwirrt", "unsicher", "schade", "durcheinander", "ratlos"),
+    "🙁" to listOf("traurig", "unglücklich", "schade", "enttäuscht"),
     "☹️" to listOf("traurig", "unglücklich", "schade", "betrübt"),
-    "😣" to listOf("gestresst", "schmerz", "verzweiflung"),
-    "😖" to listOf("gestresst", "verwirrt", "aufgewühlt"),
-    "😩" to listOf("erschöpft", "müde", "verzweiflung", "stöhnen"),
-    "😫" to listOf("erschöpft", "müde", "abgespannt"),
-    "🥺" to listOf("bitte", "traurig", "flehend", "niedlich", "cute"),
-    "😿" to listOf("traurig", "katze", "weinen"),
-    "💔" to listOf("herz", "gebrochen", "trennung", "liebe", "traurig"),
+    "😣" to listOf("gestresst", "schmerz", "verzweiflung", "angespannt"),
+    "😖" to listOf("gestresst", "verwirrt", "aufgewühlt", "überfordert"),
+    "😩" to listOf("erschöpft", "müde", "verzweiflung", "stöhnen", "kaputt", "fertig"),
+    "😫" to listOf("erschöpft", "müde", "abgespannt", "genervt", "kaputt"),
+    "🥺" to listOf("bitte", "traurig", "flehend", "niedlich", "cute", "bettelblick", "puppyeyes"),
+    "😿" to listOf("traurig", "katze", "weinen", "tränen"),
+    "💔" to listOf("herz", "gebrochen", "trennung", "liebe", "traurig", "liebeskummer"),
     // Wut / Frustration
-    "😡" to listOf("wut", "ärger", "wütend", "sauer"),
-    "🤬" to listOf("wut", "ärger", "fluchen", "sehr wütend"),
-    "😤" to listOf("frustriert", "schnaufen", "ärger", "aufgebracht"),
-    "😠" to listOf("ärger", "böse", "wütend"),
-    "👿" to listOf("böse", "teufel", "wut", "böser"),
+    "😡" to listOf("wut", "ärger", "wütend", "sauer", "zornig", "genervt"),
+    "🤬" to listOf("wut", "ärger", "fluchen", "sehr wütend", "schimpfen", "beschimpfen"),
+    "😤" to listOf("frustriert", "schnaufen", "ärger", "aufgebracht", "triumph", "stolz"),
+    "😠" to listOf("ärger", "böse", "wütend", "genervt"),
+    "👿" to listOf("böse", "teufel", "wut", "böser", "satan"),
     // Überraschung / Schock
-    "😮" to listOf("überrascht", "oh", "schock", "wow", "staunen"),
-    "😲" to listOf("schock", "überrascht", "fassungslos", "wow"),
-    "😱" to listOf("schock", "angst", "schrei", "horror", "überrascht"),
-    "🤯" to listOf("mind blown", "explosion", "schock", "unglaublich"),
+    "😮" to listOf("überrascht", "oh", "schock", "wow", "staunen", "erstaunt"),
+    "😲" to listOf("schock", "überrascht", "fassungslos", "wow", "erstaunt"),
+    "😱" to listOf("schock", "angst", "schrei", "horror", "überrascht", "panik", "schreien"),
+    "🤯" to listOf("mind blown", "explosion", "schock", "unglaublich", "kopf explodiert", "fassungslos"),
     // Müde / Krank
-    "😴" to listOf("schlafen", "müde", "schläfrig", "gute nacht"),
-    "😪" to listOf("schläfrig", "müde", "schlaf"),
-    "🥱" to listOf("gähnen", "müde", "langweilig"),
-    "😷" to listOf("krank", "maske", "grippe", "covid"),
-    "🤒" to listOf("krank", "fieber", "grippe"),
-    "🤕" to listOf("verletzt", "kopfschmerzen", "schmerz"),
+    "😴" to listOf("schlafen", "müde", "schläfrig", "gute nacht", "zzz", "einschlafen"),
+    "😪" to listOf("schläfrig", "müde", "schlaf", "weinerlich"),
+    "🥱" to listOf("gähnen", "müde", "langweilig", "erschöpft"),
+    "😷" to listOf("krank", "maske", "grippe", "covid", "husten", "atemschutz"),
+    "🤒" to listOf("krank", "fieber", "grippe", "thermometer"),
+    "🤕" to listOf("verletzt", "kopfschmerzen", "schmerz", "verband"),
     // Herz & Liebe
-    "❤️" to listOf("herz", "liebe", "rot"),
-    "🧡" to listOf("herz", "orange", "liebe"),
-    "💛" to listOf("herz", "gelb", "liebe"),
-    "💚" to listOf("herz", "grün", "liebe"),
-    "💙" to listOf("herz", "blau", "liebe"),
-    "💜" to listOf("herz", "lila", "liebe"),
-    "🖤" to listOf("herz", "schwarz", "liebe"),
-    "🤍" to listOf("herz", "weiß", "liebe"),
-    "💕" to listOf("liebe", "herzen", "paar"),
-    "💞" to listOf("liebe", "herzen", "drehend"),
-    "💗" to listOf("liebe", "herz", "wachsend"),
-    "💖" to listOf("liebe", "herz", "glitzern"),
-    "💘" to listOf("liebe", "amor", "herz", "pfeil"),
-    "💌" to listOf("liebesbrief", "brief", "liebe"),
-    "❤️‍🔥" to listOf("leidenschaft", "liebe", "feuer", "herz"),
+    "❤️" to listOf("herz", "liebe", "rot", "lieben"),
+    "🧡" to listOf("herz", "orange", "liebe", "lieben"),
+    "💛" to listOf("herz", "gelb", "liebe", "lieben", "freundschaft"),
+    "💚" to listOf("herz", "grün", "liebe", "lieben"),
+    "💙" to listOf("herz", "blau", "liebe", "lieben"),
+    "💜" to listOf("herz", "lila", "liebe", "lieben"),
+    "🖤" to listOf("herz", "schwarz", "liebe", "lieben"),
+    "🤍" to listOf("herz", "weiß", "liebe", "lieben"),
+    "💕" to listOf("liebe", "herzen", "paar", "verliebt"),
+    "💞" to listOf("liebe", "herzen", "drehend", "verliebt"),
+    "💗" to listOf("liebe", "herz", "wachsend", "aufgeregt"),
+    "💖" to listOf("liebe", "herz", "glitzern", "funkeln"),
+    "💘" to listOf("liebe", "amor", "herz", "pfeil", "verschossen"),
+    "💌" to listOf("liebesbrief", "brief", "liebe", "post"),
+    "❤️‍🔥" to listOf("leidenschaft", "liebe", "feuer", "herz", "brennend"),
     // Gesten & Hände
-    "👍" to listOf("daumen hoch", "gut", "super", "ok", "toll"),
-    "👎" to listOf("daumen runter", "schlecht", "nein", "ablehnen"),
-    "👋" to listOf("winken", "hallo", "tschüss", "verabschiedung"),
-    "🤝" to listOf("handschlag", "abmachung", "einigung"),
-    "🙌" to listOf("klatschen", "feiern", "juhu", "beifall"),
-    "👏" to listOf("klatschen", "applaus", "bravo"),
-    "🙏" to listOf("bitte", "danke", "beten", "falten", "gebet"),
-    "💪" to listOf("stark", "muskel", "fitness", "kraft", "stärke"),
-    "✌️" to listOf("frieden", "sieg", "peace", "zwei"),
-    "🤞" to listOf("daumen drücken", "glück", "hoffen", "kreuzfinger"),
-    "🖖" to listOf("vulkan", "star trek", "gruß"),
-    "👌" to listOf("ok", "perfekt", "gut", "okay"),
-    "🤌" to listOf("perfekt", "chef küss", "italien"),
-    "💅" to listOf("nagel", "chic", "schönheit", "lackieren"),
-    "🫂" to listOf("umarmung", "freundschaft", "umarmen"),
+    "👍" to listOf("daumen hoch", "gut", "super", "ok", "toll", "einverstanden", "zustimmung", "like"),
+    "👎" to listOf("daumen runter", "schlecht", "nein", "ablehnen", "dislike"),
+    "👋" to listOf("winken", "hallo", "tschüss", "verabschiedung", "hi", "servus", "moin"),
+    "🤝" to listOf("handschlag", "abmachung", "einigung", "deal", "vertrag"),
+    "🙌" to listOf("klatschen", "feiern", "juhu", "beifall", "hurra", "hände hoch"),
+    "👏" to listOf("klatschen", "applaus", "bravo", "beifall", "gut gemacht"),
+    "🙏" to listOf("bitte", "danke", "beten", "falten", "gebet", "hoffentlich"),
+    "💪" to listOf("stark", "muskel", "fitness", "kraft", "stärke", "schaffst du", "durchhalten"),
+    "✌️" to listOf("frieden", "sieg", "peace", "zwei", "victory"),
+    "🤞" to listOf("daumen drücken", "glück", "hoffen", "kreuzfinger", "hoffentlich"),
+    "🖖" to listOf("vulkan", "star trek", "gruß", "spock"),
+    "👌" to listOf("ok", "perfekt", "gut", "okay", "alles klar"),
+    "🤌" to listOf("perfekt", "chef küss", "italien", "was willst du"),
+    "💅" to listOf("nagel", "chic", "schönheit", "lackieren", "egal", "unbeeindruckt"),
+    "🫂" to listOf("umarmung", "freundschaft", "umarmen", "trösten"),
     // Feiern & Spaß
-    "🎉" to listOf("party", "feiern", "feier", "hurra", "konfetti"),
-    "🎊" to listOf("konfetti", "party", "feiern", "feier"),
-    "🎈" to listOf("luftballon", "geburtstag", "party", "feiern"),
-    "🎂" to listOf("geburtstagskuchen", "geburtstag", "kuchen", "feier"),
-    "🎁" to listOf("geschenk", "present", "geburtstag", "feier"),
-    "🥂" to listOf("anstoßen", "feiern", "party", "champagner", "prost"),
+    "🎉" to listOf("party", "feiern", "feier", "hurra", "konfetti", "glückwunsch"),
+    "🎊" to listOf("konfetti", "party", "feiern", "feier", "glückwunsch"),
+    "🎈" to listOf("luftballon", "geburtstag", "party", "feiern", "ballon"),
+    "🎂" to listOf("geburtstagskuchen", "geburtstag", "kuchen", "feier", "torte"),
+    "🎁" to listOf("geschenk", "present", "geburtstag", "feier", "überraschung"),
+    "🥂" to listOf("anstoßen", "feiern", "party", "champagner", "prost", "sekt"),
     // Natur
-    "🔥" to listOf("feuer", "heiß", "brennen", "hot"),
-    "⭐" to listOf("stern", "super", "gut", "bewerung"),
-    "🌟" to listOf("stern", "glänzend", "super"),
-    "✨" to listOf("glitzern", "funken", "magie", "super"),
-    "🌈" to listOf("regenbogen", "bunt", "farben"),
-    "☀️" to listOf("sonne", "sonnig", "warm", "gut"),
-    "🌙" to listOf("mond", "nacht", "schlafen"),
-    "🌊" to listOf("welle", "wasser", "strand", "meer"),
+    "🔥" to listOf("feuer", "heiß", "brennen", "hot", "lodern", "scharf", "geil"),
+    "⭐" to listOf("stern", "super", "gut", "bewertung", "toll"),
+    "🌟" to listOf("stern", "glänzend", "super", "funkeln"),
+    "✨" to listOf("glitzern", "funken", "magie", "super", "sparkle"),
+    "🌈" to listOf("regenbogen", "bunt", "farben", "pride"),
+    "☀️" to listOf("sonne", "sonnig", "warm", "gut", "sommer"),
+    "🌙" to listOf("mond", "nacht", "schlafen", "mondschein"),
+    "🌊" to listOf("welle", "wasser", "strand", "meer", "nass", "surfen"),
     "🌸" to listOf("kirschblüte", "blume", "frühling", "japan"),
     "🌺" to listOf("blume", "hibiskus", "natur"),
     "🌻" to listOf("sonnenblume", "blume", "sommer"),
     "🌹" to listOf("rose", "liebe", "blume", "romantik"),
     // Tiere
-    "🐶" to listOf("hund", "welpe", "tier", "niedlich", "cute"),
-    "🐱" to listOf("katze", "mieze", "tier", "niedlich", "cute"),
-    "🐰" to listOf("hase", "kaninchen", "niedlich", "ostern"),
-    "🐻" to listOf("bär", "niedlich", "tier"),
-    "🦊" to listOf("fuchs", "schlau", "tier"),
-    "🐼" to listOf("panda", "niedlich", "tier"),
-    "🐷" to listOf("schwein", "tier"),
+    "🐶" to listOf("hund", "welpe", "tier", "niedlich", "cute", "bellen"),
+    "🐱" to listOf("katze", "mieze", "tier", "niedlich", "cute", "miau"),
+    "🐰" to listOf("hase", "kaninchen", "niedlich", "ostern", "cute"),
+    "🐻" to listOf("bär", "niedlich", "tier", "teddy"),
+    "🦊" to listOf("fuchs", "schlau", "tier", "schlau wie ein fuchs"),
+    "🐼" to listOf("panda", "niedlich", "tier", "china"),
+    "🐷" to listOf("schwein", "tier", "ferkel"),
     "🦁" to listOf("löwe", "stark", "tier", "könig"),
-    "🐸" to listOf("frosch", "grün", "tier"),
-    "🐵" to listOf("affe", "tier"),
-    "🦋" to listOf("schmetterling", "tier", "schön"),
+    "🐸" to listOf("frosch", "grün", "tier", "quak"),
+    "🐵" to listOf("affe", "tier", "quatsch"),
+    "🦋" to listOf("schmetterling", "tier", "schön", "verwandlung"),
     // Essen
-    "🍕" to listOf("pizza", "essen", "italien"),
-    "🍔" to listOf("burger", "essen", "fast food"),
-    "🍟" to listOf("pommes", "essen", "fast food"),
-    "🍣" to listOf("sushi", "essen", "japan"),
+    "🍕" to listOf("pizza", "essen", "italien", "hunger"),
+    "🍔" to listOf("burger", "essen", "fast food", "hunger"),
+    "🍟" to listOf("pommes", "essen", "fast food", "hunger"),
+    "🍣" to listOf("sushi", "essen", "japan", "fisch"),
     "🍩" to listOf("donut", "kuchen", "süß", "essen"),
-    "🍫" to listOf("schokolade", "süß", "essen"),
-    "🍺" to listOf("bier", "prost", "trinken", "alkohol"),
-    "☕" to listOf("kaffee", "tee", "trinken", "warm"),
-    "🧋" to listOf("bubble tea", "tee", "trinken"),
+    "🍫" to listOf("schokolade", "süß", "essen", "naschen"),
+    "🍺" to listOf("bier", "prost", "trinken", "alkohol", "kneipe"),
+    "☕" to listOf("kaffee", "tee", "trinken", "warm", "wach werden"),
+    "🧋" to listOf("bubble tea", "tee", "trinken", "perlen"),
     // Früchte & Gemüse
     "🍏" to listOf("apfel", "grüner apfel", "frucht", "obst", "essen"),
     "🍎" to listOf("apfel", "roter apfel", "frucht", "obst", "essen"),
@@ -1127,7 +1131,7 @@ private val EMOJI_KEYWORDS: Map<String, List<String>> = mapOf(
     "🍊" to listOf("orange", "mandarine", "frucht", "obst", "essen"),
     "🍋" to listOf("zitrone", "limette", "sauer", "frucht", "obst", "essen"),
     "🍌" to listOf("banane", "frucht", "obst", "essen"),
-    "🍉" to listOf("wassermelone", "melone", "frucht", "obst", "sommer", "essen"),
+    "🍉" to listOf("wassermelone", "melone", "frucht", "obst", "sommer", "essen", "nass", "wasser"),
     "🍇" to listOf("trauben", "weintrauben", "frucht", "obst", "wein", "essen"),
     "🍓" to listOf("erdbeere", "frucht", "obst", "beere", "essen"),
     "🫐" to listOf("heidelbeere", "blaubeere", "beere", "frucht", "obst", "essen"),
@@ -1162,62 +1166,69 @@ private val EMOJI_KEYWORDS: Map<String, List<String>> = mapOf(
     "🥨" to listOf("brezel", "gebäck", "essen"),
     "🧀" to listOf("käse", "essen"),
     // Wasser & Meer
-    "💧" to listOf("wasser", "tropfen", "tröpfchen", "flüssigkeit"),
-    "💦" to listOf("wasser", "spritzen", "schweiß", "tropfen", "nass", "spritzer"),
-    "🚿" to listOf("dusche", "wasser", "duschen", "bad"),
-    "🛁" to listOf("badewanne", "wasser", "baden", "bad"),
-    "🫧" to listOf("blasen", "seifenblasen", "wasser", "sauber", "schaum"),
-    "🧜‍♀️" to listOf("meerjungfrau", "nixe", "wasser", "meer", "fabelwesen"),
-    "🧜‍♂️" to listOf("wassermann", "meermann", "wasser", "meer", "fabelwesen"),
-    "🧜" to listOf("meervolk", "meermensch", "wasser", "meer", "fabelwesen"),
+    "💧" to listOf("wasser", "tropfen", "tröpfchen", "flüssigkeit", "nass", "regen"),
+    "💦" to listOf("wasser", "spritzen", "schweiß", "tropfen", "nass", "spritzer", "schwitzen"),
+    "🚿" to listOf("dusche", "wasser", "duschen", "bad", "nass"),
+    "🛁" to listOf("badewanne", "wasser", "baden", "bad", "nass"),
+    "🫧" to listOf("blasen", "seifenblasen", "wasser", "sauber", "schaum", "nass"),
+    "🧜‍♀️" to listOf("meerjungfrau", "nixe", "wasser", "meer", "fabelwesen", "nass"),
+    "🧜‍♂️" to listOf("wassermann", "meermann", "wasser", "meer", "fabelwesen", "nass"),
+    "🧜" to listOf("meervolk", "meermensch", "wasser", "meer", "fabelwesen", "nass"),
     "🐃" to listOf("wasserbüffel", "büffel", "wasser", "tier"),
     // Sport & Aktivität
     "⚽" to listOf("fußball", "sport", "ball"),
     "🏀" to listOf("basketball", "sport", "ball"),
-    "🎮" to listOf("gaming", "spiel", "videospiel", "controller"),
-    "🏆" to listOf("trophäe", "gewinner", "sieger", "champion"),
-    "🥇" to listOf("gold", "gewonnen", "sieger", "erster"),
-    "💯" to listOf("hundert", "perfekt", "super", "toll"),
-    "🎯" to listOf("ziel", "treffer", "darts", "perfekt"),
+    "🎮" to listOf("gaming", "spiel", "videospiel", "controller", "zocken"),
+    "🏆" to listOf("trophäe", "gewinner", "sieger", "champion", "gewonnen"),
+    "🥇" to listOf("gold", "gewonnen", "sieger", "erster", "medaille"),
+    "💯" to listOf("hundert", "perfekt", "super", "toll", "volle punktzahl"),
+    "🎯" to listOf("ziel", "treffer", "darts", "perfekt", "volltreffer"),
     // Musik
-    "🎵" to listOf("musik", "note", "lied", "song"),
-    "🎶" to listOf("musik", "noten", "melodie"),
-    "🎸" to listOf("gitarre", "musik", "rock"),
-    "🎤" to listOf("mikrofon", "singen", "musik", "karaoke"),
-    "🎧" to listOf("kopfhörer", "musik", "hören"),
+    "🎵" to listOf("musik", "note", "lied", "song", "melodie"),
+    "🎶" to listOf("musik", "noten", "melodie", "lied", "song"),
+    "🎸" to listOf("gitarre", "musik", "rock", "band"),
+    "🎤" to listOf("mikrofon", "singen", "musik", "karaoke", "gesang"),
+    "🎧" to listOf("kopfhörer", "musik", "hören", "podcast"),
     // Technik
-    "📱" to listOf("handy", "smartphone", "telefon", "nachricht"),
-    "💻" to listOf("laptop", "computer", "arbeiten"),
-    "📷" to listOf("kamera", "foto", "bild"),
-    "🔑" to listOf("schlüssel", "öffnen", "zugang"),
-    "💡" to listOf("idee", "licht", "einfall"),
+    "📱" to listOf("handy", "smartphone", "telefon", "nachricht", "anrufen"),
+    "💻" to listOf("laptop", "computer", "arbeiten", "pc", "notebook"),
+    "📷" to listOf("kamera", "foto", "bild", "fotografieren"),
+    "🔑" to listOf("schlüssel", "öffnen", "zugang", "passwort"),
+    "💡" to listOf("idee", "licht", "einfall", "glühbirne"),
     // Orte & Reise
-    "✈️" to listOf("flugzeug", "fliegen", "reise", "urlaub"),
-    "🚀" to listOf("rakete", "start", "schnell", "weltall"),
-    "🏠" to listOf("haus", "zuhause", "home"),
-    "🌍" to listOf("welt", "erde", "global"),
+    "✈️" to listOf("flugzeug", "fliegen", "reise", "urlaub", "abflug"),
+    "🚀" to listOf("rakete", "start", "schnell", "weltall", "abheben"),
+    "🏠" to listOf("haus", "zuhause", "home", "heim"),
+    "🌍" to listOf("welt", "erde", "global", "planet"),
     // Symbole
-    "✅" to listOf("haken", "richtig", "erledigt", "fertig", "ok"),
-    "❌" to listOf("falsch", "nein", "fehler", "kreuz"),
-    "⚠️" to listOf("warnung", "achtung", "vorsicht"),
+    "✅" to listOf("haken", "richtig", "erledigt", "fertig", "ok", "erfolg"),
+    "❌" to listOf("falsch", "nein", "fehler", "kreuz", "abbrechen"),
+    "⚠️" to listOf("warnung", "achtung", "vorsicht", "gefahr"),
     "🔴" to listOf("rot", "kreis", "farbe"),
-    "🟢" to listOf("grün", "kreis", "farbe"),
+    "🟢" to listOf("grün", "kreis", "farbe", "online"),
     "🔵" to listOf("blau", "kreis", "farbe"),
     "⭕" to listOf("kreis", "richtig", "ok"),
     "💢" to listOf("ärger", "wut", "comic"),
-    "💬" to listOf("nachricht", "chat", "gespräch"),
+    "💬" to listOf("nachricht", "chat", "gespräch", "sprechblase"),
     // Sonstiges
-    "🤔" to listOf("nachdenken", "hmm", "überlegen", "fragen"),
-    "🙄" to listOf("augen verdrehen", "genervt", "egal"),
-    "🤦" to listOf("facepalm", "kopf in hand", "ärger", "fehler"),
-    "🤷" to listOf("achselzucken", "keine ahnung", "egal"),
-    "👀" to listOf("augen", "schauen", "beobachten", "sehen", "schau"),
-    "🫠" to listOf("schmelzen", "peinlich", "unangenehm"),
-    "😬" to listOf("grimasse", "peinlich", "unangenehm"),
-    "🤪" to listOf("verrückt", "albern", "silly"),
-    "🥲" to listOf("lachen weinen", "rührend", "glücklich traurig"),
-    "😅" to listOf("erleichtert", "nervös", "schwitzen", "lachen"),
-    "😜" to listOf("zunge raus", "albern", "winking"),
+    "🤔" to listOf("nachdenken", "hmm", "überlegen", "fragen", "grübeln"),
+    "🙄" to listOf("augen verdrehen", "genervt", "egal", "nervig"),
+    "🤦" to listOf("facepalm", "kopf in hand", "ärger", "fehler", "peinlich"),
+    "🤷" to listOf("achselzucken", "keine ahnung", "egal", "schulterzucken"),
+    "👀" to listOf("augen", "schauen", "beobachten", "sehen", "schau", "gucken"),
+    "🫠" to listOf("schmelzen", "peinlich", "unangenehm", "wegschmelzen"),
+    "😬" to listOf("grimasse", "peinlich", "unangenehm", "ups"),
+    "🤪" to listOf("verrückt", "albern", "silly", "durchgeknallt"),
+    "🥲" to listOf("lachen weinen", "rührend", "glücklich traurig", "gerührt"),
+    "😅" to listOf("erleichtert", "nervös", "schwitzen", "lachen", "nass", "schweiß"),
+    "😜" to listOf("zunge raus", "albern", "winking", "frech", "zwinkern"),
+    "😛" to listOf("zunge raus", "albern", "frech"),
+    "😐" to listOf("neutral", "ausdruckslos", "meh", "ernst", "gleichgültig"),
+    "🤤" to listOf("sabbern", "lecker", "gierig", "appetit", "nass", "wasser", "speichel", "geil"),
+    "🖕" to listOf("mittelfinger", "stinkefinger", "beleidigung"),
+    "👅" to listOf("zunge", "lecken", "nass"),
+    "🎅" to listOf("weihnachtsmann", "nikolaus", "weihnachten", "santa"),
+    "🧑‍🎤" to listOf("sänger", "sängerin", "musik", "star", "rockstar"),
 )
 
 /** Sucht Emojis anhand eines deutschen Stichworts. Durchsucht alle Listen. */
@@ -1566,6 +1577,7 @@ fun ChatScreen(
     }
     var searchResultIndex by remember { mutableIntStateOf(0) }
     var showMediaGallery by remember { mutableStateOf(false) }
+    var showPinnedItemsDialog by remember { mutableStateOf(false) }
     var showContactProfile by remember { mutableStateOf(false) }
     var showLumisPicker by remember { mutableStateOf(false) }
     var showReportSheet by remember { mutableStateOf(false) }
@@ -3143,6 +3155,27 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
                                 onDismissRequest = { showSelectionMoreMenu = false }
                             ) {
                                 val selMsg = messages.firstOrNull { it.localId in selectedIds }
+                                if (selectedIds.size == 1 && selMsg != null && isPinnableMessage(selMsg)) {
+                                    DropdownMenuItem(
+                                        text = { Text(if (selMsg.isPinned) "Lösen" else "Anpinnen") },
+                                        leadingIcon = {
+                                            Icon(
+                                                Icons.Filled.PushPin,
+                                                contentDescription = null
+                                            )
+                                        },
+                                        onClick = {
+                                            showSelectionMoreMenu = false
+                                            viewModel.setMessagePinned(
+                                                messageId = selMsg.messageId ?: "",
+                                                chatPartnerId = chatId,
+                                                localId = selMsg.localId,
+                                                pinned = !selMsg.isPinned
+                                            )
+                                            selectedIds = emptySet()
+                                        }
+                                    )
+                                }
                                 if (isGroup && selectedIds.size == 1 && selMsg?.messageId != null) {
                                     DropdownMenuItem(
                                         text = { Text("Info") },
@@ -3384,6 +3417,14 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
                                 onClick = {
                                     showChatMenu = false
                                     showMediaGallery = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Angepinnte Elemente") },
+                                leadingIcon = { Icon(Icons.Default.PushPin, null) },
+                                onClick = {
+                                    showChatMenu = false
+                                    showPinnedItemsDialog = true
                                 }
                             )
                             DropdownMenuItem(
@@ -4298,6 +4339,42 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
                         }
                     }
                 }
+            }
+
+            // Angepinnte Elemente
+            if (showPinnedItemsDialog) {
+                val pinnedMessages = messages
+                    .filter { it.isPinned }
+                    .sortedByDescending { it.pinnedAt ?: it.timestamp }
+                PinnedItemsDialog(
+                    pinnedMessages = pinnedMessages,
+                    viewModel = viewModel,
+                    onJump = { target ->
+                        val targetIdx = chatItems.indexOfFirst { ci ->
+                            ci is ChatListItem.Message && ci.entity.localId == target.localId
+                        }
+                        if (targetIdx >= 0) {
+                            showPinnedItemsDialog = false
+                            scope.launch {
+                                listState.animateScrollToItem(targetIdx)
+                                replyJumpHighlightLocalId = target.localId
+                                delay(2000L)
+                                if (replyJumpHighlightLocalId == target.localId) {
+                                    replyJumpHighlightLocalId = null
+                                }
+                            }
+                        }
+                    },
+                    onUnpin = { target ->
+                        viewModel.setMessagePinned(
+                            messageId = target.messageId ?: "",
+                            chatPartnerId = chatId,
+                            localId = target.localId,
+                            pinned = false
+                        )
+                    },
+                    onDismiss = { showPinnedItemsDialog = false }
+                )
             }
 
             // Reply-Bar
@@ -9552,6 +9629,7 @@ internal fun MessageBubble(
                                     onDismissRequest = { showVideoPlayer = false },
                                     properties = DialogProperties(usePlatformDefaultWidth = false)
                                 ) {
+                                    HdrWindowEffect()
                                     val playerCtx = LocalContext.current
                                     val playChatId = message.chatId
                                     // Abspielbare URI asynchron auflösen (lädt das Video ggf. über den
@@ -12929,6 +13007,7 @@ private fun ChatMediaDialog(
             onDismissRequest = { fullscreenImageUrl = null },
             properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false)
         ) {
+            HdrWindowEffect()
             var zoomScale by remember { mutableStateOf(1f) }
             var zoomOffset by remember { mutableStateOf(Offset.Zero) }
             val transformableState = rememberTransformableState { zoomChange, offsetChange, _ ->
@@ -13031,6 +13110,7 @@ private fun ChatMediaDialog(
             onDismissRequest = { fullscreenVideoUrl = null },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
+            HdrWindowEffect()
             val fsChatId = messages.firstOrNull { it.mediaUrl == fsVideoUrl }?.chatId ?: ""
             val exoPlayer = remember {
                 val publicUri = viewModel.getPublicMediaUri(fsVideoUrl, true)
@@ -13127,6 +13207,299 @@ private fun ChatMediaDialog(
                 }
             }
         )
+    }
+}
+
+// ======================================================================
+// Angepinnte Elemente (Links, Bilder, Videos, Sprachnachrichten, Dateien, Beiträge)
+// ======================================================================
+
+/** Ob eine Nachricht im Chat angepinnt werden darf – nur die in der Anforderung genannten Typen. */
+private fun isPinnableMessage(message: MessageEntity): Boolean = when (message.mediaType) {
+    "link", "image", "multi_image", "video", "audio", "document", "file", "pdf" -> true
+    // Geteilter Beitrag/Spark/Live-Stream wird als lethe://-Deep-Link in einer Text-Nachricht verschickt
+    "text" -> Regex("""lethe://(sp|li|post)\?""").containsMatchIn(message.content ?: "")
+    else -> false
+}
+
+/** Kurze Beschriftung für einen Eintrag in der "Angepinnte Elemente"-Liste. */
+private fun pinnedItemLabel(message: MessageEntity): String = when (message.mediaType) {
+    "image", "multi_image" -> "Foto"
+    "video" -> "Video"
+    "audio" -> "Sprachnachricht"
+    "document", "file", "pdf" -> message.mediaUrl?.substringAfterLast("/")?.takeIf { it.isNotBlank() } ?: "Datei"
+    "link" -> {
+        val json = try { org.json.JSONObject(message.content ?: "{}") } catch (_: Exception) { null }
+        json?.optString("title")?.takeIf { it.isNotBlank() }
+            ?: json?.optString("url")?.takeIf { it.isNotBlank() }
+            ?: "Link"
+    }
+    else -> "Beitrag"
+}
+
+/** Minimaler Play-Button für Sprachnachrichten in der Pin-Liste (kein Waveform, nur direktes Abspielen). */
+@Composable
+private fun PinnedVoicePlayButton(url: String) {
+    val mediaPlayer = remember(url) { android.media.MediaPlayer() }
+    var isPlaying by remember { mutableStateOf(false) }
+    var isPrepared by remember { mutableStateOf(false) }
+    DisposableEffect(url) {
+        if (url.isNotBlank()) {
+            try {
+                mediaPlayer.setDataSource(url)
+                mediaPlayer.prepareAsync()
+                mediaPlayer.setOnPreparedListener { isPrepared = true }
+                mediaPlayer.setOnCompletionListener { isPlaying = false }
+            } catch (_: Exception) {}
+        }
+        onDispose { mediaPlayer.release() }
+    }
+    Box(
+        modifier = Modifier
+            .size(52.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+            .clickable(enabled = isPrepared) {
+                if (isPlaying) { mediaPlayer.pause(); isPlaying = false }
+                else { mediaPlayer.start(); isPlaying = true }
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+            contentDescription = "Abspielen",
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(26.dp)
+        )
+    }
+}
+
+@Composable
+private fun PinnedItemRow(
+    message: MessageEntity,
+    viewModel: MainViewModel,
+    onJump: () -> Unit,
+    onUnpin: () -> Unit,
+    onOpenImage: (String) -> Unit,
+    onOpenVideo: (String) -> Unit
+) {
+    val timeText = remember(message.timestamp) {
+        java.text.SimpleDateFormat("dd.MM.yyyy · HH:mm", java.util.Locale.getDefault())
+            .format(java.util.Date(message.timestamp))
+    }
+    ListItem(
+        modifier = Modifier.clickable { onJump() },
+        leadingContent = {
+            when (message.mediaType) {
+                "image", "multi_image" -> {
+                    val url = if (message.mediaType == "multi_image") {
+                        message.mediaUrl?.let { parseMultiImageUrls(it).firstOrNull() }
+                    } else message.mediaUrl
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .clickable(enabled = url != null) { url?.let(onOpenImage) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (url != null) {
+                            Image(
+                                painter = rememberAsyncImagePainter(url),
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Icon(Icons.Default.Image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+                "video" -> {
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .clickable { message.mediaUrl?.let(onOpenVideo) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        VideoThumbnailImage(url = message.mediaUrl ?: "", viewModel = viewModel, modifier = Modifier.fillMaxSize())
+                        Icon(
+                            Icons.Default.PlayCircle, contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+                "audio" -> PinnedVoicePlayButton(url = message.mediaUrl ?: "")
+                "document", "file", "pdf" -> {
+                    Box(
+                        modifier = Modifier.size(52.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Description, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(26.dp))
+                    }
+                }
+                "link" -> {
+                    val lpImage = remember(message.content) {
+                        val json = try { org.json.JSONObject(message.content ?: "{}") } catch (_: Exception) { null }
+                        json?.optString("image", "")?.takeIf { it.isNotBlank() }
+                    }
+                    Box(
+                        modifier = Modifier.size(52.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (lpImage != null) {
+                            Image(painter = rememberAsyncImagePainter(lpImage), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                        } else {
+                            Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+                else -> {
+                    // Geteilter Beitrag/Spark/Live (lethe://-Deep-Link in Text-Nachricht): Vorschau nachladen
+                    var preview by remember(message.localId) { mutableStateOf<com.securechat.app.data.network.PublicContentPreview?>(null) }
+                    val contentId = remember(message.content) {
+                        Regex("""lethe://(sp|li|post)\?(?:id|[Cc])=([a-zA-Z0-9_-]+)""").find(message.content?.trim() ?: "")?.groupValues?.get(2)
+                    }
+                    LaunchedEffect(contentId) {
+                        if (!contentId.isNullOrBlank()) preview = viewModel.fetchPublicContentPreview(contentId)
+                    }
+                    Box(
+                        modifier = Modifier.size(52.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        val thumb = preview?.previewImageUrl
+                        if (thumb != null) {
+                            Image(painter = rememberAsyncImagePainter(thumb), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                        } else {
+                            Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+        },
+        headlineContent = {
+            Text(text = pinnedItemLabel(message), fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        },
+        supportingContent = { Text(timeText, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)) },
+        trailingContent = {
+            IconButton(onClick = onUnpin) {
+                Icon(Icons.Default.Close, contentDescription = "Lösen", modifier = Modifier.size(18.dp))
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PinnedItemsDialog(
+    pinnedMessages: List<MessageEntity>,
+    viewModel: MainViewModel,
+    onJump: (MessageEntity) -> Unit,
+    onUnpin: (MessageEntity) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var fullscreenImageUrl by remember { mutableStateOf<String?>(null) }
+    var fullscreenVideoUrl by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("Angepinnte Elemente", fontWeight = FontWeight.Bold) },
+                    navigationIcon = {
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Zurück")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        titleContentColor = topBarTitleColor(),
+                        navigationIconContentColor = MaterialTheme.colorScheme.onSurface
+                    )
+                )
+            }
+        ) { padding ->
+            if (pinnedMessages.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.PushPin, contentDescription = null, modifier = Modifier.size(72.dp), tint = Color.Gray.copy(alpha = 0.4f))
+                        Spacer(Modifier.height(12.dp))
+                        Text("Keine angepinnten Elemente", color = Color.Gray)
+                    }
+                }
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
+                    items(items = pinnedMessages, key = { it.localId }) { msg ->
+                        PinnedItemRow(
+                            message = msg,
+                            viewModel = viewModel,
+                            onJump = { onJump(msg) },
+                            onUnpin = { onUnpin(msg) },
+                            onOpenImage = { fullscreenImageUrl = it },
+                            onOpenVideo = { fullscreenVideoUrl = it }
+                        )
+                        HorizontalDivider(Modifier.padding(start = 80.dp))
+                    }
+                }
+            }
+        }
+    }
+
+    // Vollbild-Bildbetrachter (schlanker Viewer, kein Zoom/Speichern nötig)
+    val fsImg = fullscreenImageUrl
+    if (fsImg != null) {
+        Dialog(onDismissRequest = { fullscreenImageUrl = null }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+            HdrWindowEffect()
+            val fsImgCtx3 = LocalContext.current
+            Box(Modifier.fillMaxSize().background(Color.Black).clickable { fullscreenImageUrl = null }, contentAlignment = Alignment.Center) {
+                Image(
+                    painter = rememberAsyncImagePainter(
+                        ImageRequest.Builder(fsImgCtx3)
+                            .data(fsImg)
+                            // Max. 2048px: verhindert das Dekodieren eines großen Originalfotos
+                            // im Vollbild -> OOM (siehe gleiches Muster bei den anderen
+                            // Vollbild-Bildbetrachtern in dieser Datei).
+                            .size(2048, 2048)
+                            .scale(coil.size.Scale.FIT)
+                            .build()
+                    ),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
+                )
+                IconButton(onClick = { fullscreenImageUrl = null }, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)) {
+                    Icon(Icons.Default.Close, contentDescription = "Schließen", tint = Color.White)
+                }
+            }
+        }
+    }
+
+    // Vollbild-Videoplayer (schlanker Viewer)
+    val fsVid = fullscreenVideoUrl
+    if (fsVid != null) {
+        Dialog(onDismissRequest = { fullscreenVideoUrl = null }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+            HdrWindowEffect()
+            val exoPlayer = remember(fsVid) {
+                ExoPlayer.Builder(context).build().apply {
+                    setMediaItem(MediaItem.fromUri(viewModel.getPublicMediaUri(fsVid, true) ?: android.net.Uri.parse(fsVid)))
+                    prepare()
+                    playWhenReady = true
+                }
+            }
+            DisposableEffect(exoPlayer) { onDispose { exoPlayer.release() } }
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+                AndroidView(
+                    factory = { ctx -> PlayerView(ctx).apply { player = exoPlayer; useController = true } },
+                    modifier = Modifier.fillMaxSize()
+                )
+                IconButton(onClick = { fullscreenVideoUrl = null }, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)) {
+                    Icon(Icons.Default.Close, contentDescription = "Schließen", tint = Color.White)
+                }
+            }
+        }
     }
 }
 
@@ -13767,6 +14140,7 @@ internal fun ContactProfileDialog(
             onDismissRequest = { fullscreenImageUrl = null },
             properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false)
         ) {
+            HdrWindowEffect()
             val fsImgShareScope = rememberCoroutineScope()
             val fsImgCtx2 = LocalContext.current
             Box(modifier = Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
@@ -13814,6 +14188,7 @@ internal fun ContactProfileDialog(
             onDismissRequest = { fullscreenVideoUrl = null },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
+            HdrWindowEffect()
             val fsChatId = messages.firstOrNull { it.mediaUrl == fsVideoUrl }?.chatId ?: ""
             val exoPlayer = remember {
                 val publicUri = viewModel.getPublicMediaUri(fsVideoUrl, true)
@@ -16176,6 +16551,7 @@ private fun GroupEditScreen(
             onDismissRequest = { groupEditFullscreenImageUrl = null },
             properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false)
         ) {
+            HdrWindowEffect()
             var zoomScale by remember { mutableStateOf(1f) }
             var zoomOffset by remember { mutableStateOf(Offset.Zero) }
             val transformableState = rememberTransformableState { zoomChange, offsetChange, _ ->

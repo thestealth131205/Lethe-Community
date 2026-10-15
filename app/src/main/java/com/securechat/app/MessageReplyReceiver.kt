@@ -19,7 +19,11 @@ import com.securechat.app.data.network.WebSocketManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 import javax.inject.Inject
 
@@ -66,26 +70,46 @@ class MessageReplyReceiver : BroadcastReceiver() {
                     )
                 )
 
-                // Via WebSocket senden (clientMessageId im Payload → Server-ACK + DEDUP-2)
-                if (isGroup) {
-                    webSocketManager.sendMessage(
-                        "group_message", receiverId,
-                        mapOf(
-                            "content_blob" to replyText,
-                            "media_type" to "text",
-                            "group_id" to receiverId,
-                            "client_message_id" to clientId
+                // Via WebSocket senden (clientMessageId im Payload → Server-ACK + DEDUP-2).
+                // War die App lange nicht offen, ist der Prozess evtl. frisch nur für diesen
+                // Receiver gestartet → WebSocketManager hat KEINE aktive Verbindung. Ohne
+                // expliziten connect() würde die Nachricht nur in die pendingQueue gepuffert
+                // und erst beim nächsten echten App-Start (MainViewModel ruft connect() auf)
+                // tatsächlich rausgeschickt. Deshalb hier selbst verbinden und auf das
+                // message_ack warten, bevor goAsync() den Prozess beenden darf.
+                coroutineScope {
+                    val ackJob = async {
+                        withTimeoutOrNull(8000L) {
+                            webSocketManager.incomingMessages.first { msg ->
+                                msg.type == "message_ack" &&
+                                    ((msg.payload as? Map<*, *>)?.get("client_message_id") as? String) == clientId
+                            }
+                        }
+                    }
+                    if (!webSocketManager.isConnected()) {
+                        webSocketManager.connect(me.userId)
+                    }
+                    if (isGroup) {
+                        webSocketManager.sendMessage(
+                            "group_message", receiverId,
+                            mapOf(
+                                "content_blob" to replyText,
+                                "media_type" to "text",
+                                "group_id" to receiverId,
+                                "client_message_id" to clientId
+                            )
                         )
-                    )
-                } else {
-                    webSocketManager.sendMessage(
-                        "message", receiverId,
-                        mapOf(
-                            "content_blob" to replyText,
-                            "media_type" to "text",
-                            "client_message_id" to clientId
+                    } else {
+                        webSocketManager.sendMessage(
+                            "message", receiverId,
+                            mapOf(
+                                "content_blob" to replyText,
+                                "media_type" to "text",
+                                "client_message_id" to clientId
+                            )
                         )
-                    )
+                    }
+                    ackJob.await()
                 }
 
                 // Benachrichtigung mit gesendeter Nachricht aktualisieren (Wear OS Feedback)

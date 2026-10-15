@@ -117,6 +117,7 @@ fun LiveRoomScreen(
             // === VIDEO PLAYER ===
             val hlsUrlValue = hlsUrl
             if (!hlsUrlValue.isNullOrBlank()) {
+                HdrWindowEffect()
                 val ctx = androidx.compose.ui.platform.LocalContext.current
                 val exoPlayer = remember(hlsUrlValue) {
                     ExoPlayer.Builder(ctx).build().apply {
