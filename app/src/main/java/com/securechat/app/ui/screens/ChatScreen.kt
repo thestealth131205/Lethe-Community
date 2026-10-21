@@ -6259,19 +6259,37 @@ h1{text-align:center;padding:16px;color:#075e54;font-size:1.3em}
         )
     }
 
-    // Medien-Galerie
+    // Medien-Galerie: lokal bereits geladene Medien (reaktiv, deckt neu eintreffende Medien automatisch
+    // ab) + serverseitig nachgeladene ältere Seiten (siehe resetChatMediaGallery/loadMoreChatMedia).
     if (showMediaGallery) {
-        val mediaMessages = messages
-            .filter {
+        val olderMediaItems by viewModel.chatMediaOlderItems.collectAsState()
+        val mediaHasMore by viewModel.chatMediaHasMore.collectAsState()
+        val mediaLoading by viewModel.chatMediaLoading.collectAsState()
+        val localMediaMessages = remember(messages) {
+            messages.filter {
                 it.mediaType in listOf(
                     "image", "multi_image", "video", "audio", "audio_music",
                     "sticker", "gif", "document", "file", "pdf", "3dprint", "3d"
                 )
             }
-            .sortedBy { it.timestamp }
+        }
+        val mediaMessages = remember(localMediaMessages, olderMediaItems) {
+            (olderMediaItems + localMediaMessages)
+                .distinctBy { it.messageId ?: it.localId }
+                .sortedBy { it.timestamp }
+        }
+        LaunchedEffect(showMediaGallery) {
+            viewModel.resetChatMediaGallery(chatId)
+            viewModel.loadMoreChatMedia(chatId, isGroup, mediaMessages.firstOrNull()?.messageId)
+        }
         ChatMediaDialog(
             messages = mediaMessages,
             viewModel = viewModel,
+            hasMoreOlder = mediaHasMore,
+            loadingOlder = mediaLoading,
+            onLoadMoreOlder = {
+                viewModel.loadMoreChatMedia(chatId, isGroup, mediaMessages.firstOrNull()?.messageId)
+            },
             onDismiss = { showMediaGallery = false }
         )
     }
@@ -8710,12 +8728,6 @@ internal fun MessageBubble(
                                 if (imagePainterState is AsyncImagePainter.State.Success ||
                                     imagePainterState is AsyncImagePainter.State.Error) {
                                     onMediaLoaded(imageUrl)
-                                }
-                            }
-                            // Beim ersten Betrachten in den öffentlichen Pictures-Ordner verschieben.
-                            LaunchedEffect(imagePainterState) {
-                                if (imagePainterState is AsyncImagePainter.State.Success) {
-                                    viewModel?.exportImageToPictures(imageUrl, message.chatId)
                                 }
                             }
                             // Animierter Fortschritt 0 → 90 % beim Laden, Sprung auf 100 % wenn fertig
@@ -12786,6 +12798,9 @@ private fun buildGalleryEntries(items: List<MessageEntity>): List<GalleryEntry> 
 private fun ChatMediaDialog(
     messages: List<MessageEntity>,
     viewModel: MainViewModel,
+    hasMoreOlder: Boolean = false,
+    loadingOlder: Boolean = false,
+    onLoadMoreOlder: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -12847,6 +12862,29 @@ private fun ChatMediaDialog(
                                             style = MaterialTheme.typography.labelMedium
                                         )
                                     }
+                                )
+                            }
+                        }
+                    }
+                    if (hasMoreOlder) {
+                        HorizontalDivider()
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = !loadingOlder) { onLoadMoreOlder() }
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (loadingOlder) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Ältere Medien werden geladen…", style = MaterialTheme.typography.labelMedium)
+                            } else {
+                                Text(
+                                    "Ältere Medien laden",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
                         }
@@ -13019,7 +13057,6 @@ private fun ChatMediaDialog(
                 it.mediaUrl == fsImageUrl ||
                     (it.mediaType == "multi_image" && it.mediaUrl?.let { j -> fsImageUrl in parseMultiImageUrls(j) } == true)
             }?.chatId ?: ""
-            LaunchedEffect(fsImageUrl) { viewModel.exportImageToPictures(fsImageUrl, fsImgChatId) }
             Box(
                 modifier = Modifier.fillMaxSize().background(Color.Black),
                 contentAlignment = Alignment.Center

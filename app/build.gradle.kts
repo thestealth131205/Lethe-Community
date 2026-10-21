@@ -17,8 +17,8 @@ android {
         applicationId = "com.Lethe.app"
         minSdk = 26
         targetSdk = 36 // Geändert von 35 auf 36
-        versionCode = 310086
-        versionName = "10.4.198"
+        versionCode = 310090
+        versionName = "10.4.202"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -157,6 +157,9 @@ dependencies {
     // Coil
     implementation("io.coil-kt:coil-compose:2.5.0")
     implementation("io.coil-kt:coil-gif:2.5.0")
+
+    // Lottie (Vektor-Animationen, z.B. Halloween-Reaction im Videocall)
+    implementation("com.airbnb.android:lottie-compose:6.5.2")
 
     // Network / Retrofit
     implementation("com.squareup.retrofit2:retrofit:2.9.0")

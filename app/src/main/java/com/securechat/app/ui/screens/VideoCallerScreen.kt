@@ -1,5 +1,9 @@
 package com.securechat.app.ui.screens
 
+import com.airbnb.lottie.compose.LottieAnimation
+import com.airbnb.lottie.compose.LottieCompositionSpec
+import com.airbnb.lottie.compose.LottieConstants
+import com.airbnb.lottie.compose.rememberLottieComposition
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -304,6 +308,7 @@ enum class CallEmoji(
     HEART_EYES("😍","Verliebt", R.raw.emoji_heart,   Color(0xFFE91E8C)),
     LAUGH(    "😂", "Lachen",   R.raw.emoji_laugh,   Color(0xFFFFC107)),
     PARTY(    "🎉", "Party!",   R.raw.emoji_party,   Color(0xFFFF6B35)),
+    HALLOWEEN("🎃", "Spooky",   R.raw.emoji_halloween, Color(0xFFFF7518)),
 }
 
 /** Partikel-Datenpunkt für Floating-Effekte. */
@@ -569,6 +574,18 @@ fun EmojiReactionAnimation(
                     }
                 )
             }
+
+            // ── 🎃 Halloween: gruselig-schöner Kürbis mit Mond, Sternen & Fledermäusen ──
+            CallEmoji.HALLOWEEN -> {
+                val composition by rememberLottieComposition(
+                    LottieCompositionSpec.RawRes(R.raw.halloween_reaction)
+                )
+                LottieAnimation(
+                    composition = composition,
+                    iterations = LottieConstants.IterateForever,
+                    modifier = Modifier.size(320.dp)
+                )
+            }
         }
 
         // Emoji-Label unten
@@ -587,7 +604,7 @@ fun EmojiReactionAnimation(
 }
 
 /**
- * Ausklappbares Emoji-Picker-Panel (4 Emojis in Zeile 1, Party-Emoji in Zeile 2).
+ * Ausklappbares Emoji-Picker-Panel (alle Emojis außer dem letzten in Zeile 1, letztes in Zeile 2).
  */
 @Composable
 fun EmojiPickerPanel(

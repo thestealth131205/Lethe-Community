@@ -2220,6 +2220,84 @@ class MainViewModel @Inject constructor(
     private val _isLoadingOlderMessages = MutableStateFlow<Set<String>>(emptySet())
     val isLoadingOlderMessages: StateFlow<Set<String>> = _isLoadingOlderMessages.asStateFlow()
 
+    /**
+     * Medien-Galerie (Tap auf Chatpartner-/Gruppenbild): zeigt serverseitig ALLE Medien eines Chats,
+     * nicht nur das lokale Anzeigefenster ([getDisplayCutoffFlow]/[getDisplayLimitFlow]). Neue, frisch
+     * eintreffende Medien erscheinen automatisch über den normalen reaktiven [getMessagesForChat]-Flow
+     * (Room) - diese Listen hier ergänzen nur die ÄLTEREN, außerhalb des lokalen Fensters liegenden
+     * Medien per Seiten-Nachladen (before_id-Cursor) vom neuen `/media`-Endpoint.
+     */
+    private val _chatMediaOlderItems = MutableStateFlow<List<MessageEntity>>(emptyList())
+    val chatMediaOlderItems: StateFlow<List<MessageEntity>> = _chatMediaOlderItems.asStateFlow()
+    private val _chatMediaHasMore = MutableStateFlow(true)
+    val chatMediaHasMore: StateFlow<Boolean> = _chatMediaHasMore.asStateFlow()
+    private val _chatMediaLoading = MutableStateFlow(false)
+    val chatMediaLoading: StateFlow<Boolean> = _chatMediaLoading.asStateFlow()
+    private var chatMediaGalleryChatId: String? = null
+    private val CHAT_MEDIA_PAGE_SIZE = 60
+
+    /** Setzt die Medien-Galerie-Paginierung zurück - beim Öffnen des Dialogs für `chatId` aufrufen. */
+    fun resetChatMediaGallery(chatId: String) {
+        if (chatMediaGalleryChatId == chatId) return
+        chatMediaGalleryChatId = chatId
+        _chatMediaOlderItems.value = emptyList()
+        _chatMediaHasMore.value = true
+        _chatMediaLoading.value = false
+    }
+
+    /** Lädt die nächste (ältere) Seite der Medien-Galerie nach, ausgehend von `oldestLoadedId`. */
+    fun loadMoreChatMedia(chatId: String, isGroup: Boolean, oldestLoadedId: String?) {
+        if (_chatMediaLoading.value || !_chatMediaHasMore.value) return
+        if (chatMediaGalleryChatId != chatId) resetChatMediaGallery(chatId)
+        viewModelScope.launch {
+            _chatMediaLoading.value = true
+            try {
+                val requestLimit = CHAT_MEDIA_PAGE_SIZE + 1
+                val response = if (isGroup) {
+                    apiService.getGroupChatMedia(chatId, limit = requestLimit, beforeId = oldestLoadedId)
+                } else {
+                    apiService.getChatMedia(chatId, limit = requestLimit, beforeId = oldestLoadedId)
+                }
+                if (response.isSuccessful) {
+                    val items = response.body() ?: emptyList()
+                    val hasMore = items.size > CHAT_MEDIA_PAGE_SIZE
+                    // Server liefert aufsteigend (älteste..neueste); bei hasMore ist das erste
+                    // Element nur der "Peek" zum Erkennen weiterer Seiten - nicht Teil dieser Seite.
+                    val page = if (hasMore) items.drop(1) else items
+                    _chatMediaHasMore.value = hasMore
+                    val entities = page.map { item ->
+                        MessageEntity(
+                            // Negativ + aus der Server-ID abgeleitet: diese Einträge werden NICHT in Room
+                            // geschrieben (nur UI-Anzeige), müssen aber als LazyColumn/Grid-`key` eindeutig
+                            // sein und dürfen nicht mit echten (positiven, autoGenerate) Room-IDs kollidieren.
+                            localId = -kotlin.math.abs(item.id.hashCode().toLong()) - 1L,
+                            messageId = item.id,
+                            chatId = chatId,
+                            senderId = item.senderId,
+                            receiverId = item.receiverId,
+                            content = null,
+                            mediaType = item.mediaType,
+                            mediaUrl = item.mediaUrl,
+                            timestamp = item.timestamp?.let {
+                                try { java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US).parse(it)?.time }
+                                catch (e: Exception) { 0L }
+                            } ?: 0L,
+                            reaction = item.reaction,
+                            isPinned = item.isPinned
+                        )
+                    }
+                    _chatMediaOlderItems.value = entities + _chatMediaOlderItems.value
+                } else {
+                    _chatMediaHasMore.value = false
+                }
+            } catch (e: Exception) {
+                Timber.tag("Chat").e(e, "loadMoreChatMedia fehlgeschlagen für $chatId")
+            } finally {
+                _chatMediaLoading.value = false
+            }
+        }
+    }
+
     /** Media-Download-Queue: Warteschlange für Videos/Sprachnachrichten (maximal 2 gleichzeitig). */
     private val mediaDownloadSemaphore = kotlinx.coroutines.sync.Semaphore(2)
     private val mediaDownloadInProgress = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
@@ -3898,7 +3976,6 @@ class MainViewModel @Inject constructor(
                     // Bilder werden NICHT mehr vorab in den MediaCache geladen: Coil cached sie
                     // bereits beim Anzeigen (ImageLoader-Disk-Cache, 150 MB) – ein zusätzlicher
                     // MediaCache-Eintrag wäre eine reine Dopplung derselben Datei auf der Platte.
-                    // Für den Galerie-Export lädt exportImageToPictures() bei Bedarf nach.
                     "audio" -> {
                         mediaCache.getForChat(url, chatId, "audio")
                         if (_waveformCache.get(url) == null) loadWaveformForUrl(url)
@@ -4099,26 +4176,6 @@ class MainViewModel @Inject constructor(
                 if (getPublicMediaUri(url, true) != null) return@launch
                 val cached = mediaCache.getForChat(url, chatId, "video") ?: return@launch
                 val uri = mediaCache.moveToPublic(cached, url, true)
-                if (uri != null) {
-                    publicMediaUriMemo[url] = uri
-                    publicMediaAbsent.remove(url)
-                }
-            } catch (_: Exception) {}
-        }
-    }
-
-    /**
-     * Verschiebt ein Bild aus dem Cache in den öffentlichen Pictures-Ordner.
-     * Wird beim ersten Betrachten aufgerufen. Danach wird das Bild lokal aus der
-     * Galerie geladen.
-     */
-    fun exportImageToPictures(url: String, chatId: String) {
-        if (url.isBlank()) return
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                if (getPublicMediaUri(url, false) != null) return@launch
-                val cached = mediaCache.getForChat(url, chatId, "images") ?: return@launch
-                val uri = mediaCache.moveToPublic(cached, url, false)
                 if (uri != null) {
                     publicMediaUriMemo[url] = uri
                     publicMediaAbsent.remove(url)
@@ -14050,6 +14107,11 @@ class MainViewModel @Inject constructor(
             // {emoji:[uid,...]}) – damit zeigen 1:1- UND Gruppen-Chats sofort korrekte Zähler
             // statt eines rohen Einzel-Emojis, das die Server-Antwort erst später korrigiert.
             val current = messageDao.getMessageByLocalId(localId)?.reaction
+            // Aktion (add/remove) VOR dem lokalen Toggle ermitteln und mitschicken, damit der Server
+            // idempotent anwendet statt blind zu toggeln - ein doppelt zugestelltes/wiederholtes WS-Frame
+            // (z.B. nach Reconnect ohne Zustellbestätigung) darf die Reaktion sonst versehentlich wieder
+            // entfernen (Toggle zweimal angewendet).
+            val action = if (reactionHasUser(current, myUid, emoji)) "remove" else "add"
             val newReaction = toggleReactionJson(current, myUid, emoji)
             messageDao.setReactionByLocalId(localId, newReaction)
             if (messageId.isNotBlank()) {
@@ -14058,12 +14120,23 @@ class MainViewModel @Inject constructor(
                 val payload = buildMap<String, Any> {
                     put("message_id", messageId)
                     put("emoji", emoji)
+                    put("action", action)
                     if (isGroup) put("group_id", chatPartnerId)
                 }
                 webSocketManager.sendMessage("reaction", chatPartnerId, payload)
             }
             Timber.tag("LETHE_WS").d("Reaktion gesendet: $emoji auf $messageId an $chatPartnerId")
         }
+    }
+
+    /** Prüft, ob `userId` bereits mit `emoji` reagiert hat (für die add/remove-Aktion vor dem Toggle). */
+    private fun reactionHasUser(current: String?, userId: String, emoji: String): Boolean {
+        if (current.isNullOrBlank() || !current.trimStart().startsWith("{")) return false
+        return try {
+            val type = object : com.google.gson.reflect.TypeToken<Map<String, List<String>>>() {}.type
+            val map: Map<String, List<String>> = com.google.gson.Gson().fromJson(current, type) ?: emptyMap()
+            map[emoji]?.contains(userId) == true
+        } catch (e: Exception) { false }
     }
 
     /** Toggelt den eigenen Eintrag in der Reaktions-JSON-Map {emoji:[uid,...]} (analog zum Server). */
@@ -17406,8 +17479,7 @@ class MainViewModel @Inject constructor(
             try {
                 when (msg.mediaType) {
                     // Bilder werden hier bewusst NICHT vorab gecacht (siehe preloadChatMedia) –
-                    // Coil übernimmt das Caching für die Anzeige, exportImageToPictures() lädt
-                    // für den Galerie-Export selbst nach. Vermeidet doppelte Dateien auf der Platte.
+                    // Coil übernimmt das Caching für die Anzeige. Vermeidet doppelte Dateien auf der Platte.
                     "audio" -> {
                         if (!mediaCache.isCachedForChat(url, chatId, "audio")) {
                             mediaCache.getForChat(url, chatId, "audio")
@@ -19222,10 +19294,16 @@ class MainViewModel @Inject constructor(
             val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeFile(file.absolutePath, boundsOpts)
             val origWidth = boundsOpts.outWidth.takeIf { it > 0 } ?: maxWidth
+            val origHeight = boundsOpts.outHeight.takeIf { it > 0 } ?: 0
+            // Bilder unter 2 Megapixel bleiben in voller Auflösung erhalten (nur Rotation/Kompression,
+            // keine Verkleinerung) - nur größere Bilder werden auf maxWidth herunterskaliert.
+            val isUnderTwoMegapixels = origHeight > 0 && (origWidth.toLong() * origHeight.toLong()) <= 2_000_000L
 
             // Größte Zweierpotenz wählen, sodass das dekodierte Bild noch >= maxWidth bleibt
             var sample = 1
-            while (origWidth / (sample * 2) >= maxWidth) sample *= 2
+            if (!isUnderTwoMegapixels) {
+                while (origWidth / (sample * 2) >= maxWidth) sample *= 2
+            }
 
             // Bild mit Subsampling dekodieren (deutlich weniger RAM + schneller)
             var bitmap = BitmapFactory.decodeFile(
@@ -19241,8 +19319,8 @@ class MainViewModel @Inject constructor(
                 bitmap = rotated
             }
 
-            // Fein-Skalierung falls nach Subsampling noch zu breit
-            if (bitmap.width > maxWidth) {
+            // Fein-Skalierung falls nach Subsampling noch zu breit - aber nicht für Bilder unter 2MP
+            if (!isUnderTwoMegapixels && bitmap.width > maxWidth) {
                 val ratio = maxWidth.toFloat() / bitmap.width
                 val h = (bitmap.height * ratio).toInt()
                 val scaled = Bitmap.createScaledBitmap(bitmap, maxWidth, h, true)

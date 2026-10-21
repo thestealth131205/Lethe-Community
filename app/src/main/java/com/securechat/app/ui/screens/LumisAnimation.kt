@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,14 +36,16 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.airbnb.lottie.compose.LottieAnimation
+import com.airbnb.lottie.compose.LottieCompositionSpec
+import com.airbnb.lottie.compose.rememberLottieComposition
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -1257,302 +1260,23 @@ private fun DrawScope.drawSandPile(
 // CHRISTMAS-Effekt
 // ─────────────────────────────────────────────────────────────────────────────
 
-private data class ChristmasSnowflake(
-    val startX: Float,
-    val fallDuration: Float,
-    val phaseOffset: Float,
-    val wobbleAmplitude: Float,
-    val wobblePhase: Float,
-    val size: Float,
-    val opacity: Float
-)
-
-private data class StarDot(
-    val x: Float,
-    val y: Float,
-    val size: Float,
-    val twinklePhase: Float
-)
-
 /**
- * CHRISTMAS: Weihnachtsnacht-Szene mit Sternenhimmel, fallenden Schneeflocken
- * und einem Schlitten mit Weihnachtsmann und zwei Rentieren, der auf einer
- * Sinusbahn von rechts-oben nach links-unten über den Bildschirm fliegt.
+ * CHRISTMAS: cinematische Lottie-Vollbildszene (Sternenhimmel, Lichterkette,
+ * fallender Schnee, Schlitten mit Weihnachtsmann über den Mond fliegend,
+ * wachsender Schneehügel). Die Lottie-Datei ist exakt 180 Frames @ 30fps,
+ * also exakt 6s lang - deckungsgleich mit [progress] (0f..1f über 6000ms).
  */
 @Composable
 private fun LumisChristmas(progress: Float, screenW: Float, screenH: Float) {
-    val density = LocalDensity.current
-
-    val snowflakes = remember(screenW, screenH) {
-        val rng = Random(seed = 4242L)
-        List(48) {
-            ChristmasSnowflake(
-                startX          = rng.nextFloat() * screenW,
-                fallDuration    = 0.40f + rng.nextFloat() * 0.45f,
-                phaseOffset     = rng.nextFloat(),
-                wobbleAmplitude = 5f + rng.nextFloat() * 14f,
-                wobblePhase     = rng.nextFloat() * (PI * 2.0).toFloat(),
-                size            = 2.5f + rng.nextFloat() * 6f,
-                opacity         = 0.50f + rng.nextFloat() * 0.50f
-            )
-        }
-    }
-
-    val starDots = remember(screenW, screenH) {
-        val rng = Random(seed = 8181L)
-        List(60) {
-            StarDot(
-                x            = rng.nextFloat() * screenW,
-                y            = rng.nextFloat() * screenH * 0.70f,
-                size         = 1f + rng.nextFloat() * 3f,
-                twinklePhase = rng.nextFloat() * (PI * 2.0).toFloat()
-            )
-        }
-    }
-
-    Canvas(modifier = Modifier.fillMaxSize()) {
-
-        // ── Nacht-Himmels-Hintergrund (dunkelblau-schwarz Gradient) ──────
-        drawRect(
-            brush = Brush.verticalGradient(
-                colors = listOf(
-                    Color(0xFF010814),
-                    Color(0xFF011530),
-                    Color(0xFF02204A)
-                ),
-                startY = 0f,
-                endY   = screenH
-            ),
-            size = size
-        )
-
-        // ── Sternenhimmel ─────────────────────────────────────────────────
-        starDots.forEach { star ->
-            val twinkle = 0.55f + 0.45f * sinf(progress * PI.toFloat() * 8f + star.twinklePhase)
-            drawCircle(
-                color  = Color.White.copy(alpha = twinkle * 0.90f),
-                radius = star.size * 0.5f,
-                center = Offset(star.x, star.y)
-            )
-        }
-
-        // ── Schneeflocken (zyklisch fallend) ─────────────────────────────
-        snowflakes.forEach { flake ->
-            val rawCyclePos = (progress / flake.fallDuration + flake.phaseOffset) % 1f
-            val cyclePos    = if (rawCyclePos < 0f) rawCyclePos + 1f else rawCyclePos
-
-            val rawY = -flake.size * 2f + cyclePos * (screenH + flake.size * 4f)
-            val x    = flake.startX + flake.wobbleAmplitude * sinf(
-                cyclePos * PI.toFloat() * 5f + flake.wobblePhase
-            )
-
-            val alpha = flake.opacity
-            if (alpha > 0.01f) {
-                drawCircle(
-                    color  = Color.White.copy(alpha = alpha),
-                    radius = flake.size,
-                    center = Offset(x, rawY)
-                )
-            }
-        }
-
-        // ── Schlitten mit Weihnachtsmann (sinusförmige Bahn von rechts→links) ──
-        // Erscheint bei progress=0.05, verschwindet aus dem Screen am Ende
-        if (progress >= 0.05f) {
-            val t = ((progress - 0.05f) / 0.95f).coerceIn(0f, 1f)
-
-            // X: von rechts außen (screenW+150) nach links außen (-250)
-            val sleighX = screenW + 150f - t * (screenW + 400f)
-
-            // Y: sinusförmige Bahn im oberen Drittel des Bildschirms
-            val baseY      = screenH * 0.28f
-            val amplitude  = screenH * 0.12f
-            val sleighY    = baseY + amplitude * sinf(t * PI.toFloat() * 2.5f)
-
-            // Schlitten fliegt von rechts nach links → horizontale Spiegelung
-            // Schlitten-Silhouette zeichnen
-            drawChristmasSleigh(
-                cx       = sleighX,
-                cy       = sleighY,
-                screenW  = screenW,
-                screenH  = screenH,
-                progress = progress
-            )
-        }
-
-        // ── Schneehügel am unteren Rand ──────────────────────────────────
-        val pileH = screenH * 0.06f * progress
-        if (pileH > 1f) {
-            val numSeg = 30
-            val pilePath = Path()
-            pilePath.moveTo(0f, screenH)
-            pilePath.lineTo(0f, screenH - pileH)
-            for (i in 0..numSeg) {
-                val x     = screenW * i.toFloat() / numSeg.toFloat()
-                val normX = x / screenW
-                val wave1 = sinf(normX * PI.toFloat() * 4.8f + 0.5f) * pileH * 0.25f
-                val wave2 = sinf(normX * PI.toFloat() * 9.2f + 1.3f) * pileH * 0.13f
-                pilePath.lineTo(x, screenH - pileH + wave1 + wave2)
-            }
-            pilePath.lineTo(screenW, screenH)
-            pilePath.close()
-            drawPath(pilePath, Color(0xFFE8F4FF).copy(alpha = 0.92f))
-        }
-    }
-}
-
-/**
- * Zeichnet Schlitten + Weihnachtsmann-Silhouette + 2 Rentiere.
- */
-private fun DrawScope.drawChristmasSleigh(
-    cx: Float, cy: Float,
-    screenW: Float, screenH: Float,
-    progress: Float
-) {
-    val scale = (minOf(screenW, screenH) * 0.0009f).coerceIn(0.5f, 1.2f)
-    val silhouetteColor = Color(0xFF0A0A15)
-    val darkAccent      = Color(0xFF1A1030)
-
-    // ── Rentier 1 (weiter vorn, links vom Schlitten) ──────────────────────
-    val r1x = cx - 130f * scale
-    val r1y = cy - 10f * scale
-    drawReindeer(r1x, r1y, scale * 0.9f, silhouetteColor)
-
-    // ── Rentier 2 (dahinter, etwas weiter vorn) ───────────────────────────
-    val r2x = cx - 80f * scale
-    val r2y = cy - 5f * scale
-    drawReindeer(r2x, r2y, scale * 0.85f, silhouetteColor)
-
-    // Verbindungsleinen (Zügel) zu den Rentieren
-    drawLine(
-        color = silhouetteColor.copy(alpha = 0.80f),
-        start = Offset(cx - 40f * scale, cy),
-        end   = Offset(r1x + 20f * scale, r1y),
-        strokeWidth = 1.5f * scale, cap = StrokeCap.Round
+    val composition by rememberLottieComposition(
+        LottieCompositionSpec.RawRes(com.securechat.app.R.raw.xmas_cinematic)
     )
-    drawLine(
-        color = silhouetteColor.copy(alpha = 0.80f),
-        start = Offset(cx - 40f * scale, cy),
-        end   = Offset(r2x + 20f * scale, r2y),
-        strokeWidth = 1.5f * scale, cap = StrokeCap.Round
+    LottieAnimation(
+        composition = composition,
+        progress = { progress },
+        contentScale = ContentScale.Crop,
+        modifier = Modifier.fillMaxSize()
     )
-
-    // ── Schlitten-Korb ────────────────────────────────────────────────────
-    val sledPath = Path()
-    // Hauptkorb (gebogen)
-    sledPath.moveTo(cx - 35f * scale, cy - 5f * scale)
-    sledPath.cubicTo(
-        cx - 30f * scale, cy - 30f * scale,
-        cx + 20f * scale, cy - 30f * scale,
-        cx + 35f * scale, cy - 5f * scale
-    )
-    sledPath.lineTo(cx + 35f * scale, cy + 5f * scale)
-    sledPath.cubicTo(
-        cx + 20f * scale, cy + 5f * scale,
-        cx - 30f * scale, cy + 5f * scale,
-        cx - 35f * scale, cy + 5f * scale
-    )
-    sledPath.close()
-    drawPath(sledPath, darkAccent)
-
-    // Schlitten-Kufen (2 gebogene Linien unten)
-    val runner1 = Path()
-    runner1.moveTo(cx - 40f * scale, cy + 5f * scale)
-    runner1.cubicTo(
-        cx - 38f * scale, cy + 14f * scale,
-        cx + 32f * scale, cy + 14f * scale,
-        cx + 42f * scale, cy + 5f * scale
-    )
-    drawPath(runner1, silhouetteColor, style = Stroke(width = 3f * scale, cap = StrokeCap.Round))
-
-    val runner2 = Path()
-    runner2.moveTo(cx - 36f * scale, cy + 8f * scale)
-    runner2.cubicTo(
-        cx - 34f * scale, cy + 18f * scale,
-        cx + 28f * scale, cy + 18f * scale,
-        cx + 38f * scale, cy + 8f * scale
-    )
-    drawPath(runner2, silhouetteColor.copy(alpha = 0.55f), style = Stroke(width = 2f * scale))
-
-    // ── Weihnachtsmann-Silhouette (auf dem Schlitten) ─────────────────────
-    val santaX = cx + 8f * scale
-    val santaY = cy - 5f * scale
-
-    // Körper
-    drawOval(
-        color   = silhouetteColor,
-        topLeft = Offset(santaX - 14f * scale, santaY - 28f * scale),
-        size    = Size(28f * scale, 24f * scale)
-    )
-    // Kopf
-    drawCircle(
-        color  = silhouetteColor,
-        radius = 11f * scale,
-        center = Offset(santaX, santaY - 38f * scale)
-    )
-    // Mütze (Dreieck-artig nach oben)
-    val hatPath = Path()
-    hatPath.moveTo(santaX - 10f * scale, santaY - 46f * scale)
-    hatPath.lineTo(santaX + 2f * scale, santaY - 70f * scale)
-    hatPath.lineTo(santaX + 12f * scale, santaY - 48f * scale)
-    hatPath.close()
-    drawPath(hatPath, silhouetteColor)
-    // Mützen-Bommel
-    drawCircle(
-        color  = Color(0xFFEEEEEE).copy(alpha = 0.85f),
-        radius = 4f * scale,
-        center = Offset(santaX + 2f * scale, santaY - 70f * scale)
-    )
-    // Sack auf dem Schlitten
-    drawOval(
-        color   = silhouetteColor,
-        topLeft = Offset(cx - 30f * scale, cy - 30f * scale),
-        size    = Size(22f * scale, 26f * scale)
-    )
-}
-
-/**
- * Zeichnet eine einfache Rentier-Silhouette (Kopf, Geweih, Körper, Beine).
- */
-private fun DrawScope.drawReindeer(cx: Float, cy: Float, scale: Float, color: Color) {
-    // Körper (Oval)
-    drawOval(
-        color   = color,
-        topLeft = Offset(cx - 22f * scale, cy - 10f * scale),
-        size    = Size(44f * scale, 18f * scale)
-    )
-    // Hals
-    drawLine(color, Offset(cx + 14f * scale, cy - 8f * scale), Offset(cx + 22f * scale, cy - 22f * scale),
-        strokeWidth = 7f * scale, cap = StrokeCap.Round)
-    // Kopf
-    drawCircle(color, radius = 7f * scale, center = Offset(cx + 26f * scale, cy - 26f * scale))
-    // Geweih links
-    val antlerLx = cx + 22f * scale
-    val antlerLy = cy - 32f * scale
-    drawLine(color, Offset(antlerLx, antlerLy), Offset(antlerLx - 8f * scale, antlerLy - 12f * scale),
-        strokeWidth = 2.5f * scale, cap = StrokeCap.Round)
-    drawLine(color, Offset(antlerLx - 8f * scale, antlerLy - 12f * scale),
-        Offset(antlerLx - 14f * scale, antlerLy - 8f * scale),
-        strokeWidth = 2f * scale, cap = StrokeCap.Round)
-    drawLine(color, Offset(antlerLx - 8f * scale, antlerLy - 12f * scale),
-        Offset(antlerLx - 5f * scale, antlerLy - 18f * scale),
-        strokeWidth = 2f * scale, cap = StrokeCap.Round)
-    // Geweih rechts
-    drawLine(color, Offset(antlerLx + 4f * scale, antlerLy), Offset(antlerLx + 12f * scale, antlerLy - 12f * scale),
-        strokeWidth = 2.5f * scale, cap = StrokeCap.Round)
-    drawLine(color, Offset(antlerLx + 12f * scale, antlerLy - 12f * scale),
-        Offset(antlerLx + 18f * scale, antlerLy - 8f * scale),
-        strokeWidth = 2f * scale, cap = StrokeCap.Round)
-    drawLine(color, Offset(antlerLx + 12f * scale, antlerLy - 12f * scale),
-        Offset(antlerLx + 9f * scale, antlerLy - 18f * scale),
-        strokeWidth = 2f * scale, cap = StrokeCap.Round)
-    // 4 Beine
-    val legY = cy + 8f * scale
-    listOf(-14f, -5f, 8f, 17f).forEachIndexed { i, lx ->
-        val swing = sinf(lx * 0.8f) * 4f * scale
-        drawLine(color, Offset(cx + lx * scale, legY), Offset(cx + lx * scale + swing, legY + 14f * scale),
-            strokeWidth = 4f * scale, cap = StrokeCap.Round)
-    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2533,121 +2257,22 @@ private fun DrawScope.drawMarioPeach(cx: Float, baseY: Float, size: Float, progr
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * HALLOWEEN: Der Bildschirm dunkelt langsam ab, hellt kurz wieder etwas auf,
- * blitzt ganz kurz weiß auf und dimmt dann langsam wieder herunter – exakt
- * dieselbe Phasen-Kurve wie das Event auf der Kontaktliste/Login. Zusätzlich
- * ein Kürbis mit rot flackernden Augen oben links, ein Totenschädel oben
- * rechts und ein klapperndes Skelett unten rechts.
+ * HALLOWEEN: cinematische Lottie-Vollbildszene (Nebel, Vollmond mit Glühschein,
+ * fliegende Fledermäuse, flackernder Kürbis, schwebender Geist, Lichtblitz um
+ * die Bildschirmmitte herum). Die Lottie-Datei ist exakt 180 Frames @ 30fps,
+ * also exakt 6s lang - deckungsgleich mit [progress] (0f..1f über 6000ms).
  */
 @Composable
 private fun LumisHalloween(progress: Float, screenW: Float, screenH: Float) {
-    // Phasen-Grenzen als Anteile von 0..1 (identisch zur Kontaktlisten-Kurve: 2200/900/280/500/2120 ms von 6000 ms)
-    val pDarkEnd     = 0.3667f
-    val pLightEnd    = 0.5000f
-    val pFlashEnd    = 0.5250f
-    val pReboundEnd  = 0.5917f
-
-    fun lerpF(a: Float, b: Float, t: Float) = a + (b - a) * t.coerceIn(0f, 1f)
-
-    val blackAlpha = when {
-        progress < pDarkEnd    -> lerpF(0f, 0.62f, progress / pDarkEnd)
-        progress < pLightEnd   -> lerpF(0.62f, 0.30f, (progress - pDarkEnd) / (pLightEnd - pDarkEnd))
-        progress < pFlashEnd   -> 0f
-        progress < pReboundEnd -> lerpF(0f, 0.30f, (progress - pFlashEnd) / (pReboundEnd - pFlashEnd))
-        else                   -> lerpF(0.30f, 0f, (progress - pReboundEnd) / (1f - pReboundEnd))
-    }
-    val flashMid = pLightEnd + (pFlashEnd - pLightEnd) * 0.5f
-    val whiteAlpha = when {
-        progress < pLightEnd -> 0f
-        progress < flashMid  -> lerpF(0f, 0.85f, (progress - pLightEnd) / (flashMid - pLightEnd))
-        progress < pFlashEnd -> lerpF(0.85f, 0f, (progress - flashMid) / (pFlashEnd - flashMid))
-        else                 -> 0f
-    }
-
-    // Deko-Animationen: schnelles rotes Augenflackern, leichtes Wackeln/Pulsieren
-    val eyeFlicker      = 0.4f + 0.6f * kotlin.math.abs(sinf(progress * PI.toFloat() * 16f))
-    val pumpkinBobPx    = sinf(progress * PI.toFloat() * 6f) * (screenH * 0.01f)
-    val skeletonRattle  = sinf(progress * PI.toFloat() * 20f) * 4f
-    val skullPulse      = 1f + 0.06f * sinf(progress * PI.toFloat() * 4f)
-
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        // Dunkler Grundton, damit die Deko auch zwischen den Dimm-Phasen gut absticht
-        drawRect(color = Color(0xFF0A0004), size = size)
-
-        // Kürbis oben links – rot flackernde Augen statt der sonst gelben Mündung
-        val pumpkinW = screenW * 0.26f
-        val pumpkinH = screenH * 0.16f
-        translate(left = screenW * 0.04f, top = screenH * 0.06f + pumpkinBobPx) {
-            drawJackOLantern(
-                topLeft  = Offset.Zero,
-                w        = pumpkinW,
-                h        = pumpkinH,
-                glow     = eyeFlicker,
-                eyeColor = Color(0xFFFF1A1A)
-            )
-        }
-
-        // Totenschädel oben rechts
-        val skullW = screenW * 0.20f
-        val skullH = screenH * 0.14f
-        translate(left = screenW * 0.96f - skullW, top = screenH * 0.06f) {
-            scale(scale = skullPulse, pivot = Offset(skullW / 2f, skullH / 2f)) {
-                drawSkullIcon(w = skullW, h = skullH, jawDrop = eyeFlicker)
-            }
-        }
-
-        // Klapperndes Skelett unten rechts
-        val skelW = screenW * 0.30f
-        val skelH = screenH * 0.34f
-        withTransform({
-            translate(left = screenW * 0.96f - skelW, top = screenH * 0.94f - skelH)
-            rotate(degrees = skeletonRattle, pivot = Offset(skelW / 2f, skelH * 0.95f))
-            scale(scaleX = skelW / screenW, scaleY = skelH / screenH, pivot = Offset.Zero)
-        }) {
-            drawSkeletonFigure(jawDrop = eyeFlicker)
-        }
-
-        // Abdunkeln / Aufhellen / Blitz-Overlay (identisch zur Kontaktliste)
-        if (blackAlpha > 0f) {
-            drawRect(color = Color.Black.copy(alpha = blackAlpha), size = size)
-        }
-        if (whiteAlpha > 0f) {
-            drawRect(color = Color.White.copy(alpha = whiteAlpha), size = size)
-        }
-    }
-}
-
-/** Eigenständiger Totenschädel (ohne Brustkorb) – unterscheidet sich bewusst vom vollen Skelett. */
-private fun DrawScope.drawSkullIcon(w: Float, h: Float, jawDrop: Float) {
-    val cx = w / 2f
-
-    drawCircle(BoneWhite, radius = w * 0.34f, center = Offset(cx, h * 0.38f))
-
-    val jawOffset = h * 0.08f * jawDrop
-    drawRoundRect(
-        color = BoneWhite,
-        topLeft = Offset(cx - w * 0.19f, h * 0.55f + jawOffset),
-        size = Size(w * 0.38f, h * 0.13f),
-        cornerRadius = CornerRadius(w * 0.06f)
+    val composition by rememberLottieComposition(
+        LottieCompositionSpec.RawRes(com.securechat.app.R.raw.halloween_cinematic)
     )
-    for (i in -2..2) {
-        drawLine(
-            BoneShadow,
-            Offset(cx + i * w * 0.057f, h * 0.56f + jawOffset),
-            Offset(cx + i * w * 0.057f, h * 0.56f + jawOffset + h * 0.075f),
-            strokeWidth = 1.5f
-        )
-    }
-    drawCircle(Color.Black, radius = w * 0.095f, center = Offset(cx - w * 0.14f, h * 0.35f))
-    drawCircle(Color.Black, radius = w * 0.095f, center = Offset(cx + w * 0.14f, h * 0.35f))
-
-    val nosePath = Path().apply {
-        moveTo(cx, h * 0.40f)
-        lineTo(cx - w * 0.05f, h * 0.49f)
-        lineTo(cx + w * 0.05f, h * 0.49f)
-        close()
-    }
-    drawPath(nosePath, Color.Black)
+    LottieAnimation(
+        composition = composition,
+        progress = { progress },
+        contentScale = ContentScale.Crop,
+        modifier = Modifier.fillMaxSize()
+    )
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -24,45 +24,45 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
-            version = "10.4.198",
-            title = "HDR-Unterstützung & Absturz-Fix",
+            version = "10.4.202",
+            title = "Bildqualität, Medien-Übersicht & Reaktionen im Chat verbessert",
             items = listOf(
-                "Bilder und Videos werden jetzt in HDR angezeigt, sofern Gerät und Bildschirm das unterstützen – im Vollbildmodus im Chat, bei Videoanrufen, Livestreams und im Sparks-Feed",
-                "Angepinnte Bilder in der Übersicht 'Angepinnte Elemente' luden das Originalfoto ungekürzt in den Speicher – behoben, das konnte bei großen Fotos zu einem Absturz durch Speichermangel führen",
+                "Fotos unter 2 Megapixel werden beim Versenden nicht mehr verkleinert – die Originalauflösung bleibt erhalten",
+                "Bilder und Videos landen nicht mehr doppelt auf dem Gerät – eine außerhalb der App nutzbare Kopie entsteht jetzt nur noch beim Tippen auf 'In Galerie speichern'",
+                "Reaktionen auf Nachrichten in 1-zu-1-Chats verschwanden manchmal wieder oder kamen beim Chatpartner gar nicht erst an – behoben",
+                "Die Medien-Übersicht eines Chats (Tipp auf Profil- bzw. Gruppenbild) zeigt jetzt wirklich alle gesendeten Fotos und Videos und lädt bei Bedarf weitere ältere Medien nach",
+                "Im Lethe Media Player funktionierte 'Wiederholen' bei eingeschalteten Übergängen nicht richtig – behoben; außerdem unterstützt jetzt auch die Chromecast-Wiedergabe das Wiederholen",
             ),
-            shortSummary = "HDR bei Bildern/Videos, Videoanrufen, Livestreams & Sparks; Absturz-Fix bei angepinnten Bildern"
+            shortSummary = "Originalauflösung bei kleinen Fotos, kein doppeltes Speichern, Reaktionen-Fix, vollständige Medien-Übersicht, Wiederholen-Fix im Media Player"
         ),
 
         ChangelogEntry(
-            version = "10.4.197",
-            title = "Angepinnte Elemente & Reaktionen in Einzelchats",
+            version = "10.4.201",
+            title = "Gruseligere Halloween-Reaktion bei Videoanrufen",
             items = listOf(
-                "Links, Bilder, Videos, Sprachnachrichten, Dateien und Beiträge können jetzt in jedem Chat angepinnt werden – im Auswahlmenü einer Nachricht erscheint 'Anpinnen'/'Lösen'. Über das 3-Punkte-Menü ('Angepinnte Elemente') gibt es eine Übersicht mit Vorschau (Bild/Video klein mit Vollbild-Tipp, Sprachnachricht direkt abspielbar), ein Tipp springt zur Stelle im Chat",
-                "Reaktionen (Emojis) auf Nachrichten funktionieren in Einzelchats jetzt genauso wie in Gruppen – mit korrekten Zählern bei mehreren Reaktionen, statt nur einer einzelnen überschriebenen Reaktion",
-                "Antworten direkt aus einer Benachrichtigung wurde zuverlässiger: War Lethe lange nicht geöffnet, kam die Antwort bisher erst beim nächsten App-Start an – jetzt wird sie sofort verschickt",
+                "Die Halloween-Reaktion (Kürbiskopf) bei Videoanrufen wurde gruseliger: dunkle Wolken ziehen im Hintergrund vorbei, ein Totenschädel lauert in der Ecke, und zwei Blitze lassen den Bildschirm kurz aufblitzen",
             ),
-            shortSummary = "Angepinnte Elemente in Chats, Reaktions-Zähler auch in Einzelchats, Antwort aus Benachrichtigung zuverlässiger"
+            shortSummary = "Halloween-Reaktion bei Videoanrufen jetzt mit Wolken, Totenschädel und Blitzen"
         ),
 
         ChangelogEntry(
-            version = "10.4.196",
-            title = "Anruf-Benachrichtigungen & Lautstärke-Warnung",
+            version = "10.4.200",
+            title = "Sound für Halloween-Reaktion bei Videoanrufen",
             items = listOf(
-                "Wird die Vollbild-Anrufanzeige versehentlich mit der Zurück-Taste weggedrückt, bleibt der Anruf jetzt als kompakte Benachrichtigung mit Annehmen/Ablehnen erreichbar, statt zu verschwinden",
-                "Ist die Lautstärke während eines Anrufs zu niedrig oder stumm, wird jetzt ein animierter Hinweis zum Lauterstellen eingeblendet – ebenso bei Sprachnachrichten und Status-Beiträgen mit Ton",
-                "FriendsMix-Kontaktliste im Lethe Media Player lädt jetzt zuverlässiger (Fehler werden angezeigt statt stillschweigend als 'keine Kontakte')",
+                "Die neue Halloween-Reaktion (Kürbiskopf) bei Videoanrufen hat jetzt einen passenden gruseligen Sound",
             ),
-            shortSummary = "Anruf-Benachrichtigung bleibt erreichbar, Warnung bei zu leiser Lautstärke"
+            shortSummary = "Halloween-Reaktion bei Videoanrufen hat jetzt einen Sound"
         ),
 
         ChangelogEntry(
-            version = "10.4.195",
-            title = "Medien-Kompression & automatischer Cache-Reset",
+            version = "10.4.199",
+            title = "Neue Halloween-Animation & Lethe Media Player Fix",
             items = listOf(
-                "Im Chat gesendete Bilder werden jetzt etwas kleiner skaliert und Videos maximal in Full-HD (1920x1080) mit leicht erhöhter Kompression übertragen – spart deutlich Speicherplatz bei weiterhin guter Qualität",
-                "Nach diesem Update wird der Medien-Zwischenspeicher der App einmalig automatisch geleert, damit alte, unkomprimierte Dateien nicht unnötig Platz belegen",
+                "Neue animierte Halloween-Reaktion bei Videoanrufen: ein leuchtender, flackernder Kürbiskopf mit Fledermäusen und Mond",
+                "Die Halloween- und Weihnachts-Überraschung in der Kontaktliste sowie im Chat wurde durch eine deutlich hochwertigere, filmreife Animation ersetzt",
+                "Im Lethe Media Player öffnete ein Tipp auf den Mini-Player manchmal nicht den Vollbild-Player, wenn man sich gerade auf einem Künstler-Profil befand – behoben",
             ),
-            shortSummary = "Kleinere Bilder/Videos beim Senden, einmaliger Cache-Reset nach Update"
+            shortSummary = "Neue Halloween-Reaktion bei Videoanrufen, hochwertigere Fest-Animationen, Mini-Player-Fix im Media Player"
         ),
 
     )

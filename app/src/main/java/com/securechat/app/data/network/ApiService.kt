@@ -426,6 +426,13 @@ interface ApiService {
         @Query("after_timestamp") afterTimestamp: String? = null
     ): Response<List<MessageItemResponse>>
 
+    @GET("messages/{contact_id}/media")
+    suspend fun getChatMedia(
+        @Path("contact_id") contactId: String,
+        @Query("limit") limit: Int = 61,
+        @Query("before_id") beforeId: String? = null
+    ): Response<List<MessageItemResponse>>
+
     @GET("messages/{contact_id}/sync")
     suspend fun syncMessages(
         @Path("contact_id") contactId: String,
@@ -694,6 +701,13 @@ interface ApiService {
     suspend fun getGroupMessages(
         @Path("group_id") groupId: String,
         @Query("limit") limit: Int = 50,
+        @Query("before_id") beforeId: String? = null
+    ): Response<List<MessageItemResponse>>
+
+    @GET("groups/{group_id}/media")
+    suspend fun getGroupChatMedia(
+        @Path("group_id") groupId: String,
+        @Query("limit") limit: Int = 61,
         @Query("before_id") beforeId: String? = null
     ): Response<List<MessageItemResponse>>
 
