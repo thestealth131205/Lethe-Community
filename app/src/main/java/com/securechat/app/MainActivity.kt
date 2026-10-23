@@ -197,13 +197,16 @@ class MainActivity : FragmentActivity() {
             multiplePermissionLauncher.launch(permissionsToRequest.toTypedArray())
         }
 
-        // Akkuoptimierung deaktivieren: Lethe als Messenger braucht uneingeschränkten
-        // Hintergrundbetrieb, damit WebSocket und Benachrichtigungen nicht eingefroren werden.
-        val powerManager = getSystemService(POWER_SERVICE) as PowerManager
-        if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
-            startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                data = Uri.parse("package:$packageName")
-            })
+        // Akkuoptimierung deaktivieren: nur nötig, wenn der Dauer-WS-Dienst tatsächlich läuft
+        // (FOSS immer, playstore außer im Only-FCM-Modus mit erfolgreich registriertem Token –
+        // siehe NotificationHandler.shouldRunPersistentService).
+        if (NotificationHandler.shouldRunPersistentService(this)) {
+            val powerManager = getSystemService(POWER_SERVICE) as PowerManager
+            if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
+                startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = Uri.parse("package:$packageName")
+                })
+            }
         }
 
         // Netzwerkänderungen überwachen (WLAN ↔ Mobilfunk → WebSocket neu verbinden)
@@ -222,10 +225,18 @@ class MainActivity : FragmentActivity() {
             }
         }
 
-        // NotificationHandler ForegroundService starten (Keepalive + Liveness-Check)
-        try {
-            NotificationHandler.start(this)
-        } catch (_: Exception) { /* Service-Start kann in manchen Situationen fehlschlagen */ }
+        // NotificationHandler ForegroundService starten (Keepalive + Liveness-Check).
+        // FOSS: immer (einziger Push-Weg). Playstore: nur außerhalb des Only-FCM-Modus,
+        // sonst übernimmt FCM das Aufwecken bei eingehenden Nachrichten/Anrufen.
+        if (NotificationHandler.shouldRunPersistentService(this)) {
+            try {
+                NotificationHandler.start(this)
+            } catch (_: Exception) { /* Service-Start kann in manchen Situationen fehlschlagen */ }
+        } else {
+            try {
+                NotificationHandler.stop(this)
+            } catch (_: Exception) { /* Dienst lief evtl. gar nicht */ }
+        }
 
         // Anruf-Aktionen vom Sperrbildschirm (App-Neustart via Intent)
         val intentNavigateTo = intent.getStringExtra("navigate_to")

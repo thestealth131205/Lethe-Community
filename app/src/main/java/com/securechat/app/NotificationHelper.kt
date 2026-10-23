@@ -105,6 +105,21 @@ class NotificationHelper @Inject constructor(
         fun isOnlyFcmMode(context: Context): Boolean =
             context.getSharedPreferences(ONLY_FCM_PREFS, Context.MODE_PRIVATE)
                 .getBoolean(ONLY_FCM_KEY, false)
+
+        // Vom FCM-Token-Flow (nur playstore-Flavor: LetheFcmService.onNewToken / FcmPushProvider)
+        // gesetzt, sobald der Server einen gültigen Token bestätigt hat. NotificationHandler nutzt
+        // dieses Flag, um im Only-FCM-Modus zu entscheiden, ob der Dauer-WS-Dienst verzichtbar ist.
+        const val FCM_TOKEN_REGISTERED_KEY = "fcm_token_registered"
+
+        fun setFcmTokenRegistered(context: Context, registered: Boolean) {
+            context.getSharedPreferences(ONLY_FCM_PREFS, Context.MODE_PRIVATE)
+                .edit().putBoolean(FCM_TOKEN_REGISTERED_KEY, registered).apply()
+        }
+
+        /** true, wenn zuletzt ein FCM-Token erfolgreich am Server registriert wurde (nie true im foss-Build). */
+        fun hasFcmTokenRegistered(context: Context): Boolean =
+            context.getSharedPreferences(ONLY_FCM_PREFS, Context.MODE_PRIVATE)
+                .getBoolean(FCM_TOKEN_REGISTERED_KEY, false)
     }
 
     init {
@@ -1492,10 +1507,18 @@ class NotificationHelper @Inject constructor(
     }
 
     /** Zeigt eine Benachrichtigung wenn jemand auf eine eigene Nachricht reagiert hat. */
-    fun showReactionNotification(reactorName: String, emoji: String, reactorId: String, target: String = "deine Nachricht") {
+    fun showReactionNotification(
+        reactorName: String,
+        emoji: String,
+        reactorId: String,
+        target: String = "deine Nachricht",
+        isGroup: Boolean = false,
+        chatId: String = reactorId
+    ) {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra("chat_id", reactorId)
+            putExtra("chat_id", chatId)
+            if (isGroup) putExtra("navigate_to", "group_chat")
         }
         val pendingIntent = PendingIntent.getActivity(
             context, reactorId.hashCode() + 9100, intent,

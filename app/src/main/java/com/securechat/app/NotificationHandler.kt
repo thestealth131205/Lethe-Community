@@ -17,6 +17,9 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.securechat.app.data.local.ContactDao
+import com.securechat.app.data.local.GroupDao
+import com.securechat.app.data.local.MessageDao
+import com.securechat.app.data.network.TokenManager
 import com.securechat.app.data.network.WebSocketManager
 import com.securechat.app.data.network.WebSocketMessage
 import dagger.hilt.android.AndroidEntryPoint
@@ -52,6 +55,15 @@ class NotificationHandler : Service() {
     @Inject
     lateinit var contactDao: ContactDao
 
+    @Inject
+    lateinit var messageDao: MessageDao
+
+    @Inject
+    lateinit var groupDao: GroupDao
+
+    @Inject
+    lateinit var tokenManager: TokenManager
+
     private val handler = Handler(Looper.getMainLooper())
     private var wakeLock: PowerManager.WakeLock? = null
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -65,6 +77,23 @@ class NotificationHandler : Service() {
 
         fun start(context: Context) {
             context.startForegroundService(Intent(context, NotificationHandler::class.java))
+        }
+
+        fun stop(context: Context) {
+            context.stopService(Intent(context, NotificationHandler::class.java))
+        }
+
+        /**
+         * FOSS hat keinen FCM-Fallback (siehe FossPushProvider) – push_kind='ws' heißt, dieser
+         * Dauer-Dienst IST der einzige Push-Weg, er muss also immer laufen. Im playstore-Flavor
+         * kann der Dauer-WS+Wakelock-Betrieb entfallen, wenn der Nutzer/Admin "Nur FCM" aktiviert
+         * hat UND zuletzt erfolgreich ein FCM-Token registriert wurde – FCM übernimmt dann das
+         * Aufwecken bei eingehenden Nachrichten/Anrufen (siehe PushPayloadHandler).
+         */
+        fun shouldRunPersistentService(context: Context): Boolean {
+            if (BuildConfig.IS_FOSS) return true
+            if (!NotificationHelper.isOnlyFcmMode(context)) return true
+            return !NotificationHelper.hasFcmTokenRegistered(context)
         }
 
         fun requestBatteryOptimization(context: Context) {
@@ -85,7 +114,14 @@ class NotificationHandler : Service() {
     private val pingRunnable = object : Runnable {
         override fun run() {
             val connected = webSocketManager.isConnected()
-            webSocketManager.sendPing()  // ping wenn verbunden, reconnect-trigger wenn tot
+            // Wakelock nur für den kurzen Sende-Moment, nicht mehr dauerhaft gehalten –
+            // zwischen den Ticks darf die CPU in den Doze-Tiefschlaf fallen.
+            acquireShortWakeLock()
+            try {
+                webSocketManager.sendPing()  // ping wenn verbunden, reconnect-trigger wenn tot
+            } finally {
+                releaseWakeLock()
+            }
             PingHealthTracker.record(connected)
             if (connected) {
                 Timber.tag("LETHE_BG").d("NotificationHandler: Ping – WS verbunden")
@@ -130,7 +166,6 @@ class NotificationHandler : Service() {
             stopSelf(startId)
             return START_NOT_STICKY
         }
-        acquireWakeLock()
         handler.post(pingRunnable)
         scheduleWorkManagerJobs()
         startWsNotificationCollector()
@@ -309,19 +344,42 @@ class NotificationHandler : Service() {
                 notificationHelper.showStatusLikedNotification(likerUsername)
             }
 
-            // Jemand hat auf eine eigene 1:1-Nachricht reagiert (FCM-loser Fall: App geschlossen).
-            // Der Server routet die 1:1-Reaktion ausschließlich an den Nachrichten-Ersteller, daher
-            // ist jede empfangene 1:1-Reaktion für eine eigene Nachricht bestimmt. Gruppen-Reaktionen
-            // (reactions_json vorhanden) werden ignoriert. Der Selbst-Mirror auf eigene Geräte wird
-            // über den Kontakt-Lookup gefiltert: man ist nie sein eigener Kontakt → Contact == null.
+            // Jemand hat auf eine eigene Nachricht (1:1 oder Gruppe) reagiert (FCM-loser Fall:
+            // App geschlossen, dieser Dauer-Dienst noch aktiv). Seit der Umstellung auf eine
+            // per-User JSON-Map {emoji:[uid,...]} tragen 1:1- UND Gruppen-Reaktionen "reactions_json"
+            // im Payload - "Hinzugefügt" statt "entfernt" wird daher über die Map erkannt (Reaktor-ID
+            // muss nach dem Toggle in der Liste des Emojis stehen), nicht mehr über deren Anwesenheit.
             "reaction" -> {
                 val emoji = payload?.get("emoji") as? String ?: return
-                if (emoji.isBlank()) return                     // Reaktion entfernt: nicht benachrichtigen
-                if (payload["reactions_json"] != null) return  // Gruppen-Reaktion: nicht benachrichtigen
+                if (emoji.isBlank()) return  // Reaktion entfernt: nicht benachrichtigen
+                val messageId = payload["message_id"] as? String ?: return
+                val groupId = payload["group_id"] as? String
+                val reactionsJson = payload["reactions_json"] as? String
                 val reactorId = msg.senderId ?: return
-                val contact = contactDao.getContactById(reactorId) ?: return
-                val reactorName = contact.customAlias ?: contact.username ?: contact.fakeNumber ?: reactorId
-                notificationHelper.showReactionNotification(reactorName, emoji, reactorId)
+                val myUid = tokenManager.getUserId()
+                val wasAdded = if (!reactionsJson.isNullOrBlank()) {
+                    try {
+                        val type = object : com.google.gson.reflect.TypeToken<Map<String, List<String>>>() {}.type
+                        val map: Map<String, List<String>> = com.google.gson.Gson().fromJson(reactionsJson, type)
+                        map[emoji]?.contains(reactorId) == true
+                    } catch (e: Exception) { true }
+                } else true
+                if (!wasAdded || reactorId == myUid) return
+                val reacted = messageDao.getMessageById(messageId)
+                if (reacted == null || reacted.senderId != myUid) return
+                val contact = contactDao.getContactById(reactorId)
+                val reactorName = contact?.customAlias ?: contact?.username ?: contact?.fakeNumber ?: reactorId
+                if (groupId != null) {
+                    val group = groupDao.getGroupById(groupId)
+                    notificationHelper.showReactionNotification(
+                        reactorName, emoji, reactorId,
+                        target = "deine Nachricht in ${group?.name ?: "der Gruppe"}",
+                        isGroup = true,
+                        chatId = groupId
+                    )
+                } else {
+                    notificationHelper.showReactionNotification(reactorName, emoji, reactorId)
+                }
             }
 
             "content_liked" -> {
@@ -382,16 +440,28 @@ class NotificationHandler : Service() {
         super.onTaskRemoved(rootIntent)
     }
 
-    private fun acquireWakeLock() {
-        if (wakeLock?.isHeld == true) return
+    /**
+     * Wakelock nur für die kurze Dauer eines Ping-Sends – nicht mehr dauerhaft über die
+     * gesamte Service-Laufzeit gehalten. Vorher wurde ein Wakelock mit 60-Minuten-Timeout
+     * bei Service-Start geholt und vom alle 15 Min laufenden WebSocketReconnectWorker
+     * (NotificationHandler.start()) praktisch lückenlos erneuert, bevor er ablaufen konnte –
+     * die CPU kam dadurch nie in den Doze-Tiefschlaf, auch bei inaktivem Chat. Das 10s-Timeout
+     * hier ist nur ein Sicherheitsnetz falls releaseWakeLock() aus irgendeinem Grund nicht
+     * erreicht wird.
+     */
+    private fun acquireShortWakeLock() {
         val pm = getSystemService(POWER_SERVICE) as PowerManager
         wakeLock = pm.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
             "Lethe:NotificationHandler"
         ).apply {
             setReferenceCounted(false)
-            acquire(60 * 60 * 1000L)  // max 60 Minuten; Handler-Loop hält Service aktiv
+            acquire(10_000L)
         }
+    }
+
+    private fun releaseWakeLock() {
+        wakeLock?.let { if (it.isHeld) it.release() }
     }
 
     private fun buildForegroundNotification() =
@@ -440,7 +510,7 @@ class NotificationHandler : Service() {
     override fun onTimeout(startId: Int) {
         Timber.tag("LETHE_BG").w("NotificationHandler: System-Timeout – Service wird sauber beendet")
         handler.removeCallbacks(pingRunnable)
-        wakeLock?.let { if (it.isHeld) it.release() }
+        releaseWakeLock()
         stopSelf(startId)
     }
 
@@ -449,7 +519,7 @@ class NotificationHandler : Service() {
     override fun onTimeout(startId: Int, fgsType: Int) {
         Timber.tag("LETHE_BG").w("NotificationHandler: System-Timeout (API 35+) – Service wird sauber beendet")
         handler.removeCallbacks(pingRunnable)
-        wakeLock?.let { if (it.isHeld) it.release() }
+        releaseWakeLock()
         stopSelf(startId)
     }
 
@@ -457,7 +527,7 @@ class NotificationHandler : Service() {
 
     override fun onDestroy() {
         handler.removeCallbacks(pingRunnable)
-        wakeLock?.let { if (it.isHeld) it.release() }
+        releaseWakeLock()
         serviceScope.cancel()
         Timber.tag("LETHE_BG").i("NotificationHandler: Service zerstört – wird durch START_STICKY neu gestartet")
         super.onDestroy()

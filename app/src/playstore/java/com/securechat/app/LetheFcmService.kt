@@ -35,8 +35,10 @@ class LetheFcmService : FirebaseMessagingService() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 apiService.updateFcmToken(FcmTokenRequest(fcmToken = token, pushKind = "fcm"))
+                NotificationHelper.setFcmTokenRegistered(applicationContext, true)
                 Timber.tag("LETHE_FCM").d("Neuer FCM-Token erfolgreich am Server registriert.")
             } catch (e: Exception) {
+                NotificationHelper.setFcmTokenRegistered(applicationContext, false)
                 Timber.tag("LETHE_FCM").e(e, "Token-Update fehlgeschlagen")
             }
         }

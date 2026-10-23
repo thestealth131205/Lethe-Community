@@ -12161,9 +12161,9 @@ class MainViewModel @Inject constructor(
                     loadMessages(senderId)
                 }
                 // Benachrichtigung an den Nachrichten-Ersteller (auch ohne FCM), wenn jemand
-                // auf eine EIGENE 1:1-Nachricht neu reagiert hat (nicht beim Entfernen/eigenem Mirror).
-                // "Hinzugefügt" statt "entfernt" wird anhand der JSON-Map erkannt: Reaktor-ID muss
-                // nach dem Toggle in der Liste des Emojis stehen.
+                // auf eine EIGENE Nachricht (1:1 oder Gruppe) neu reagiert hat (nicht beim
+                // Entfernen/eigenem Mirror). "Hinzugefügt" statt "entfernt" wird anhand der
+                // JSON-Map erkannt: Reaktor-ID muss nach dem Toggle in der Liste des Emojis stehen.
                 val myUid = _currentUser.value?.userId
                 val wasAdded = if (!reactionsJson.isNullOrBlank() && !emoji.isNullOrBlank()) {
                     try {
@@ -12172,7 +12172,7 @@ class MainViewModel @Inject constructor(
                         map[emoji]?.contains(senderId) == true
                     } catch (e: Exception) { true }
                 } else !emoji.isNullOrBlank()
-                if (groupId == null && wasAdded && senderId != myUid && !_onlyFcmMode.value && !emoji.isNullOrBlank()) {
+                if (wasAdded && senderId != myUid && !_onlyFcmMode.value && !emoji.isNullOrBlank()) {
                     val reacted = messageDao.getMessageById(messageId)
                     if (reacted != null && reacted.senderId == myUid) {
                         val reactorContact = contactDao.getContactById(senderId)
@@ -12182,14 +12182,24 @@ class MainViewModel @Inject constructor(
                             reactorContact?.username?.takeIf { it.isNotBlank() }
                                 ?: reactorContact?.fakeNumber
                         }) ?: "Jemand"
-                        val target = when (reacted.mediaType) {
-                            "image" -> "dein Bild"
-                            "video" -> "dein Video"
-                            "audio" -> "deine Sprachnachricht"
-                            "poll"  -> "deine Umfrage"
-                            else    -> "deine Nachricht"
+                        if (groupId != null) {
+                            val group = groupDao.getGroupById(groupId)
+                            notificationHelper.showReactionNotification(
+                                reactorName, emoji!!, senderId,
+                                target = "deine Nachricht in ${group?.name ?: "der Gruppe"}",
+                                isGroup = true,
+                                chatId = groupId
+                            )
+                        } else {
+                            val target = when (reacted.mediaType) {
+                                "image" -> "dein Bild"
+                                "video" -> "dein Video"
+                                "audio" -> "deine Sprachnachricht"
+                                "poll"  -> "deine Umfrage"
+                                else    -> "deine Nachricht"
+                            }
+                            notificationHelper.showReactionNotification(reactorName, emoji!!, senderId, target)
                         }
-                        notificationHelper.showReactionNotification(reactorName, emoji!!, senderId, target)
                     }
                 }
                 Timber.tag("LETHE_WS").d("Reaktion empfangen: $emoji auf $messageId (updated=$updated)")
@@ -18581,6 +18591,13 @@ class MainViewModel @Inject constructor(
                 apiService.updateServerSettings(com.securechat.app.data.network.ServerSettingsUpdate(onlyFcm = enabled))
                 _onlyFcmMode.value = enabled
                 persistOnlyFcmMode(enabled)
+                // Dauer-WS-Dienst sofort an neuen Modus anpassen statt erst beim nächsten
+                // App-Start (FOSS bleibt unberührt, siehe shouldRunPersistentService).
+                if (NotificationHandler.shouldRunPersistentService(context)) {
+                    NotificationHandler.start(context)
+                } else {
+                    NotificationHandler.stop(context)
+                }
             } catch (e: Exception) {
                 _statusMessage.value = "Fehler: ${e.message}"
             }

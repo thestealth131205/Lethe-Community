@@ -24,6 +24,29 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.204",
+            title = "Benachrichtigung bei Reaktionen & Media-Player-Neuerungen",
+            items = listOf(
+                "Reagiert jemand auf eine eigene Nachricht (auch in Gruppen), gibt es jetzt eine Benachrichtigung mit Name und Emoji – ein Tipp darauf führt direkt zum passenden Chat",
+                "Dabei einen seit einigen Tagen bestehenden Fehler behoben, durch den solche Benachrichtigungen bei geschlossener App manchmal gar nicht ankamen",
+                "Im Lethe Media Player für Windows/Desktop gibt es jetzt Zufallswiedergabe und Wiederholen (auch beim Casten über Chromecast)",
+                "In der Lethe-Musikbibliothek waren über 'Künstler scannen' verknüpfte Titel für andere Nutzer teils unsichtbar – behoben",
+            ),
+            shortSummary = "Benachrichtigung bei Reaktionen auf eigene Nachrichten, Zufallswiedergabe/Wiederholen im Desktop-Player, Bibliotheks-Fix"
+        ),
+
+        ChangelogEntry(
+            version = "10.4.203",
+            title = "Akkuverbrauch im Hintergrund deutlich reduziert",
+            items = listOf(
+                "Bei Play-Store-Installationen mit funktionierendem Push (FCM) läuft der Dauer-Verbindungsdienst jetzt nicht mehr ständig im Hintergrund – Nachrichten und Anrufe kommen stattdessen über Push, was den Akkuverbrauch bei wenig Nutzung deutlich senkt",
+                "Der Wach-Zustand des Geräts wird nicht mehr dauerhaft gehalten, sondern nur noch für den kurzen Moment der Verbindungsprüfung – dazwischen kann das Gerät wieder in den Energiesparschlaf wechseln",
+                "Betrifft sowohl die Play-Store- als auch die F-Droid/FOSS-Version; bei F-Droid bleibt der Dauerdienst weiterhin aktiv, da es dort keine alternative Push-Zustellung gibt",
+            ),
+            shortSummary = "Deutlich weniger Akkuverbrauch im Hintergrund durch reduzierte Wach-Zustände und Push statt Dauerverbindung (Play Store)"
+        ),
+
+        ChangelogEntry(
             version = "10.4.202",
             title = "Bildqualität, Medien-Übersicht & Reaktionen im Chat verbessert",
             items = listOf(
@@ -43,26 +66,6 @@ object AppChangelog {
                 "Die Halloween-Reaktion (Kürbiskopf) bei Videoanrufen wurde gruseliger: dunkle Wolken ziehen im Hintergrund vorbei, ein Totenschädel lauert in der Ecke, und zwei Blitze lassen den Bildschirm kurz aufblitzen",
             ),
             shortSummary = "Halloween-Reaktion bei Videoanrufen jetzt mit Wolken, Totenschädel und Blitzen"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.200",
-            title = "Sound für Halloween-Reaktion bei Videoanrufen",
-            items = listOf(
-                "Die neue Halloween-Reaktion (Kürbiskopf) bei Videoanrufen hat jetzt einen passenden gruseligen Sound",
-            ),
-            shortSummary = "Halloween-Reaktion bei Videoanrufen hat jetzt einen Sound"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.199",
-            title = "Neue Halloween-Animation & Lethe Media Player Fix",
-            items = listOf(
-                "Neue animierte Halloween-Reaktion bei Videoanrufen: ein leuchtender, flackernder Kürbiskopf mit Fledermäusen und Mond",
-                "Die Halloween- und Weihnachts-Überraschung in der Kontaktliste sowie im Chat wurde durch eine deutlich hochwertigere, filmreife Animation ersetzt",
-                "Im Lethe Media Player öffnete ein Tipp auf den Mini-Player manchmal nicht den Vollbild-Player, wenn man sich gerade auf einem Künstler-Profil befand – behoben",
-            ),
-            shortSummary = "Neue Halloween-Reaktion bei Videoanrufen, hochwertigere Fest-Animationen, Mini-Player-Fix im Media Player"
         ),
 
     )
