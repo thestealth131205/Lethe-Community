@@ -2045,7 +2045,14 @@ fun ContactlistScreen(
                     showGreetingOverlay = false
                 }
             )
-            "xmas" -> XmasGreetingDialog(onDismiss = { showGreetingOverlay = false })
+            "xmas" -> XmasGreetingDialog(
+                onDismiss = { showGreetingOverlay = false },
+                username = greetingUsername,
+                onShareCard = { uri ->
+                    viewModel.setPendingShare(uri = uri, mimeType = "image/jpeg")
+                    showGreetingOverlay = false
+                }
+            )
             "halloween" -> HalloweenGreetingDialog(
                 onDismiss = { showGreetingOverlay = false },
                 username = greetingUsername,
@@ -3279,7 +3286,15 @@ private fun MayGreetingDialog(
 }
 
 @Composable
-private fun XmasGreetingDialog(onDismiss: () -> Unit) {
+private fun XmasGreetingDialog(
+    onDismiss: () -> Unit,
+    username: String = "",
+    onShareCard: (Uri) -> Unit = {}
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var isSharingCard by remember { mutableStateOf(false) }
+
     Dialog(onDismissRequest = onDismiss) {
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -3340,6 +3355,32 @@ private fun XmasGreetingDialog(onDismiss: () -> Unit) {
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB71C1C))
                 ) {
                     Text(stringResource(com.securechat.app.R.string.contacts_greeting_christmas_btn), color = Color.White)
+                }
+                Spacer(Modifier.height(8.dp))
+                // Glückwunschkarte teilen
+                OutlinedButton(
+                    onClick = {
+                        if (isSharingCard) return@OutlinedButton
+                        isSharingCard = true
+                        scope.launch(Dispatchers.IO) {
+                            val uri = generateAndSaveXmasCard(context, username)
+                            withContext(Dispatchers.Main) {
+                                isSharingCard = false
+                                if (uri != null) onShareCard(uri)
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFB71C1C)),
+                    enabled = !isSharingCard
+                ) {
+                    if (isSharingCard) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Color(0xFFB71C1C))
+                        Spacer(Modifier.width(8.dp))
+                    } else {
+                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text(stringResource(com.securechat.app.R.string.contacts_share_greeting_card))
                 }
             }
         }
@@ -3577,6 +3618,153 @@ private fun generateAndSaveHalloweenCard(context: android.content.Context, usern
 
         val dir = java.io.File(context.cacheDir, "greeting_cards").also { it.mkdirs() }
         val file = java.io.File(dir, "halloween_${System.currentTimeMillis()}.jpg")
+        file.outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 92, it) }
+        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    } catch (_: Exception) { null }
+}
+
+private fun generateAndSaveXmasCard(context: android.content.Context, username: String): Uri? {
+    return try {
+        val w = 900; val h = 1260
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val canvas = AndroidCanvas(bmp)
+        val p = AndroidPaint().apply { isAntiAlias = true }
+
+        // Hintergrund: tiefes Nachtblau mit Verlauf nach Dunkelgrün unten
+        p.shader = android.graphics.LinearGradient(
+            0f, 0f, 0f, h.toFloat(),
+            android.graphics.Color.parseColor("#0D1B2A"),
+            android.graphics.Color.parseColor("#1B2E1F"),
+            android.graphics.Shader.TileMode.CLAMP
+        )
+        canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), p)
+        p.shader = null
+
+        // Sterne (zufällig verteilte kleine Punkte)
+        val starPaint = AndroidPaint().apply { isAntiAlias = true; color = android.graphics.Color.parseColor("#FFF9C4") }
+        val starRng = kotlin.random.Random(42)
+        repeat(50) {
+            val sx = starRng.nextFloat() * w
+            val sy = starRng.nextFloat() * h * 0.5f
+            starPaint.alpha = 90 + starRng.nextInt(140)
+            canvas.drawCircle(sx, sy, 2f + starRng.nextFloat() * 2.5f, starPaint)
+        }
+        starPaint.alpha = 255
+
+        // Schneeflocken (verstreut über die ganze Karte)
+        val flakePaint = AndroidPaint().apply { isAntiAlias = true; color = android.graphics.Color.WHITE }
+        val flakeRng = kotlin.random.Random(7)
+        repeat(40) {
+            val fx = flakeRng.nextFloat() * w
+            val fy = flakeRng.nextFloat() * h
+            flakePaint.alpha = 100 + flakeRng.nextInt(120)
+            canvas.drawCircle(fx, fy, 3f + flakeRng.nextFloat() * 6f, flakePaint)
+        }
+        flakePaint.alpha = 255
+
+        // Tannenbaum (Mitte unten, 3 Etagen)
+        val tx = w / 2f; val tbaseY = 980f
+        val treePaint = AndroidPaint().apply { isAntiAlias = true }
+        val tiers = listOf(
+            Triple(220f, 220f, "#1B5E20"),
+            Triple(160f, 180f, "#2E7D32"),
+            Triple(100f, 140f, "#388E3C")
+        )
+        var tierY = tbaseY
+        tiers.forEach { (hgt, halfW, colorHex) ->
+            treePaint.color = android.graphics.Color.parseColor(colorHex)
+            val path = android.graphics.Path().apply {
+                moveTo(tx, tierY - hgt)
+                lineTo(tx - halfW, tierY)
+                lineTo(tx + halfW, tierY)
+                close()
+            }
+            canvas.drawPath(path, treePaint)
+            tierY -= hgt * 0.55f
+        }
+        // Stamm
+        treePaint.color = android.graphics.Color.parseColor("#5D4037")
+        canvas.drawRect(tx - 24f, tbaseY, tx + 24f, tbaseY + 55f, treePaint)
+        // Stern auf der Spitze
+        treePaint.color = android.graphics.Color.parseColor("#FFD600")
+        val starCy = tierY - 10f
+        val starPath = android.graphics.Path()
+        for (i in 0 until 10) {
+            val angle = Math.toRadians((i * 36 - 90).toDouble())
+            val r = if (i % 2 == 0) 42f else 18f
+            val sx = tx + (r * kotlin.math.cos(angle)).toFloat()
+            val sy = starCy + (r * kotlin.math.sin(angle)).toFloat()
+            if (i == 0) starPath.moveTo(sx, sy) else starPath.lineTo(sx, sy)
+        }
+        starPath.close()
+        canvas.drawPath(starPath, treePaint)
+        // Kugeln (Ornamente)
+        val ornColors = listOf("#D32F2F", "#FFD600", "#1976D2", "#D32F2F", "#FFD600")
+        val ornData = listOf(
+            Triple(-70f, -40f, 0), Triple(55f, -70f, 1), Triple(-30f, -150f, 2),
+            Triple(25f, -200f, 3), Triple(-80f, -220f, 4)
+        )
+        ornData.forEach { (dx, dy, ci) ->
+            treePaint.color = android.graphics.Color.parseColor(ornColors[ci])
+            canvas.drawCircle(tx + dx, tbaseY + dy, 16f, treePaint)
+        }
+
+        // Headline
+        val titlePaint = AndroidPaint().apply {
+            isAntiAlias = true
+            typeface = AndroidTypeface.create(AndroidTypeface.DEFAULT, AndroidTypeface.BOLD)
+            textSize = 100f
+            color = android.graphics.Color.parseColor("#E53935")
+            textAlign = AndroidPaint.Align.CENTER
+            setShadowLayer(6f, 3f, 3f, android.graphics.Color.argb(160, 0, 0, 0))
+        }
+        canvas.drawText("Frohe Weihnachten!", w / 2f, 260f, titlePaint)
+
+        // Wunschtext
+        val bodyPaint = AndroidPaint().apply {
+            isAntiAlias = true
+            textSize = 50f
+            color = android.graphics.Color.parseColor("#ECEFF1")
+            textAlign = AndroidPaint.Align.CENTER
+        }
+        val bodyLine1 = "Ich wünsche dir und deinen Liebsten"
+        val bodyLine2 = "eine besinnliche Weihnachtszeit! 🎄❄️"
+        val maxBodyWidth = w - 120f
+        while (bodyPaint.textSize > 28f && (bodyPaint.measureText(bodyLine1) > maxBodyWidth || bodyPaint.measureText(bodyLine2) > maxBodyWidth)) {
+            bodyPaint.textSize -= 2f
+        }
+        canvas.drawText(bodyLine1, w / 2f, 340f, bodyPaint)
+        canvas.drawText(bodyLine2, w / 2f, 400f, bodyPaint)
+
+        // Trennlinie
+        val linePaint = AndroidPaint().apply {
+            color = android.graphics.Color.parseColor("#E53935"); strokeWidth = 3f; isAntiAlias = true; alpha = 140
+        }
+        canvas.drawLine(80f, 1190f, (w - 80).toFloat(), 1190f, linePaint)
+
+        // Von-Zeile
+        val vonPaint = AndroidPaint().apply {
+            isAntiAlias = true
+            typeface = AndroidTypeface.create(AndroidTypeface.DEFAULT, AndroidTypeface.ITALIC)
+            textSize = 48f
+            color = android.graphics.Color.parseColor("#E53935")
+            textAlign = AndroidPaint.Align.CENTER
+        }
+        canvas.drawText("Von: $username", w / 2f, 1215f, vonPaint)
+
+        // Footer
+        val footerPaint = AndroidPaint().apply {
+            isAntiAlias = true
+            typeface = AndroidTypeface.create(AndroidTypeface.DEFAULT, AndroidTypeface.ITALIC)
+            textSize = 26f
+            color = android.graphics.Color.parseColor("#E53935")
+            alpha = 160
+            textAlign = AndroidPaint.Align.CENTER
+        }
+        canvas.drawText("versendet aus dem Lethe Messenger • https://letheapp.de", w / 2f, 1248f, footerPaint)
+
+        val dir = java.io.File(context.cacheDir, "greeting_cards").also { it.mkdirs() }
+        val file = java.io.File(dir, "xmas_${System.currentTimeMillis()}.jpg")
         file.outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 92, it) }
         FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     } catch (_: Exception) { null }

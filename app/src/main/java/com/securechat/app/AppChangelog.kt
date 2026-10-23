@@ -24,6 +24,18 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.205",
+            title = "Neues Feuerwerk-Lumi & Weihnachts-Reaktion bei Videoanrufen",
+            items = listOf(
+                "Neues Feuerwerk-Lumi zum Versenden in 1-zu-1- und Gruppenchats: mehrere bunte Raketen (Rot, Grün, Pink, Blau) steigen auf und zerplatzen kugelförmig",
+                "Neue Weihnachts-Reaktion bei Videoanrufen: ein Tannenbaum mit Lichterkette und ein vorbeifliegender Schlitten mit Rentier im Schneefall",
+                "Die Weihnachts-Glückwunschkarte in der Kontaktliste lässt sich jetzt wie die anderen Saisonkarten direkt teilen",
+                "Live-Emoji-Animationen bei Video- und Sprachanrufen wurden im Querformat bzw. auf Tablets teilweise über den oberen Bildschirmrand hinaus unsichtbar – jetzt passen sie sich der verfügbaren Höhe an",
+            ),
+            shortSummary = "Feuerwerk-Lumi, Weihnachts-Reaktion bei Anrufen inkl. teilbarer Grußkarte, Emoji-Animationen im Querformat/Tablet behoben"
+        ),
+
+        ChangelogEntry(
             version = "10.4.204",
             title = "Benachrichtigung bei Reaktionen & Media-Player-Neuerungen",
             items = listOf(
@@ -57,15 +69,6 @@ object AppChangelog {
                 "Im Lethe Media Player funktionierte 'Wiederholen' bei eingeschalteten Übergängen nicht richtig – behoben; außerdem unterstützt jetzt auch die Chromecast-Wiedergabe das Wiederholen",
             ),
             shortSummary = "Originalauflösung bei kleinen Fotos, kein doppeltes Speichern, Reaktionen-Fix, vollständige Medien-Übersicht, Wiederholen-Fix im Media Player"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.201",
-            title = "Gruseligere Halloween-Reaktion bei Videoanrufen",
-            items = listOf(
-                "Die Halloween-Reaktion (Kürbiskopf) bei Videoanrufen wurde gruseliger: dunkle Wolken ziehen im Hintergrund vorbei, ein Totenschädel lauert in der Ecke, und zwei Blitze lassen den Bildschirm kurz aufblitzen",
-            ),
-            shortSummary = "Halloween-Reaktion bei Videoanrufen jetzt mit Wolken, Totenschädel und Blitzen"
         ),
 
     )

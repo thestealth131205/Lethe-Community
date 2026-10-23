@@ -309,6 +309,8 @@ enum class CallEmoji(
     LAUGH(    "😂", "Lachen",   R.raw.emoji_laugh,   Color(0xFFFFC107)),
     PARTY(    "🎉", "Party!",   R.raw.emoji_party,   Color(0xFFFF6B35)),
     HALLOWEEN("🎃", "Spooky",   R.raw.emoji_halloween, Color(0xFFFF7518)),
+    FIREWORKS("🎆", "Feuerwerk", R.raw.emoji_fireworks, Color(0xFF6A1B9A)),
+    CHRISTMAS("🎄", "Weihnachten", null, Color(0xFFC62828)),
 }
 
 /** Partikel-Datenpunkt für Floating-Effekte. */
@@ -364,17 +366,26 @@ fun EmojiReactionAnimation(
 
     val infiniteTransition = rememberInfiniteTransition(label = "emojiAnim")
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .graphicsLayer { alpha = alphaAnim.value },
         contentAlignment = Alignment.Center
     ) {
+        // Im Querformat/auf Tablets ist die verfügbare Höhe oft deutlich kleiner als die
+        // 760dp, auf die die Partikel-Reichweiten unten kalibriert sind — ohne Skalierung
+        // wandern Partikel (z.B. y=-200dp) dann über den oberen Bildschirmrand hinaus und
+        // sind unsichtbar. scale schrumpft Bewegungsdistanzen/Schriftgröße proportional zur
+        // tatsächlichen Höhe, bleibt aber auf Portrait-Phones (>=760dp) unverändert bei 1.
+        val scale = (maxHeight.value / 760f).coerceIn(0.45f, 1f)
+        val emojiFontSize = (120f * scale).coerceAtLeast(70f).sp
+        val lottieSize = minOf(320.dp, maxHeight * 0.75f, maxWidth * 0.75f)
+
         when (emoji) {
             // ── 💩 Kackhaufen: hüpft + Gestankspartikel steigen auf ─────────
             CallEmoji.POOP -> {
                 val bounceY by infiniteTransition.animateFloat(
-                    initialValue = 0f, targetValue = -30f,
+                    initialValue = 0f, targetValue = -30f * scale,
                     animationSpec = infiniteRepeatable(tween(350, easing = FastOutSlowInEasing), RepeatMode.Reverse),
                     label = "bounceY"
                 )
@@ -385,7 +396,7 @@ fun EmojiReactionAnimation(
                 }
                 stinkParticles.forEach { p ->
                     val floatY by infiniteTransition.animateFloat(
-                        initialValue = 0f, targetValue = -160f,
+                        initialValue = 0f, targetValue = -160f * scale,
                         animationSpec = infiniteRepeatable(
                             tween((1500 + (p.delay * 400).toInt()), easing = FastOutSlowInEasing),
                             RepeatMode.Restart
@@ -404,13 +415,13 @@ fun EmojiReactionAnimation(
                         text = p.glyph,
                         fontSize = 28.sp,
                         modifier = Modifier
-                            .offset(x = p.x.dp, y = (-80f + floatY).dp)
+                            .offset(x = p.x.dp, y = (-80f * scale + floatY).dp)
                             .graphicsLayer { alpha = stinkAlpha }
                     )
                 }
                 Text(
                     text = emoji.glyph,
-                    fontSize = 120.sp,
+                    fontSize = emojiFontSize,
                     modifier = Modifier.offset(y = bounceY.dp)
                 )
             }
@@ -424,7 +435,7 @@ fun EmojiReactionAnimation(
                 )
                 Text(
                     text = emoji.glyph,
-                    fontSize = 120.sp,
+                    fontSize = emojiFontSize,
                     modifier = Modifier.graphicsLayer { rotationZ = rotDeg }
                 )
             }
@@ -443,7 +454,7 @@ fun EmojiReactionAnimation(
                 }
                 heartParticles.forEach { p ->
                     val hy by infiniteTransition.animateFloat(
-                        initialValue = 60f, targetValue = -200f,
+                        initialValue = 60f * scale, targetValue = -200f * scale,
                         animationSpec = infiniteRepeatable(
                             tween((1800 + (p.delay * 300).toInt()), easing = FastOutSlowInEasing),
                             RepeatMode.Restart
@@ -468,7 +479,7 @@ fun EmojiReactionAnimation(
                 }
                 Text(
                     text = emoji.glyph,
-                    fontSize = 120.sp,
+                    fontSize = emojiFontSize,
                     modifier = Modifier.graphicsLayer { scaleX = pulse; scaleY = pulse }
                 )
             }
@@ -511,7 +522,7 @@ fun EmojiReactionAnimation(
                 }
                 Text(
                     text = emoji.glyph,
-                    fontSize = 120.sp,
+                    fontSize = emojiFontSize,
                     modifier = Modifier.graphicsLayer {
                         translationX = shakeX
                         scaleX = scaleL; scaleY = scaleL
@@ -522,7 +533,7 @@ fun EmojiReactionAnimation(
             // ── 🎉 Party: hüpft + Konfetti-Partikel regnen herunter ──────────
             CallEmoji.PARTY -> {
                 val bounceP by infiniteTransition.animateFloat(
-                    initialValue = 0f, targetValue = -25f,
+                    initialValue = 0f, targetValue = -25f * scale,
                     animationSpec = infiniteRepeatable(tween(400, easing = FastOutSlowInEasing), RepeatMode.Reverse),
                     label = "partyBounce"
                 )
@@ -542,7 +553,7 @@ fun EmojiReactionAnimation(
                 }
                 confettiParticles.forEach { p ->
                     val cy by infiniteTransition.animateFloat(
-                        initialValue = -120f, targetValue = 80f,
+                        initialValue = -120f * scale, targetValue = 80f * scale,
                         animationSpec = infiniteRepeatable(
                             tween(900, easing = FastOutSlowInEasing, delayMillis = p.delay.toInt()),
                             RepeatMode.Restart
@@ -567,7 +578,7 @@ fun EmojiReactionAnimation(
                 }
                 Text(
                     text = emoji.glyph,
-                    fontSize = 120.sp,
+                    fontSize = emojiFontSize,
                     modifier = Modifier.graphicsLayer {
                         translationY = bounceP
                         rotationZ = rotP
@@ -583,7 +594,31 @@ fun EmojiReactionAnimation(
                 LottieAnimation(
                     composition = composition,
                     iterations = LottieConstants.IterateForever,
-                    modifier = Modifier.size(320.dp)
+                    modifier = Modifier.size(lottieSize)
+                )
+            }
+
+            // ── 🎆 Feuerwerk: mehrere aufsteigende Raketen mit bunten Explosionen ──
+            CallEmoji.FIREWORKS -> {
+                val composition by rememberLottieComposition(
+                    LottieCompositionSpec.RawRes(R.raw.fireworks_reaction)
+                )
+                LottieAnimation(
+                    composition = composition,
+                    iterations = LottieConstants.IterateForever,
+                    modifier = Modifier.size(lottieSize)
+                )
+            }
+
+            // ── 🎄 Weihnachten: Tannenbaum mit Lichterkette, Schnee & Schlitten ──
+            CallEmoji.CHRISTMAS -> {
+                val composition by rememberLottieComposition(
+                    LottieCompositionSpec.RawRes(R.raw.xmas_reaction)
+                )
+                LottieAnimation(
+                    composition = composition,
+                    iterations = LottieConstants.IterateForever,
+                    modifier = Modifier.size(lottieSize)
                 )
             }
         }
@@ -596,7 +631,7 @@ fun EmojiReactionAnimation(
             fontWeight = FontWeight.Bold,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 160.dp)
+                .padding(bottom = (160f * scale).coerceAtLeast(70f).dp)
                 .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
                 .padding(horizontal = 16.dp, vertical = 6.dp)
         )
@@ -612,8 +647,7 @@ fun EmojiPickerPanel(
     onDismiss: () -> Unit
 ) {
     val allEmojis = CallEmoji.entries
-    val firstRow = allEmojis.dropLast(1)
-    val secondRow = allEmojis.takeLast(1)
+    val emojiRows = allEmojis.chunked(4)
 
     @Composable
     fun EmojiButton(emoji: CallEmoji) {
@@ -648,17 +682,13 @@ fun EmojiPickerPanel(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                firstRow.forEach { emoji -> EmojiButton(emoji) }
-            }
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                secondRow.forEach { emoji -> EmojiButton(emoji) }
+            emojiRows.forEach { row ->
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    row.forEach { emoji -> EmojiButton(emoji) }
+                }
             }
         }
     }

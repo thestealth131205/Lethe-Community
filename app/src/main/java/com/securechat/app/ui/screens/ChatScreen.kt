@@ -6982,7 +6982,8 @@ private fun EmojiPanel(
                             Triple(LumisType.KISS,      "💋", "Kiss"),
                             Triple(LumisType.RAIN,      "🌧️", "Rain"),
                             Triple(LumisType.SUMMER,    "🌴", "Summer"),
-                            Triple(LumisType.HALLOWEEN, "🎃", "Halloween")
+                            Triple(LumisType.HALLOWEEN, "🎃", "Halloween"),
+                            Triple(LumisType.FIREWORKS, "🎆", "Feuerwerk")
                         )
                         items(lumisItems) { (type, emoji, label) ->
                             Row(

@@ -55,7 +55,7 @@ import kotlin.random.Random
 // Öffentliches Enum — welcher Lumis-Effekt läuft
 // ─────────────────────────────────────────────────────────────────────────────
 
-enum class LumisType { LOVE, SNOW, KISS, RAIN, SUMMER, CHRISTMAS, STRANGER_THINGS, LAST_OF_US, MARIO, HALLOWEEN, NONE }
+enum class LumisType { LOVE, SNOW, KISS, RAIN, SUMMER, CHRISTMAS, STRANGER_THINGS, LAST_OF_US, MARIO, HALLOWEEN, FIREWORKS, NONE }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Interne Partikel-Datenklassen
@@ -134,6 +134,7 @@ fun LumisPickerDialog(
                             LumisType.LAST_OF_US      -> { emoji = "🍄";  label = "The Last of Us"; description = "Ein Clicker steht düster in der Mitte" }
                             LumisType.MARIO           -> { emoji = "🍄";  label = "Mario & Peach";  description = "Mario-Landschaft mit Mario und Peach" }
                             LumisType.HALLOWEEN       -> { emoji = "🎃";  label = "Halloween";      description = "Gruseliges Abdunkeln mit Kürbis, Totenkopf und Skelett" }
+                            LumisType.FIREWORKS       -> { emoji = "🎆";  label = "Feuerwerk";      description = "Mehrere Raketen steigen auf und explodieren bunt" }
                             LumisType.NONE            -> return@forEach
                         }
                         Row(
@@ -222,6 +223,7 @@ fun LumisPlayer(
             LumisType.LAST_OF_US      -> LumisLastOfUs(progress = progress, screenW = screenW, screenH = screenH)
             LumisType.MARIO           -> LumisMario(progress = progress, screenW = screenW, screenH = screenH)
             LumisType.HALLOWEEN       -> LumisHalloween(progress = progress, screenW = screenW, screenH = screenH)
+            LumisType.FIREWORKS       -> LumisFireworks(progress = progress, screenW = screenW, screenH = screenH)
             LumisType.NONE            -> { /* Nichts zeichnen */ }
         }
     }
@@ -2266,6 +2268,29 @@ private fun DrawScope.drawMarioPeach(cx: Float, baseY: Float, size: Float, progr
 private fun LumisHalloween(progress: Float, screenW: Float, screenH: Float) {
     val composition by rememberLottieComposition(
         LottieCompositionSpec.RawRes(com.securechat.app.R.raw.halloween_cinematic)
+    )
+    LottieAnimation(
+        composition = composition,
+        progress = { progress },
+        contentScale = ContentScale.Crop,
+        modifier = Modifier.fillMaxSize()
+    )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FIREWORKS-Effekt
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * FIREWORKS: cinematische Lottie-Vollbildszene mit mehreren nacheinander und
+ * überlappend aufsteigenden Raketen, die in kreisförmigen Farbexplosionen
+ * (Rot, Grün, Pink, Blau) zerplatzen. Die Lottie-Datei ist exakt 180 Frames
+ * @30fps, also exakt 6s lang - deckungsgleich mit [progress] (0f..1f über 6000ms).
+ */
+@Composable
+private fun LumisFireworks(progress: Float, screenW: Float, screenH: Float) {
+    val composition by rememberLottieComposition(
+        LottieCompositionSpec.RawRes(com.securechat.app.R.raw.fireworks_cinematic)
     )
     LottieAnimation(
         composition = composition,
