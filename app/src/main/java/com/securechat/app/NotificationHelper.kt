@@ -95,31 +95,16 @@ class NotificationHelper @Inject constructor(
         const val EXTRA_NOTIFICATION_ID = "extra_notification_id"
         const val EXTRA_IS_GROUP = "extra_is_group"
 
-        // Lokal gespiegeltes Server-Setting "only_fcm". Wird vom MainViewModel beschrieben
-        // und von Hintergrund-Workern gelesen, um das WS/HTTP-Fallback-Benachrichtigungs-
-        // system bei aktivem Only-FCM-Modus komplett zu deaktivieren.
+        // Lokal gespiegeltes Server-Setting "only_iris" (ehem. "only_fcm"). Wird vom
+        // MainViewModel beschrieben und von Hintergrund-Workern gelesen, um das WS/HTTP-
+        // Fallback-Benachrichtigungssystem bei aktivem Only-Iris-Modus komplett zu deaktivieren.
         const val ONLY_FCM_PREFS = "lethe_notif_settings"
-        const val ONLY_FCM_KEY = "only_fcm"
+        const val ONLY_IRIS_KEY = "only_iris"
 
-        /** true, wenn Benachrichtigungen ausschließlich über FCM laufen sollen. */
-        fun isOnlyFcmMode(context: Context): Boolean =
+        /** true, wenn Benachrichtigungen ausschließlich über Iris laufen sollen. */
+        fun isOnlyIrisMode(context: Context): Boolean =
             context.getSharedPreferences(ONLY_FCM_PREFS, Context.MODE_PRIVATE)
-                .getBoolean(ONLY_FCM_KEY, false)
-
-        // Vom FCM-Token-Flow (nur playstore-Flavor: LetheFcmService.onNewToken / FcmPushProvider)
-        // gesetzt, sobald der Server einen gültigen Token bestätigt hat. NotificationHandler nutzt
-        // dieses Flag, um im Only-FCM-Modus zu entscheiden, ob der Dauer-WS-Dienst verzichtbar ist.
-        const val FCM_TOKEN_REGISTERED_KEY = "fcm_token_registered"
-
-        fun setFcmTokenRegistered(context: Context, registered: Boolean) {
-            context.getSharedPreferences(ONLY_FCM_PREFS, Context.MODE_PRIVATE)
-                .edit().putBoolean(FCM_TOKEN_REGISTERED_KEY, registered).apply()
-        }
-
-        /** true, wenn zuletzt ein FCM-Token erfolgreich am Server registriert wurde (nie true im foss-Build). */
-        fun hasFcmTokenRegistered(context: Context): Boolean =
-            context.getSharedPreferences(ONLY_FCM_PREFS, Context.MODE_PRIVATE)
-                .getBoolean(FCM_TOKEN_REGISTERED_KEY, false)
+                .getBoolean(ONLY_IRIS_KEY, false)
     }
 
     init {
@@ -1513,15 +1498,20 @@ class NotificationHelper @Inject constructor(
         reactorId: String,
         target: String = "deine Nachricht",
         isGroup: Boolean = false,
-        chatId: String = reactorId
+        chatId: String = reactorId,
+        messageId: String = ""
     ) {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("chat_id", chatId)
             if (isGroup) putExtra("navigate_to", "group_chat")
         }
+        // ID bezieht die Nachricht mit ein (nicht nur den Reagierenden) - sonst überschreibt jede
+        // weitere Reaktion derselben Person auf eine ANDERE Nachricht die vorherige Notification in
+        // der Systemleiste, bevor der Nutzer sie gesehen hat (wirkte wie "Benachrichtigung kam nie an").
+        val notifId = (reactorId.hashCode() * 31 + messageId.hashCode()) + 9100
         val pendingIntent = PendingIntent.getActivity(
-            context, reactorId.hashCode() + 9100, intent,
+            context, notifId, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val notification = NotificationCompat.Builder(context, CHANNEL_ID_MESSAGES)
@@ -1533,7 +1523,7 @@ class NotificationHelper @Inject constructor(
             .setAutoCancel(true)
             .build()
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(reactorId.hashCode() + 9100, notification)
+        manager.notify(notifId, notification)
     }
 
     /** Einmalige Hinweis-Benachrichtigung: Nearby-Profil aktivieren. */

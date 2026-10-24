@@ -527,15 +527,17 @@ class PushPayloadHandler @Inject constructor(
                 val reactorId   = data["reactor_id"] ?: return
                 val groupId     = data["group_id"]
                 val groupName   = data["group_name"]
+                val messageId   = data["message_id"] ?: ""
                 if (groupId != null) {
                     notificationHelper.showReactionNotification(
                         reactorName, emoji, reactorId,
                         target = "deine Nachricht in ${groupName ?: "der Gruppe"}",
                         isGroup = true,
-                        chatId = groupId
+                        chatId = groupId,
+                        messageId = messageId
                     )
                 } else {
-                    notificationHelper.showReactionNotification(reactorName, emoji, reactorId)
+                    notificationHelper.showReactionNotification(reactorName, emoji, reactorId, messageId = messageId)
                 }
             }
 

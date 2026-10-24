@@ -197,9 +197,8 @@ class MainActivity : FragmentActivity() {
             multiplePermissionLauncher.launch(permissionsToRequest.toTypedArray())
         }
 
-        // Akkuoptimierung deaktivieren: nur nötig, wenn der Dauer-WS-Dienst tatsächlich läuft
-        // (FOSS immer, playstore außer im Only-FCM-Modus mit erfolgreich registriertem Token –
-        // siehe NotificationHandler.shouldRunPersistentService).
+        // Akkuoptimierung deaktivieren: der Dauer-WS-Dienst läuft seit der Umstellung von FCM
+        // auf Iris immer, in beiden Flavors (siehe NotificationHandler.shouldRunPersistentService).
         if (NotificationHandler.shouldRunPersistentService(this)) {
             val powerManager = getSystemService(POWER_SERVICE) as PowerManager
             if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
@@ -225,9 +224,8 @@ class MainActivity : FragmentActivity() {
             }
         }
 
-        // NotificationHandler ForegroundService starten (Keepalive + Liveness-Check).
-        // FOSS: immer (einziger Push-Weg). Playstore: nur außerhalb des Only-FCM-Modus,
-        // sonst übernimmt FCM das Aufwecken bei eingehenden Nachrichten/Anrufen.
+        // NotificationHandler ForegroundService starten (Keepalive + Liveness-Check + Iris).
+        // Läuft seit der Umstellung von FCM auf Iris immer, in beiden Flavors.
         if (NotificationHandler.shouldRunPersistentService(this)) {
             try {
                 NotificationHandler.start(this)
@@ -2527,8 +2525,10 @@ class MainActivity : FragmentActivity() {
                             val adminUserReportsError by viewModel.adminUserReportsError.collectAsState()
                             val backendInitialTab = backStackEntry.arguments?.getInt("initialTab") ?: 0
                             val diamondToEuroRate by viewModel.diamondToEuroRate.collectAsState()
-                            val onlyFcmMode by viewModel.onlyFcmMode.collectAsState()
+                            val onlyIrisMode by viewModel.onlyIrisMode.collectAsState()
                             val smsGatewayStatus by viewModel.smsGatewayStatus.collectAsState()
+                            val irisTokens by viewModel.irisTokens.collectAsState()
+                            val irisActionMessage by viewModel.irisActionMessage.collectAsState()
                             BackendScreen(
                                 initialTab = backendInitialTab,
                                 onNavigateBack = { navController.popBackStack() },
@@ -2609,8 +2609,8 @@ class MainActivity : FragmentActivity() {
                                 diamondToEuroRate = diamondToEuroRate,
                                 onLoadDiamondRate = { viewModel.loadAdminDiamondRate() },
                                 onSetDiamondRate = { rate -> viewModel.setDiamondRate(rate) {} },
-                                onlyFcmMode = onlyFcmMode,
-                                onOnlyFcmModeChange = { viewModel.setOnlyFcmMode(it) },
+                                onlyIrisMode = onlyIrisMode,
+                                onOnlyIrisModeChange = { viewModel.setOnlyIrisMode(it) },
                                 onLoadServerSettings = { viewModel.loadServerSettings() },
                                 smsGatewayStatus = smsGatewayStatus,
                                 onRefreshSmsGatewayStatus = { viewModel.refreshSmsGatewayStatus() },
@@ -2632,7 +2632,13 @@ class MainActivity : FragmentActivity() {
                                 },
                                 onNavigateToMusicLibrary = {
                                     navController.navigate("music_library_manage")
-                                }
+                                },
+                                irisTokens = irisTokens,
+                                irisActionMessage = irisActionMessage,
+                                onLoadIrisTokens = { viewModel.loadIrisTokens() },
+                                onCreateIrisToken = { pkg -> viewModel.createIrisToken(pkg) },
+                                onRevokeIrisToken = { id -> viewModel.revokeIrisToken(id) },
+                                onClearIrisActionMessage = { viewModel.clearIrisActionMessage() }
                             )
                         }
 

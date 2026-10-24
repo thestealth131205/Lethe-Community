@@ -61,10 +61,10 @@ class WebSocketReconnectWorker @AssistedInject constructor(
             webSocketManager.sendPing()  // löst Reconnect aus wenn tot
 
             // 3. Als Fallback: HTTP-Poll für neue Nachrichten von allen Kontakten.
-            //    Im Only-FCM-Modus ist das WS/HTTP-Benachrichtigungssystem komplett
-            //    deaktiviert – Nachrichten-Benachrichtigungen laufen ausschließlich über FCM.
-            if (NotificationHelper.isOnlyFcmMode(context)) {
-                Timber.tag("LETHE_BG").d("ReconnectWorker: Only-FCM-Modus – HTTP-Fallback-Benachrichtigungen übersprungen")
+            //    Im Only-Iris-Modus ist das WS/HTTP-Benachrichtigungssystem komplett
+            //    deaktiviert – Nachrichten-Benachrichtigungen laufen ausschließlich über Iris.
+            if (NotificationHelper.isOnlyIrisMode(context)) {
+                Timber.tag("LETHE_BG").d("ReconnectWorker: Only-Iris-Modus – HTTP-Fallback-Benachrichtigungen übersprungen")
             } else {
                 fetchMissedMessages()
             }

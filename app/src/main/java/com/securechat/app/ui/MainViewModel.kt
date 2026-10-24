@@ -609,8 +609,14 @@ class MainViewModel @Inject constructor(
     val adminLogs: StateFlow<List<String>> = _adminLogs.asStateFlow()
 
     /** Wenn true, werden nur noch FCM-Benachrichtigungen angezeigt – eigener WS-Dienst stumm. */
-    private val _onlyFcmMode = MutableStateFlow(false)
-    val onlyFcmMode: StateFlow<Boolean> = _onlyFcmMode.asStateFlow()
+    private val _onlyIrisMode = MutableStateFlow(false)
+    val onlyIrisMode: StateFlow<Boolean> = _onlyIrisMode.asStateFlow()
+
+    // Iris: offener, FCM-unabhängiger Push-Relay-Dienst (Backend-Screen)
+    private val _irisTokens = MutableStateFlow<List<com.securechat.app.data.network.IrisTokenResponse>>(emptyList())
+    val irisTokens: StateFlow<List<com.securechat.app.data.network.IrisTokenResponse>> = _irisTokens.asStateFlow()
+    private val _irisActionMessage = MutableStateFlow<String?>(null)
+    val irisActionMessage: StateFlow<String?> = _irisActionMessage.asStateFlow()
 
     /** Live-Konsole für Neustart-Fortschritt (Client-seitige Statusmeldungen). */
     private val _restartLog = MutableStateFlow<List<String>>(emptyList())
@@ -4239,11 +4245,10 @@ class MainViewModel @Inject constructor(
     }
 
     /**
-     * Registriert den Push-Token am Server (nach Login und Session-Restore).
-     * Der konkrete Transport ist flavor-abhängig ([PushProvider]): playstore = FCM,
-     * foss = no-op (WS-Foreground-Service).
+     * Registriert den Iris-Push-Token am Server (nach Login und Session-Restore) - identisch
+     * für beide Flavors, siehe [com.securechat.app.push.IrisPushProvider] (ersetzt FCM).
      */
-    private fun registerFcmToken() {
+    private fun registerIrisToken() {
         pushProvider.registerToken()
     }
 
@@ -7981,7 +7986,7 @@ class MainViewModel @Inject constructor(
                         )
                         loadSavedAccounts()
                     }
-                    registerFcmToken()
+                    registerIrisToken()
                     // ECDH-Schlüsselpaar sicherstellen – synchron, damit loadContacts() deriveSharedSecret() nutzen kann
                     try {
                         val ecdhPubKey = withContext(Dispatchers.IO) {
@@ -8240,7 +8245,7 @@ class MainViewModel @Inject constructor(
                         )
                     )
                     loadSavedAccounts()
-                    registerFcmToken()
+                    registerIrisToken()
                     redeemPendingInvite()
 
                     // Auto-Restore: Falls kein lokaler Key vorhanden (Neuinstallation / Gerätewechsel),
@@ -10717,7 +10722,7 @@ class MainViewModel @Inject constructor(
                     val alreadyNotified = (alreadyNotifiedByFcm || alreadyNotifiedByDb) && !shouldUpdateFcmNotif
 
                     if (!alreadyNotified) {
-                        if (!_onlyFcmMode.value) {
+                        if (!_onlyIrisMode.value) {
                             // Drop(1) entfernt die gerade eingefügte Nachricht (neueste) aus der Historie,
                             // damit sie nicht doppelt erscheint (einmal in recentMessages + einmal als messagePreview)
                             val recentRaw = messageDao.getRecentMessagesForChat(senderId, 6).drop(1)
@@ -10958,7 +10963,7 @@ class MainViewModel @Inject constructor(
 
                 _incomingContactRequest.value = IncomingRequest(fromNumber, fromName, entryId)
                 // System-Benachrichtigung anzeigen (auch wenn App im Vordergrund ist)
-                if (!_onlyFcmMode.value) notificationHelper.showContactRequestNotification(fromName, fromNumber, entryId)
+                if (!_onlyIrisMode.value) notificationHelper.showContactRequestNotification(fromName, fromNumber, entryId)
                 Timber.tag("LETHE_WS").d("Kontaktanfrage von: $fromName ($fromNumber)")
             }
 
@@ -11219,7 +11224,7 @@ class MainViewModel @Inject constructor(
                 )
                 val ltContact = contactDao.getContactById(ltSenderId)
                 val ltName = ltContact?.username ?: ltContact?.fakeNumber ?: ltSenderId
-                if (!_onlyFcmMode.value) notificationHelper.showListenTogetherNotification(ltName, trackTitle)
+                if (!_onlyIrisMode.value) notificationHelper.showListenTogetherNotification(ltName, trackTitle)
                 // Systemnachricht lokal in den Chat einfügen (für den Empfänger sichtbar)
                 messageDao.insertMessage(
                     MessageEntity(
@@ -11464,7 +11469,7 @@ class MainViewModel @Inject constructor(
                 }
 
                 // Benachrichtigung anzeigen wenn Gruppe nicht aktiv ist und kein FCM-Modus
-                if (!isActiveGroup && !_onlyFcmMode.value) {
+                if (!isActiveGroup && !_onlyIrisMode.value) {
                     val alreadyNotifiedByFcm = messageId != null && FcmMessageBus.wasNotificationShownByFcm(messageId)
                     val alreadyNotifiedByDb = messageId != null && messageDao.isDeliveredAsNotification(messageId) == 1
                     val group = groupDao.getGroupById(groupId)
@@ -11760,7 +11765,7 @@ class MainViewModel @Inject constructor(
                 // Sperrzustand GENAU EINE der beiden Darstellungen, nie beide gleichzeitig:
                 // Standby/gesperrt → kleiner Banner, Gerät aktiv in Benutzung (Bildschirm an
                 // und entsperrt) → direkt die Vollbild-Anruf-UI.
-                if (!_onlyFcmMode.value) {
+                if (!_onlyIrisMode.value) {
                     when (CallDisplayPolicy.decide(context, _isAppInForeground.value)) {
                         CallDisplayPolicy.Mode.FULL_SCREEN -> {
                             IncomingCallActivity.startFromBackground(context)
@@ -12172,7 +12177,7 @@ class MainViewModel @Inject constructor(
                         map[emoji]?.contains(senderId) == true
                     } catch (e: Exception) { true }
                 } else !emoji.isNullOrBlank()
-                if (wasAdded && senderId != myUid && !_onlyFcmMode.value && !emoji.isNullOrBlank()) {
+                if (wasAdded && senderId != myUid && !_onlyIrisMode.value && !emoji.isNullOrBlank()) {
                     val reacted = messageDao.getMessageById(messageId)
                     if (reacted != null && reacted.senderId == myUid) {
                         val reactorContact = contactDao.getContactById(senderId)
@@ -12188,7 +12193,8 @@ class MainViewModel @Inject constructor(
                                 reactorName, emoji!!, senderId,
                                 target = "deine Nachricht in ${group?.name ?: "der Gruppe"}",
                                 isGroup = true,
-                                chatId = groupId
+                                chatId = groupId,
+                                messageId = messageId
                             )
                         } else {
                             val target = when (reacted.mediaType) {
@@ -12198,7 +12204,7 @@ class MainViewModel @Inject constructor(
                                 "poll"  -> "deine Umfrage"
                                 else    -> "deine Nachricht"
                             }
-                            notificationHelper.showReactionNotification(reactorName, emoji!!, senderId, target)
+                            notificationHelper.showReactionNotification(reactorName, emoji!!, senderId, target, messageId = messageId)
                         }
                     }
                 }
@@ -12387,7 +12393,7 @@ class MainViewModel @Inject constructor(
             "status_liked" -> {
                 val payload = msg.payload as? Map<*, *> ?: return
                 val likerUsername = payload["liker_username"] as? String ?: "Jemand"
-                if (!_onlyFcmMode.value) notificationHelper.showStatusLikedNotification(likerUsername)
+                if (!_onlyIrisMode.value) notificationHelper.showStatusLikedNotification(likerUsername)
                 Timber.tag("LETHE_WS").d("Status geliked von: $likerUsername")
             }
 
@@ -12395,7 +12401,7 @@ class MainViewModel @Inject constructor(
             "new_status" -> {
                 val payload = msg.payload as? Map<*, *> ?: return
                 val senderName = payload["sender_name"] as? String ?: "Jemand"
-                if (!_onlyFcmMode.value) notificationHelper.showNewStatusNotification(senderName)
+                if (!_onlyIrisMode.value) notificationHelper.showNewStatusNotification(senderName)
                 Timber.tag("LETHE_WS").d("Neuer Status von: $senderName")
             }
 
@@ -12407,7 +12413,7 @@ class MainViewModel @Inject constructor(
                 val ticketId = payload["ticket_id"] as? String ?: return
                 val category = payload["category"] as? String ?: ""
                 val title = payload["title"] as? String ?: "Neues Ticket"
-                if (!_onlyFcmMode.value) notificationHelper.showNewSupportTicketNotification(category, title, ticketId)
+                if (!_onlyIrisMode.value) notificationHelper.showNewSupportTicketNotification(category, title, ticketId)
                 Timber.tag("LETHE_WS").d("Neues Support-Ticket: [$category] $title")
             }
 
@@ -12488,7 +12494,7 @@ class MainViewModel @Inject constructor(
                         val msgPreview = newMsg.content?.takeIf { it.isNotBlank() }
                             ?: "[${newMsg.mediaType}]"
                         val notifId = NotificationHelper.NOTIFICATION_ID_MESSAGE_BASE + newMsg.matchId.hashCode()
-                        if (!_onlyFcmMode.value) viewModelScope.launch {
+                        if (!_onlyIrisMode.value) viewModelScope.launch {
                             notificationHelper.showMessageNotification(
                                 senderId = newMsg.senderId,
                                 senderName = partnerName,
@@ -12527,7 +12533,7 @@ class MainViewModel @Inject constructor(
             "nearby_reaction" -> {
                 val payload = msg.payload as? Map<*, *> ?: return
                 val emoji = payload["emoji"] as? String ?: return
-                if (!_onlyFcmMode.value) notificationHelper.showNearbyQuestionReactionNotification(emoji)
+                if (!_onlyIrisMode.value) notificationHelper.showNearbyQuestionReactionNotification(emoji)
             }
 
             "key_sync_request" -> {
@@ -12723,7 +12729,7 @@ class MainViewModel @Inject constructor(
                 val playersRequired = (payload?.get("players_required") as? Number)?.toInt() ?: 4
                 _sknChOpenGamesCount.value = _sknChOpenGamesCount.value + 1
                 val myUsername = _currentUser.value?.name ?: ""
-                if (creatorUsername != myUsername && !_onlyFcmMode.value) {
+                if (creatorUsername != myUsername && !_onlyIrisMode.value) {
                     notificationHelper.showSknChGameOpenedNotification(creatorUsername, playersRequired)
                 }
             }
@@ -12752,7 +12758,7 @@ class MainViewModel @Inject constructor(
                     val senderId = msg.senderId
                     if (senderId != null) {
                         _pendingGameInvite.value = PendingGameInvite(senderId, fromName, gameType)
-                        if (!_onlyFcmMode.value) notificationHelper.showGameInviteNotification(fromName)
+                        if (!_onlyIrisMode.value) notificationHelper.showGameInviteNotification(fromName)
                         // Systemnachricht in den Chat des Empfängers einfügen
                         val gameDisplayName = when (gameType) {
                             "ACTIVITY"    -> "Zeichnen & Raten"
@@ -15597,7 +15603,7 @@ class MainViewModel @Inject constructor(
                 if (resp.isSuccessful) {
                     loadNearbyAnonQuestions(profileUserId)
                     val count = prefsRepository.incrementNearbyQuestionsSent()
-                    if (count == 100 && !_onlyFcmMode.value) {
+                    if (count == 100 && !_onlyIrisMode.value) {
                         notificationHelper.showNearby100QuestionsNotification()
                     }
                     onSuccess()
@@ -18578,27 +18584,20 @@ class MainViewModel @Inject constructor(
             try {
                 val resp = apiService.getServerSettings()
                 if (resp.isSuccessful) {
-                    val onlyFcm = resp.body()?.onlyFcm ?: false
-                    _onlyFcmMode.value = onlyFcm
-                    persistOnlyFcmMode(onlyFcm)
+                    val onlyIris = resp.body()?.onlyIris ?: false
+                    _onlyIrisMode.value = onlyIris
+                    persistOnlyIrisMode(onlyIris)
                 }
             } catch (_: Exception) {}
         }
     }
 
-    fun setOnlyFcmMode(enabled: Boolean) {
+    fun setOnlyIrisMode(enabled: Boolean) {
         viewModelScope.launch {
             try {
-                apiService.updateServerSettings(com.securechat.app.data.network.ServerSettingsUpdate(onlyFcm = enabled))
-                _onlyFcmMode.value = enabled
-                persistOnlyFcmMode(enabled)
-                // Dauer-WS-Dienst sofort an neuen Modus anpassen statt erst beim nächsten
-                // App-Start (FOSS bleibt unberührt, siehe shouldRunPersistentService).
-                if (NotificationHandler.shouldRunPersistentService(context)) {
-                    NotificationHandler.start(context)
-                } else {
-                    NotificationHandler.stop(context)
-                }
+                apiService.updateServerSettings(com.securechat.app.data.network.ServerSettingsUpdate(onlyIris = enabled))
+                _onlyIrisMode.value = enabled
+                persistOnlyIrisMode(enabled)
             } catch (e: Exception) {
                 _statusMessage.value = "Fehler: ${e.message}"
             }
@@ -18606,15 +18605,59 @@ class MainViewModel @Inject constructor(
     }
 
     /**
-     * Persistiert den Only-FCM-Modus lokal, damit Hintergrund-Worker (z. B. der
+     * Persistiert den Only-Iris-Modus lokal, damit Hintergrund-Worker (z. B. der
      * WebSocketReconnectWorker) das nur-Admins-sichtbare Server-Setting kennen und
      * das WS/HTTP-Fallback-Benachrichtigungssystem komplett deaktivieren können.
      */
-    private fun persistOnlyFcmMode(enabled: Boolean) {
+    private fun persistOnlyIrisMode(enabled: Boolean) {
         context.getSharedPreferences(NotificationHelper.ONLY_FCM_PREFS, Context.MODE_PRIVATE)
             .edit()
-            .putBoolean(NotificationHelper.ONLY_FCM_KEY, enabled)
+            .putBoolean(NotificationHelper.ONLY_IRIS_KEY, enabled)
             .apply()
+    }
+
+    fun loadIrisTokens() {
+        viewModelScope.launch {
+            try {
+                val resp = apiService.listIrisTokens()
+                if (resp.isSuccessful) {
+                    _irisTokens.value = resp.body() ?: emptyList()
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun createIrisToken(packageName: String) {
+        viewModelScope.launch {
+            try {
+                val resp = apiService.createIrisToken(
+                    com.securechat.app.data.network.IrisTokenGenerateRequest(packageName)
+                )
+                if (resp.isSuccessful) {
+                    _irisActionMessage.value = "Token erzeugt ✓"
+                    loadIrisTokens()
+                } else {
+                    _irisActionMessage.value = "Fehler: ${resp.code()}"
+                }
+            } catch (e: Exception) {
+                _irisActionMessage.value = "Fehler: ${e.message}"
+            }
+        }
+    }
+
+    fun revokeIrisToken(id: String) {
+        viewModelScope.launch {
+            try {
+                apiService.revokeIrisToken(id)
+                loadIrisTokens()
+            } catch (e: Exception) {
+                _irisActionMessage.value = "Fehler: ${e.message}"
+            }
+        }
+    }
+
+    fun clearIrisActionMessage() {
+        _irisActionMessage.value = null
     }
 
     // ===================== ADMIN: NUTZERVERWALTUNG =====================

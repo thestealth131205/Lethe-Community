@@ -22,6 +22,7 @@ import com.securechat.app.data.local.MessageDao
 import com.securechat.app.data.network.TokenManager
 import com.securechat.app.data.network.WebSocketManager
 import com.securechat.app.data.network.WebSocketMessage
+import com.securechat.app.push.IrisConnection
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,9 +35,11 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 /**
- * Zentraler ForegroundService für WebSocket-Keepalive.
+ * Zentraler ForegroundService für WebSocket-Keepalive (Chat-WS + Iris-Push-Verbindung).
  *
- * - Ping-Loop: alle 30s wenn verbunden, alle 10s wenn getrennt (löst Reconnect aus)
+ * - Ping-Loop: alle 30s wenn verbunden, alle 10s wenn getrennt (löst Reconnect aus); hält im
+ *   selben Tick auch die Iris-Verbindung ([com.securechat.app.push.IrisConnection]) am Leben -
+ *   der FCM-Ersatz, über den der Server bei "nur Iris" eingehende Pushes zustellt
  * - Läuft dank android:stopWithTask="false" weiter, wenn die App aus den Recents gewischt wird,
  *   sodass der WebSocket verbunden bleibt (kein "du könntest Nachrichten haben"-False-Positive)
  * - Startet WorkManager-Jobs für belt-and-suspenders-Hintergrundprüfung
@@ -64,6 +67,9 @@ class NotificationHandler : Service() {
     @Inject
     lateinit var tokenManager: TokenManager
 
+    @Inject
+    lateinit var irisConnection: IrisConnection
+
     private val handler = Handler(Looper.getMainLooper())
     private var wakeLock: PowerManager.WakeLock? = null
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -84,17 +90,13 @@ class NotificationHandler : Service() {
         }
 
         /**
-         * FOSS hat keinen FCM-Fallback (siehe FossPushProvider) – push_kind='ws' heißt, dieser
-         * Dauer-Dienst IST der einzige Push-Weg, er muss also immer laufen. Im playstore-Flavor
-         * kann der Dauer-WS+Wakelock-Betrieb entfallen, wenn der Nutzer/Admin "Nur FCM" aktiviert
-         * hat UND zuletzt erfolgreich ein FCM-Token registriert wurde – FCM übernimmt dann das
-         * Aufwecken bei eingehenden Nachrichten/Anrufen (siehe PushPayloadHandler).
+         * Seit der Umstellung von FCM auf Iris (siehe IrisPushProvider/IrisConnection) gibt es
+         * keinen Google-seitig gehaltenen Push-Weg mehr, der diesen Dienst verzichtbar machen
+         * würde – die Iris-Verbindung braucht wie die normale Chat-WebSocket einen dauerhaft
+         * gehaltenen Socket, den nur dieser Foreground-Service bereitstellen kann. Gilt daher
+         * unverändert für beide Flavors.
          */
-        fun shouldRunPersistentService(context: Context): Boolean {
-            if (BuildConfig.IS_FOSS) return true
-            if (!NotificationHelper.isOnlyFcmMode(context)) return true
-            return !NotificationHelper.hasFcmTokenRegistered(context)
-        }
+        fun shouldRunPersistentService(context: Context): Boolean = true
 
         fun requestBatteryOptimization(context: Context) {
             val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -119,6 +121,9 @@ class NotificationHandler : Service() {
             acquireShortWakeLock()
             try {
                 webSocketManager.sendPing()  // ping wenn verbunden, reconnect-trigger wenn tot
+                // Iris-Verbindung (FCM-Ersatz) im selben Tick am Leben halten/wiederherstellen.
+                irisConnection.ensureConnected(tokenManager.getIrisToken())
+                irisConnection.ping()
             } finally {
                 releaseWakeLock()
             }
@@ -375,10 +380,11 @@ class NotificationHandler : Service() {
                         reactorName, emoji, reactorId,
                         target = "deine Nachricht in ${group?.name ?: "der Gruppe"}",
                         isGroup = true,
-                        chatId = groupId
+                        chatId = groupId,
+                        messageId = messageId
                     )
                 } else {
-                    notificationHelper.showReactionNotification(reactorName, emoji, reactorId)
+                    notificationHelper.showReactionNotification(reactorName, emoji, reactorId, messageId = messageId)
                 }
             }
 
@@ -528,6 +534,7 @@ class NotificationHandler : Service() {
     override fun onDestroy() {
         handler.removeCallbacks(pingRunnable)
         releaseWakeLock()
+        irisConnection.disconnect()
         serviceScope.cancel()
         Timber.tag("LETHE_BG").i("NotificationHandler: Service zerstört – wird durch START_STICKY neu gestartet")
         super.onDestroy()

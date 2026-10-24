@@ -62,6 +62,21 @@ data class FcmTokenRequest(
     @SerializedName("push_kind") val pushKind: String? = null
 )
 
+// --- IRIS (offener, FCM-unabhängiger Push-Relay-Dienst) ---
+
+data class IrisTokenGenerateRequest(
+    @SerializedName("package_name") val packageName: String
+)
+
+data class IrisTokenResponse(
+    val id: String? = null,
+    val token: String,
+    @SerializedName("package_name") val packageName: String,
+    @SerializedName("created_at") val createdAt: String? = null,
+    @SerializedName("last_seen_at") val lastSeenAt: String? = null,
+    val connected: Boolean = false
+)
+
 // --- APP UPDATE ---
 
 data class AppVersionResponse(
@@ -548,11 +563,11 @@ data class AdminLogsResponse(
 )
 
 data class ServerSettingsResponse(
-    @SerializedName("only_fcm") val onlyFcm: Boolean = false
+    @SerializedName("only_iris") val onlyIris: Boolean = false
 )
 
 data class ServerSettingsUpdate(
-    @SerializedName("only_fcm") val onlyFcm: Boolean
+    @SerializedName("only_iris") val onlyIris: Boolean
 )
 
 data class AdminStatusResponse(

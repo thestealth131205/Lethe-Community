@@ -24,6 +24,28 @@ object AppChangelog {
     val entries: List<ChangelogEntry> = listOf(
 
         ChangelogEntry(
+            version = "10.4.207",
+            title = "Iris ersetzt FCM als Push-Weg",
+            items = listOf(
+                "Lethe Messenger nutzt jetzt in beiden Versionen (Play Store und F-Droid/FOSS) den eigenen, offenen Iris-Push-Dienst statt Google FCM für Benachrichtigungen und Anrufe – Google Play Services werden dafür nicht mehr benötigt",
+                "Neuer Schalter 'Nur Iris-Push' im Backend-Bereich für Admins, um FCM als Fallback komplett zu deaktivieren",
+                "Fehler behoben: Die Iris-Push-Endpunkte waren über die öffentliche Adresse nicht erreichbar (fehlender Eintrag in der Server-Weiterleitung), wodurch sich kein Token erzeugen ließ",
+            ),
+            shortSummary = "Push-Zustellung läuft jetzt über den eigenen Iris-Dienst statt Google FCM (beide Versionen)"
+        ),
+
+        ChangelogEntry(
+            version = "10.4.206",
+            title = "Iris Push & zuverlässigere Reaktions-Benachrichtigungen",
+            items = listOf(
+                "Neu: Iris Push im Backend-Bereich – ein offener, FCM-unabhängiger Push-Weg für eigene Geräte/Apps, inklusive Token-Verwaltung direkt in der App",
+                "Fehler behoben: Reagierten mehrere Personen kurz hintereinander auf eigene Nachrichten, überschrieb eine neue Benachrichtigung die vorherige ungesehen, statt sich daneben anzuzeigen",
+                "Zustellung von Gruppen-Reaktions-Benachrichtigungen bei geschlossener App verbessert",
+            ),
+            shortSummary = "Neuer Iris-Push-Dienst im Backend-Bereich, Reaktions-Benachrichtigungen verschwinden nicht mehr ungesehen"
+        ),
+
+        ChangelogEntry(
             version = "10.4.205",
             title = "Neues Feuerwerk-Lumi & Weihnachts-Reaktion bei Videoanrufen",
             items = listOf(
@@ -45,30 +67,6 @@ object AppChangelog {
                 "In der Lethe-Musikbibliothek waren über 'Künstler scannen' verknüpfte Titel für andere Nutzer teils unsichtbar – behoben",
             ),
             shortSummary = "Benachrichtigung bei Reaktionen auf eigene Nachrichten, Zufallswiedergabe/Wiederholen im Desktop-Player, Bibliotheks-Fix"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.203",
-            title = "Akkuverbrauch im Hintergrund deutlich reduziert",
-            items = listOf(
-                "Bei Play-Store-Installationen mit funktionierendem Push (FCM) läuft der Dauer-Verbindungsdienst jetzt nicht mehr ständig im Hintergrund – Nachrichten und Anrufe kommen stattdessen über Push, was den Akkuverbrauch bei wenig Nutzung deutlich senkt",
-                "Der Wach-Zustand des Geräts wird nicht mehr dauerhaft gehalten, sondern nur noch für den kurzen Moment der Verbindungsprüfung – dazwischen kann das Gerät wieder in den Energiesparschlaf wechseln",
-                "Betrifft sowohl die Play-Store- als auch die F-Droid/FOSS-Version; bei F-Droid bleibt der Dauerdienst weiterhin aktiv, da es dort keine alternative Push-Zustellung gibt",
-            ),
-            shortSummary = "Deutlich weniger Akkuverbrauch im Hintergrund durch reduzierte Wach-Zustände und Push statt Dauerverbindung (Play Store)"
-        ),
-
-        ChangelogEntry(
-            version = "10.4.202",
-            title = "Bildqualität, Medien-Übersicht & Reaktionen im Chat verbessert",
-            items = listOf(
-                "Fotos unter 2 Megapixel werden beim Versenden nicht mehr verkleinert – die Originalauflösung bleibt erhalten",
-                "Bilder und Videos landen nicht mehr doppelt auf dem Gerät – eine außerhalb der App nutzbare Kopie entsteht jetzt nur noch beim Tippen auf 'In Galerie speichern'",
-                "Reaktionen auf Nachrichten in 1-zu-1-Chats verschwanden manchmal wieder oder kamen beim Chatpartner gar nicht erst an – behoben",
-                "Die Medien-Übersicht eines Chats (Tipp auf Profil- bzw. Gruppenbild) zeigt jetzt wirklich alle gesendeten Fotos und Videos und lädt bei Bedarf weitere ältere Medien nach",
-                "Im Lethe Media Player funktionierte 'Wiederholen' bei eingeschalteten Übergängen nicht richtig – behoben; außerdem unterstützt jetzt auch die Chromecast-Wiedergabe das Wiederholen",
-            ),
-            shortSummary = "Originalauflösung bei kleinen Fotos, kein doppeltes Speichern, Reaktionen-Fix, vollständige Medien-Übersicht, Wiederholen-Fix im Media Player"
         ),
 
     )

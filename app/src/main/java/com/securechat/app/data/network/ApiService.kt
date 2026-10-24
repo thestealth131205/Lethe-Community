@@ -147,6 +147,16 @@ interface ApiService {
     @POST("users/me/fcm-token")
     suspend fun updateFcmToken(@Body request: FcmTokenRequest): Response<Unit>
 
+    // Iris: offener, FCM-unabhängiger Push-Relay-Dienst
+    @POST("push/tokens")
+    suspend fun createIrisToken(@Body request: IrisTokenGenerateRequest): Response<IrisTokenResponse>
+
+    @GET("push/tokens")
+    suspend fun listIrisTokens(): Response<List<IrisTokenResponse>>
+
+    @DELETE("push/tokens/{id}")
+    suspend fun revokeIrisToken(@Path("id") id: String): Response<Unit>
+
     @POST("user/buy-verification")
     suspend fun buyVerification(): Response<Map<String, Any>>
 

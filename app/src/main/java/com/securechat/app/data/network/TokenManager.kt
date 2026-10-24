@@ -52,6 +52,8 @@ class TokenManager @Inject constructor(
     companion object {
         private const val KEY_AUTH_TOKEN = "auth_token"
         private const val KEY_USER_ID = "user_id"
+        private const val KEY_IRIS_TOKEN = "iris_token"
+        private const val KEY_IRIS_TOKEN_OWNER_ID = "iris_token_owner_id"
         private fun profileTokenKey(profileKey: String) = "auth_token_$profileKey"
         private fun profileUserIdKey(profileKey: String) = "user_id_$profileKey"
     }
@@ -117,6 +119,28 @@ class TokenManager @Inject constructor(
         prefs.edit().apply {
             remove(KEY_AUTH_TOKEN)
             remove(KEY_USER_ID)
+            commit()
+        }
+        clearIrisToken()
+    }
+
+    /** Iris-Push-Token des eingeloggten Accounts (an dessen user_id gebunden, siehe /push/tokens). */
+    fun getIrisToken(): String? = prefs.getString(KEY_IRIS_TOKEN, null)
+
+    fun getIrisTokenOwnerId(): String? = prefs.getString(KEY_IRIS_TOKEN_OWNER_ID, null)
+
+    fun saveIrisToken(token: String, ownerUserId: String) {
+        prefs.edit().apply {
+            putString(KEY_IRIS_TOKEN, token)
+            putString(KEY_IRIS_TOKEN_OWNER_ID, ownerUserId)
+            apply()
+        }
+    }
+
+    fun clearIrisToken() {
+        prefs.edit().apply {
+            remove(KEY_IRIS_TOKEN)
+            remove(KEY_IRIS_TOKEN_OWNER_ID)
             commit()
         }
     }

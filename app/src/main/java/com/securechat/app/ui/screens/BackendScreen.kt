@@ -134,15 +134,22 @@ fun BackendScreen(
     onLoadDiamondRate: () -> Unit = {},
     onSetDiamondRate: (Double) -> Unit = {},
     // Nur-FCM-Modus
-    onlyFcmMode: Boolean = false,
-    onOnlyFcmModeChange: (Boolean) -> Unit = {},
+    onlyIrisMode: Boolean = false,
+    onOnlyIrisModeChange: (Boolean) -> Unit = {},
     onLoadServerSettings: () -> Unit = {},
     // SMS-Gateway
     smsGatewayStatus: com.securechat.app.data.network.SmsGatewayStatusResponse? = null,
     onRefreshSmsGatewayStatus: () -> Unit = {},
     onRestartSmsGateway: () -> Unit = {},
     onSendGroupAnnouncement: (targetType: String, content: String) -> Unit = { _, _ -> },
-    onNavigateToMusicLibrary: () -> Unit = {}
+    onNavigateToMusicLibrary: () -> Unit = {},
+    // Iris: offener, FCM-unabhängiger Push-Relay-Dienst
+    irisTokens: List<com.securechat.app.data.network.IrisTokenResponse> = emptyList(),
+    irisActionMessage: String? = null,
+    onLoadIrisTokens: () -> Unit = {},
+    onCreateIrisToken: (String) -> Unit = {},
+    onRevokeIrisToken: (String) -> Unit = {},
+    onClearIrisActionMessage: () -> Unit = {}
 ) {
     var showLogViewer by remember { mutableStateOf(false) }
     var showRestartConfirm by remember { mutableStateOf(false) }
@@ -288,13 +295,19 @@ fun BackendScreen(
                     diamondToEuroRate = diamondToEuroRate,
                     onLoadDiamondRate = onLoadDiamondRate,
                     onSetDiamondRate = onSetDiamondRate,
-                    onlyFcmMode = onlyFcmMode,
-                    onOnlyFcmModeChange = onOnlyFcmModeChange,
+                    onlyIrisMode = onlyIrisMode,
+                    onOnlyIrisModeChange = onOnlyIrisModeChange,
                     onLoadServerSettings = onLoadServerSettings,
                     smsGatewayStatus = smsGatewayStatus,
                     onRefreshSmsGatewayStatus = onRefreshSmsGatewayStatus,
                     onRestartSmsGateway = onRestartSmsGateway,
-                    onSendGroupAnnouncement = onSendGroupAnnouncement
+                    onSendGroupAnnouncement = onSendGroupAnnouncement,
+                    irisTokens = irisTokens,
+                    irisActionMessage = irisActionMessage,
+                    onLoadIrisTokens = onLoadIrisTokens,
+                    onCreateIrisToken = onCreateIrisToken,
+                    onRevokeIrisToken = onRevokeIrisToken,
+                    onClearIrisActionMessage = onClearIrisActionMessage
                 )
                 1 -> NutzerTab(
                     adminSearchQuery = adminSearchQuery,
@@ -694,15 +707,22 @@ private fun ServerTab(
     diamondToEuroRate: Double = 0.01,
     onLoadDiamondRate: () -> Unit = {},
     onSetDiamondRate: (Double) -> Unit = {},
-    onlyFcmMode: Boolean = false,
-    onOnlyFcmModeChange: (Boolean) -> Unit = {},
+    onlyIrisMode: Boolean = false,
+    onOnlyIrisModeChange: (Boolean) -> Unit = {},
     onLoadServerSettings: () -> Unit = {},
     smsGatewayStatus: com.securechat.app.data.network.SmsGatewayStatusResponse? = null,
     onRefreshSmsGatewayStatus: () -> Unit = {},
     onRestartSmsGateway: () -> Unit = {},
-    onSendGroupAnnouncement: (targetType: String, content: String) -> Unit = { _, _ -> }
+    onSendGroupAnnouncement: (targetType: String, content: String) -> Unit = { _, _ -> },
+    irisTokens: List<com.securechat.app.data.network.IrisTokenResponse> = emptyList(),
+    irisActionMessage: String? = null,
+    onLoadIrisTokens: () -> Unit = {},
+    onCreateIrisToken: (String) -> Unit = {},
+    onRevokeIrisToken: (String) -> Unit = {},
+    onClearIrisActionMessage: () -> Unit = {}
 ) {
     var showSmsBroadcastDialog by remember { mutableStateOf(false) }
+    var irisPackageName by remember { mutableStateOf("") }
 
     if (showSmsBroadcastDialog) {
         SmsGatewayBroadcastDialog(
@@ -717,6 +737,7 @@ private fun ServerTab(
     LaunchedEffect(Unit) {
         onLoadAdminServerInfo()
         onLoadServerSettings()
+        onLoadIrisTokens()
         onRefreshSmsGatewayStatus()
         while (true) {
             kotlinx.coroutines.delay(30_000)
@@ -1143,16 +1164,114 @@ private fun ServerTab(
         SettingsSection(title = "🔔 Benachrichtigungen") {
             SettingsItem(
                 icon = Icons.Default.NotificationsOff,
-                title = "Nur FCM-Benachrichtigungen",
-                subtitle = if (onlyFcmMode)
-                    "Eigener Dienst stumm – nur Firebase-Push aktiv"
+                title = "Nur Iris-Push",
+                subtitle = if (onlyIrisMode)
+                    "FCM-Fallback global deaktiviert – nur noch Iris"
                 else
-                    "Eigener WS-Dienst + FCM aktiv"
+                    "FCM bleibt als Fallback aktiv, falls Iris mal nicht verbunden ist"
             ) {
                 Switch(
-                    checked = onlyFcmMode,
-                    onCheckedChange = onOnlyFcmModeChange
+                    checked = onlyIrisMode,
+                    onCheckedChange = onOnlyIrisModeChange
                 )
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // ─── IRIS: OFFENER, FCM-UNABHÄNGIGER PUSH-RELAY-DIENST ─────────────────
+        val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+
+        SettingsSection(title = "📡 Iris Push") {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "Erzeugt einen Token, mit dem sich ein Iris-Push-Dienst (eigenständige App, " +
+                        "z.B. auf einem eigenen Betriebssystem) am Server anmeldet und Pushes für " +
+                        "den angegebenen Package-Namen entgegennimmt – unabhängig von Google FCM.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                if (irisActionMessage != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = irisActionMessage,
+                            color = if (irisActionMessage.contains("Fehler")) MaterialTheme.colorScheme.error
+                                    else Color(0xFF4CAF50),
+                            fontSize = 13.sp
+                        )
+                        IconButton(onClick = onClearIrisActionMessage, modifier = Modifier.size(20.dp)) {
+                            Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(14.dp))
+                        }
+                    }
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = irisPackageName,
+                        onValueChange = { irisPackageName = it },
+                        label = { Text("Package-Name") },
+                        placeholder = { Text("de.letheapp.lethe") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Button(
+                        onClick = {
+                            if (irisPackageName.isNotBlank()) {
+                                onCreateIrisToken(irisPackageName.trim())
+                                irisPackageName = ""
+                            }
+                        }
+                    ) {
+                        Text("Erzeugen")
+                    }
+                }
+
+                if (irisTokens.isEmpty()) {
+                    Text("Noch keine Iris-Tokens erzeugt.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    irisTokens.forEach { entry ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
+                                .padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .background(
+                                                if (entry.connected) Color(0xFF4CAF50) else MaterialTheme.colorScheme.outline,
+                                                CircleShape
+                                            )
+                                    )
+                                    Text(entry.packageName, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Text(
+                                    entry.token,
+                                    fontSize = 11.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            IconButton(onClick = { clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(entry.token)) }) {
+                                Icon(Icons.Default.ContentCopy, contentDescription = "Kopieren", modifier = Modifier.size(18.dp))
+                            }
+                            IconButton(onClick = { entry.id?.let(onRevokeIrisToken) }) {
+                                Icon(Icons.Default.Delete, contentDescription = "Widerrufen", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                            }
+                        }
+                    }
+                }
             }
         }
 
